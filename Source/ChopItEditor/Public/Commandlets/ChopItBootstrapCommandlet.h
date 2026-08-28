@@ -35,6 +35,7 @@ private:
 	bool CreateShopBlueprint() const;
 	bool CreateHarvestBlueprints() const;
 	bool CreateEconomyBlueprints() const;
+	bool CreateChainLabAssets() const;
 	bool CreateDayDefinition() const;
 	bool CreateBlockoutMaterials() const;
 	bool RebuildPhase1Map(
@@ -43,4 +44,5 @@ private:
 		bool bIncludeCombatDummies = false,
 		bool bHarvestTestLayout = false,
 		bool bEconomyTestLayout = false) const;
+	bool RebuildChainLabMap() const;
 };

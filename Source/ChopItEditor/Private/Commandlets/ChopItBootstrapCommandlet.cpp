@@ -10,10 +10,13 @@
 #include "Curves/CurveFloat.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/ExponentialHeightFog.h"
+#include "Engine/Blueprint.h"
 #include "Engine/SkyLight.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/TextRenderActor.h"
 #include "Engine/World.h"
 #include "Economy/ChopItCabinHub.h"
+#include "Economy/ChopItChainDefinition.h"
 #include "Economy/ChopItDayDefinition.h"
 #include "Economy/ChopItDeliveryZone.h"
 #include "Economy/ChopItQuotaMachine.h"
@@ -56,6 +59,7 @@ namespace ChopItBootstrap
 	constexpr TCHAR ProgressionMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Progression");
 	constexpr TCHAR ShopMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Shop");
 	constexpr TCHAR EnemyMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Enemies");
+	constexpr TCHAR ChainLabMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_ChainLab");
 	constexpr TCHAR MoveActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Move");
 	constexpr TCHAR InteractActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Interact");
 	constexpr TCHAR GameplayContextPackage[] = TEXT("/Game/ChopIt/Input/IMC_Gameplay");
@@ -70,6 +74,8 @@ namespace ChopItBootstrap
 	constexpr TCHAR QuotaMachineBlueprintPackage[] = TEXT("/Game/ChopIt/World/Economy/BP_QuotaMachine");
 	constexpr TCHAR DeliveryZoneBlueprintPackage[] = TEXT("/Game/ChopIt/World/Economy/BP_DeliveryZone");
 	constexpr TCHAR SellZoneBlueprintPackage[] = TEXT("/Game/ChopIt/World/Economy/BP_SellZone");
+	constexpr TCHAR ChainLabMachineBlueprintPackage[] = TEXT("/Game/ChopIt/World/ChainLab/BP_ChainLabMachine");
+	constexpr TCHAR DefaultChainDefinitionPackage[] = TEXT("/Game/ChopIt/World/ChainLab/DA_Chain_Default");
 	constexpr TCHAR DayOnePackage[] = TEXT("/Game/ChopIt/Economy/Days/DA_Day_01");
 
 	template <typename AssetType>
@@ -146,6 +152,31 @@ namespace ChopItBootstrap
 		Component->SetMaterial(0, Material);
 		Component->SetMobility(EComponentMobility::Static);
 		Component->SetCollisionProfileName(CollisionProfile);
+		return Actor;
+	}
+
+	ATextRenderActor* SpawnLabSign(
+		UWorld* World,
+		const FName Name,
+		const FString& Text,
+		const FVector& Location,
+		const FRotator& Rotation = FRotator(0.0f, 180.0f, 0.0f))
+	{
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.Name = Name;
+		ATextRenderActor* Actor = World->SpawnActor<ATextRenderActor>(Location, Rotation, SpawnParameters);
+		if (!Actor)
+		{
+			return nullptr;
+		}
+
+		Actor->SetActorLabel(Name.ToString());
+		UTextRenderComponent* TextComponent = Actor->GetTextRender();
+		TextComponent->SetText(FText::FromString(Text));
+		TextComponent->SetHorizontalAlignment(EHTA_Center);
+		TextComponent->SetWorldSize(48.0f);
+		TextComponent->SetTextRenderColor(FColor(255, 220, 110));
+		TextComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		return Actor;
 	}
 }
@@ -230,6 +261,11 @@ int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 	}
 	if (FParse::Param(*Params, TEXT("Phase10")) && !CreatePhase10Assets()) return 1;
 	if (FParse::Param(*Params, TEXT("Phase12")) && !CreatePhase12Assets()) return 1;
+	if (FParse::Param(*Params, TEXT("ChainLab")) && !CreateChainLabAssets())
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Failed to create Chain Lab assets."));
+		return 1;
+	}
 
 	UE_LOG(LogChopIt, Display, TEXT("ChopIt bootstrap assets are ready."));
 	return 0;
@@ -702,6 +738,60 @@ bool UChopItBootstrapCommandlet::CreateEconomyBlueprints() const
 	return true;
 }
 
+bool UChopItBootstrapCommandlet::CreateChainLabAssets() const
+{
+	if (!CreateBlockoutMaterials())
+	{
+		return false;
+	}
+	const bool bNewDefinition = !FPackageName::DoesPackageExist(ChopItBootstrap::DefaultChainDefinitionPackage);
+	UChopItChainDefinition* DefaultChainDefinition = ChopItBootstrap::LoadOrCreateAsset<UChopItChainDefinition>(
+		ChopItBootstrap::DefaultChainDefinitionPackage, TEXT("DA_Chain_Default"));
+	if (!DefaultChainDefinition)
+	{
+		return false;
+	}
+	if (bNewDefinition)
+	{
+		DefaultChainDefinition->ChainLinkMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+		if (!DefaultChainDefinition->ChainLinkMesh || !ChopItBootstrap::SaveAsset(DefaultChainDefinition))
+		{
+			return false;
+		}
+	}
+
+	UBlueprint* ChainLabMachineBlueprint = LoadObject<UBlueprint>(
+		nullptr,
+		TEXT("/Game/ChopIt/World/ChainLab/BP_ChainLabMachine.BP_ChainLabMachine"));
+	if (!ChainLabMachineBlueprint)
+	{
+		UPackage* Package = CreatePackage(ChopItBootstrap::ChainLabMachineBlueprintPackage);
+		ChainLabMachineBlueprint = FKismetEditorUtilities::CreateBlueprint(
+			AChopItQuotaMachine::StaticClass(), Package, TEXT("BP_ChainLabMachine"), BPTYPE_Normal, NAME_None);
+		if (ChainLabMachineBlueprint)
+		{
+			FAssetRegistryModule::AssetCreated(ChainLabMachineBlueprint);
+		}
+	}
+	if (!ChainLabMachineBlueprint)
+	{
+		return false;
+	}
+
+	FKismetEditorUtilities::CompileBlueprint(ChainLabMachineBlueprint);
+	AChopItQuotaMachine* MachineDefaults = Cast<AChopItQuotaMachine>(ChainLabMachineBlueprint->GeneratedClass
+		? ChainLabMachineBlueprint->GeneratedClass->GetDefaultObject()
+		: nullptr);
+	if (!MachineDefaults)
+	{
+		return false;
+	}
+	MachineDefaults->SetChainDefinition(DefaultChainDefinition);
+	const bool bSaved = ChopItBootstrap::SaveAsset(ChainLabMachineBlueprint) && RebuildChainLabMap();
+	UE_LOG(LogChopIt, Display, TEXT("Chain Lab Blueprint and test map: %s"), bSaved ? TEXT("OK") : TEXT("FAILED"));
+	return bSaved;
+}
+
 bool UChopItBootstrapCommandlet::CreateInputAssets() const
 {
 	UInputAction* MoveAction = ChopItBootstrap::LoadOrCreateAsset<UInputAction>(
@@ -997,5 +1087,170 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 
 	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, LongPackageName);
 	UE_LOG(LogChopIt, Display, TEXT("Rebuilt Phase 1 map %s: %s"), *LongPackageName, bSaved ? TEXT("OK") : TEXT("FAILED"));
+	return bSaved;
+}
+
+bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
+{
+	UWorld* World = UEditorLoadingAndSavingUtils::NewBlankMap(false);
+	if (!World)
+	{
+		return false;
+	}
+	World->GetWorldSettings()->DefaultGameMode = AChopItGameMode::StaticClass();
+
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (!Cube || !Cylinder || !Sphere)
+	{
+		return false;
+	}
+
+	UMaterialInterface* Ground = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Ground"));
+	UMaterialInterface* Path = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Path"));
+	UMaterialInterface* Wood = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Wood"));
+	UMaterialInterface* Leaves = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Leaves"));
+	UMaterialInterface* Stone = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Stone"));
+	if (!Ground || !Path || !Wood || !Leaves || !Stone)
+	{
+		return false;
+	}
+
+	// All obstacle meshes use BlockAll. The ChopItChain profile therefore sweeps
+	// against them exactly like it will against normal world geometry in game.
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("ChainLab_Ground"), FVector(0, 0, -50), FVector(50, 50, 1), Ground);
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("ChainLab_StartPath"), FVector(0, -1500, 3), FVector(3.0f, 8.0f, 0.08f), Path, TEXT("NoCollision"));
+
+	FActorSpawnParameters SpawnParameters;
+	SpawnParameters.Name = TEXT("PlayerStart_ChainLab");
+	APlayerStart* PlayerStart = World->SpawnActor<APlayerStart>(FVector(0, -1900, 110), FRotator::ZeroRotator, SpawnParameters);
+	if (!PlayerStart)
+	{
+		return false;
+	}
+	PlayerStart->SetActorLabel(TEXT("PlayerStart_ChainLab"));
+
+	UBlueprint* ChainLabBlueprint = LoadObject<UBlueprint>(
+		nullptr,
+		TEXT("/Game/ChopIt/World/ChainLab/BP_ChainLabMachine.BP_ChainLabMachine"));
+	UClass* MachineClass = AChopItQuotaMachine::StaticClass();
+	if (ChainLabBlueprint && ChainLabBlueprint->GeneratedClass)
+	{
+		MachineClass = ChainLabBlueprint->GeneratedClass;
+	}
+	SpawnParameters.Name = TEXT("BP_ChainLabMachine");
+	AChopItQuotaMachine* Machine = World->SpawnActor<AChopItQuotaMachine>(
+		MachineClass, FVector(0, -1200, 0), FRotator::ZeroRotator, SpawnParameters);
+	if (!Machine)
+	{
+		return false;
+	}
+	Machine->SetActorLabel(TEXT("BP_ChainLabMachine (Edit Chain Settings Here)"));
+	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_ChainLabTitle"), TEXT("CHAIN LAB - MACHINE SETTINGS IN BP_ChainLabMachine"), FVector(0, -1110, 340));
+
+	// 01: wide, spaced poles. This catches the most common wrapping and release cases.
+	const FVector WrapPillars[] =
+	{
+		FVector(-340, -830, 210), FVector(0, -700, 210), FVector(360, -830, 210),
+		FVector(-180, -390, 210), FVector(260, -310, 210)
+	};
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(WrapPillars); ++Index)
+	{
+		ChopItBootstrap::SpawnBlockoutMesh(
+			World, Cylinder, FName(*FString::Printf(TEXT("WrapPillar_%02d"), Index)), WrapPillars[Index], FVector(1.4f, 1.4f, 4.2f), Wood);
+	}
+	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_WrapPillars"), TEXT("01  WRAP / UNWRAP POSTS"), FVector(0, -520, 470));
+
+	// 02: a narrow slalom and alternating wall corners exercise particle density.
+	const FVector SlalomPosts[] =
+	{
+		FVector(720, -920, 160), FVector(980, -720, 160), FVector(720, -520, 160), FVector(980, -320, 160),
+		FVector(720, -120, 160), FVector(980, 80, 160)
+	};
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(SlalomPosts); ++Index)
+	{
+		ChopItBootstrap::SpawnBlockoutMesh(
+			World, Cylinder, FName(*FString::Printf(TEXT("SlalomPost_%02d"), Index)), SlalomPosts[Index], FVector(0.85f, 0.85f, 3.2f), Stone);
+	}
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("CornerWall_A"), FVector(1320, -520, 125), FVector(0.35f, 4.4f, 2.5f), Stone);
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("CornerWall_B"), FVector(1130, -100, 125), FVector(2.2f, 0.35f, 2.5f), Stone);
+	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_Slalom"), TEXT("02  DENSE SLALOM + CORNERS"), FVector(900, 240, 390));
+
+	// 03: a frame and an overhang make the chain pass under, around and over level pieces.
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cylinder, TEXT("FramePost_Left"), FVector(-730, -90, 210), FVector(1.0f, 1.0f, 4.2f), Wood);
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cylinder, TEXT("FramePost_Right"), FVector(-170, -90, 210), FVector(1.0f, 1.0f, 4.2f), Wood);
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("FrameTopBeam"), FVector(-450, -90, 405), FVector(3.4f, 0.6f, 0.45f), Wood);
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("Overhang"), FVector(-480, 330, 300), FVector(5.0f, 1.2f, 0.35f), Stone);
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cylinder, TEXT("OverhangSupport_A"), FVector(-880, 330, 150), FVector(0.55f, 0.55f, 3.0f), Stone);
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cylinder, TEXT("OverhangSupport_B"), FVector(-80, 330, 150), FVector(0.55f, 0.55f, 3.0f), Stone);
+	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_Frame"), TEXT("03  FRAME + OVERHANG"), FVector(-460, 560, 470));
+
+	// 04: ramps and tiered cubes exercise sliding collision without floor snagging.
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("Ramp_Up"), FVector(450, 520, 105), FVector(5.6f, 3.0f, 0.35f), Path, TEXT("BlockAll"), FRotator(16.0f, 0.0f, 0.0f));
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("Ramp_Down"), FVector(1040, 520, 105), FVector(5.6f, 3.0f, 0.35f), Path, TEXT("BlockAll"), FRotator(-16.0f, 0.0f, 0.0f));
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("TierBlock_Low"), FVector(820, 920, 75), FVector(2.1f, 2.1f, 1.5f), Stone);
+	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("TierBlock_High"), FVector(1120, 920, 150), FVector(1.8f, 1.8f, 3.0f), Stone);
+	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_Ramps"), TEXT("04  RAMPS + TIERS"), FVector(760, 1210, 420));
+
+	// 05: trunks with collision and harmless canopies recreate the important tree case.
+	const FVector TreeLocations[] = { FVector(-1180, 820, 230), FVector(-1540, 520, 230), FVector(-1450, 1110, 230) };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(TreeLocations); ++Index)
+	{
+		const FVector TrunkLocation = TreeLocations[Index];
+		ChopItBootstrap::SpawnBlockoutMesh(World, Cylinder, FName(*FString::Printf(TEXT("ChainTreeTrunk_%02d"), Index)), TrunkLocation, FVector(1.25f, 1.25f, 4.6f), Wood);
+		ChopItBootstrap::SpawnBlockoutMesh(World, Sphere, FName(*FString::Printf(TEXT("ChainTreeCanopy_%02d"), Index)), TrunkLocation + FVector(0, 0, 290), FVector(3.4f, 3.4f, 2.4f), Leaves, TEXT("NoCollision"));
+	}
+	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_Trees"), TEXT("05  TREE TRUNKS"), FVector(-1360, 1420, 490));
+
+	const struct { FName Name; FVector Location; FVector Scale; } Boundaries[] =
+	{
+		{ TEXT("ChainLab_BoundaryNorth"), FVector(0, 2500, 220), FVector(50, 0.25f, 5) },
+		{ TEXT("ChainLab_BoundarySouth"), FVector(0, -2500, 220), FVector(50, 0.25f, 5) },
+		{ TEXT("ChainLab_BoundaryEast"), FVector(2500, 0, 220), FVector(0.25f, 50, 5) },
+		{ TEXT("ChainLab_BoundaryWest"), FVector(-2500, 0, 220), FVector(0.25f, 50, 5) }
+	};
+	for (const auto& Boundary : Boundaries)
+	{
+		AStaticMeshActor* Actor = ChopItBootstrap::SpawnBlockoutMesh(World, Cube, Boundary.Name, Boundary.Location, Boundary.Scale, Stone);
+		if (Actor)
+		{
+			Actor->SetActorHiddenInGame(true);
+		}
+	}
+
+	SpawnParameters.Name = TEXT("DirectionalLight_ChainLab");
+	ADirectionalLight* DirectionalLight = World->SpawnActor<ADirectionalLight>(FVector::ZeroVector, FRotator(-55, -35, 0), SpawnParameters);
+	SpawnParameters.Name = TEXT("SkyLight_ChainLab");
+	ASkyLight* SkyLight = World->SpawnActor<ASkyLight>(FVector::ZeroVector, FRotator::ZeroRotator, SpawnParameters);
+	SpawnParameters.Name = TEXT("SkyAtmosphere_ChainLab");
+	World->SpawnActor<ASkyAtmosphere>(FVector::ZeroVector, FRotator::ZeroRotator, SpawnParameters);
+	SpawnParameters.Name = TEXT("HeightFog_ChainLab");
+	World->SpawnActor<AExponentialHeightFog>(FVector(0, 0, -50), FRotator::ZeroRotator, SpawnParameters);
+	if (DirectionalLight)
+	{
+		DirectionalLight->SetActorLabel(TEXT("DirectionalLight"));
+		DirectionalLight->GetLightComponent()->SetIntensity(5.0f);
+		DirectionalLight->GetLightComponent()->SetLightColor(FLinearColor(1.0f, 0.88f, 0.70f));
+		DirectionalLight->GetLightComponent()->SetMobility(EComponentMobility::Movable);
+	}
+	if (SkyLight)
+	{
+		SkyLight->SetActorLabel(TEXT("SkyLight"));
+		SkyLight->GetLightComponent()->SetMobility(EComponentMobility::Movable);
+		SkyLight->GetLightComponent()->SetIntensity(1.2f);
+		SkyLight->GetLightComponent()->SetRealTimeCapture(true);
+	}
+
+	SpawnParameters.Name = TEXT("NavMeshBounds_ChainLab");
+	ANavMeshBoundsVolume* NavBounds = World->SpawnActor<ANavMeshBoundsVolume>(FVector(0, 0, 200), FRotator::ZeroRotator, SpawnParameters);
+	if (NavBounds)
+	{
+		NavBounds->SetActorLabel(TEXT("NavMeshBounds"));
+		NavBounds->SetActorScale3D(FVector(25, 25, 5));
+	}
+
+	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, ChopItBootstrap::ChainLabMap);
+	UE_LOG(LogChopIt, Display, TEXT("Rebuilt Chain Lab %s: %s"), ChopItBootstrap::ChainLabMap, bSaved ? TEXT("OK") : TEXT("FAILED"));
 	return bSaved;
 }

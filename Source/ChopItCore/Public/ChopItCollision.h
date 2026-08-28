@@ -12,6 +12,7 @@ namespace ChopItCollisionChannels
 	inline constexpr ECollisionChannel Pickup = ECC_GameTraceChannel4;
 	inline constexpr ECollisionChannel DeliveryZone = ECC_GameTraceChannel5;
 	inline constexpr ECollisionChannel Interaction = ECC_GameTraceChannel6;
+	inline constexpr ECollisionChannel Chain = ECC_GameTraceChannel7;
 }
 
 namespace ChopItCollisionProfiles
@@ -22,4 +23,5 @@ namespace ChopItCollisionProfiles
 	inline const FName Projectile(TEXT("ChopItProjectile"));
 	inline const FName Pickup(TEXT("ChopItPickup"));
 	inline const FName DeliveryZone(TEXT("ChopItDeliveryZone"));
+	inline const FName Chain(TEXT("ChopItChain"));
 }
