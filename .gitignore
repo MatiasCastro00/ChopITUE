@@ -1,0 +1,28 @@
+# Unreal generated data
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# IDE generated data
+.vs/
+.vscode/
+.idea/
+*.VC.db
+*.VC.opendb
+*.sln
+*.slnx
+*.suo
+*.user
+
+# Build artifacts
+Build/Artifacts/
+Build/Reports/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local developer content must never ship or be committed
+Content/ChopIt/Developer/
