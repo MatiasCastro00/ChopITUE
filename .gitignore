@@ -1,23 +1,58 @@
-# Unreal generated data
-Binaries/
-DerivedDataCache/
-Intermediate/
-Saved/
-
-# IDE generated data
+# Visual Studio user and project files
 .vs/
 .vscode/
 .idea/
-*.VC.db
-*.VC.opendb
 *.sln
 *.slnx
 *.suo
 *.user
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+.vsconfig
+*.xcodeproj
+*.xcworkspace
 
-# Build artifacts
-Build/Artifacts/
-Build/Reports/
+# Compiled object and library files
+*.slo
+*.lo
+*.o
+*.obj
+*.gch
+*.pch
+*.so
+*.dylib
+*.dll
+*.mod
+*.lai
+*.la
+*.a
+*.lib
+*.exe
+*.out
+*.app
+*.ipa
+
+# Precompiled source art
+SourceArt/**/*.png
+SourceArt/**/*.tga
+
+# Unreal generated data and binaries
+Binaries/
+Plugins/**/Binaries/
+Intermediate/
+Plugins/**/Intermediate/
+DerivedDataCache/
+Saved/
+*_BuiltData.uasset
+
+# Build artifacts, except pak blacklist files and icons
+Build/*
+!Build/*/
+Build/*/**
+!Build/*/PakBlacklist*.txt
+!Build/**/*.ico
 
 # OS/editor noise
 .DS_Store
