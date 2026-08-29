@@ -19,6 +19,7 @@ public:
 	void SetVisualComponent(UPrimitiveComponent* NewVisual);
 	void SetWoodenTarget(bool bNewWoodenTarget) { bWoodenTarget = bNewWoodenTarget; }
 	void SetFoliageComponent(UPrimitiveComponent* NewFoliage) { FoliageComponent = NewFoliage; }
+	void SetDeathEffectsEnabled(bool bEnabled) { bEnableDeathEffects = bEnabled; }
 
 private:
 	void HandleDamageReceived(float Damage, bool bCritical, AActor* DamageSource, const FVector& ImpactLocation);
@@ -30,6 +31,7 @@ private:
 	float PulseDuration = 0.09f;
 
 	bool bWoodenTarget = false;
+	bool bEnableDeathEffects = true;
 
 	TWeakObjectPtr<UPrimitiveComponent> VisualComponent;
 	TWeakObjectPtr<UPrimitiveComponent> FoliageComponent;

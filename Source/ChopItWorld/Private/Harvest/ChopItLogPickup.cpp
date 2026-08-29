@@ -5,10 +5,13 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Engine/World.h"
 #include "Harvest/ChopItForestRegistrySubsystem.h"
 #include "Harvest/ChopItWoodCargoComponent.h"
 #include "GameFramework/Pawn.h"
+#include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerState.h"
+#include "Kismet/GameplayStatics.h"
 #include "Progression/ChopItExperienceComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -16,17 +19,32 @@ AChopItLogPickup::AChopItLogPickup()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
+	PhysicsBody = CreateDefaultSubobject<USphereComponent>(TEXT("PhysicsBody"));
+	SetRootComponent(PhysicsBody);
+	PhysicsBody->InitSphereRadius(28.0f);
+	PhysicsBody->SetMobility(EComponentMobility::Movable);
+	PhysicsBody->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	PhysicsBody->SetCollisionObjectType(ChopItCollisionChannels::Pickup);
+	PhysicsBody->SetCollisionResponseToAllChannels(ECR_Ignore);
+	PhysicsBody->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+	PhysicsBody->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
+	PhysicsBody->SetEnableGravity(true);
+	PhysicsBody->SetSimulatePhysics(true);
+	PhysicsBody->SetUseCCD(true);
+	PhysicsBody->SetLinearDamping(0.65f);
+	PhysicsBody->SetAngularDamping(0.8f);
+
+	LogMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LogMesh"));
+	LogMesh->SetupAttachment(PhysicsBody);
+	LogMesh->SetRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));
+	LogMesh->SetRelativeScale3D(FVector(0.22f, 0.22f, 0.7f));
+	LogMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
 	MagnetSphere = CreateDefaultSubobject<USphereComponent>(TEXT("MagnetSphere"));
-	SetRootComponent(MagnetSphere);
+	MagnetSphere->SetupAttachment(PhysicsBody);
 	MagnetSphere->InitSphereRadius(450.0f);
 	MagnetSphere->SetCollisionProfileName(ChopItCollisionProfiles::Pickup);
 	MagnetSphere->SetGenerateOverlapEvents(true);
-
-	LogMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LogMesh"));
-	LogMesh->SetupAttachment(MagnetSphere);
-	LogMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	LogMesh->SetRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));
-	LogMesh->SetRelativeScale3D(FVector(0.22f, 0.22f, 0.7f));
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	if (CylinderMesh.Succeeded())
@@ -35,20 +53,32 @@ AChopItLogPickup::AChopItLogPickup()
 	}
 
 	UnitLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("UnitLabel"));
-	UnitLabel->SetupAttachment(MagnetSphere);
+	UnitLabel->SetupAttachment(PhysicsBody);
 	UnitLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 75.0f));
-	UnitLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
+	UnitLabel->SetUsingAbsoluteRotation(true);
 	UnitLabel->SetHorizontalAlignment(EHTA_Center);
 	UnitLabel->SetWorldSize(36.0f);
 	UnitLabel->SetTextRenderColor(FColor::Yellow);
+	UnitLabel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AChopItLogPickup::BeginPlay()
 {
 	Super::BeginPlay();
+	// Existing Blueprint children may retain their old no-collision component
+	// settings, so enforce the physical drop profile at runtime as well.
+	ConfigureDroppedPhysics();
+	PreviousPhysicsLocation = PhysicsBody->GetComponentLocation();
 	MagnetSphere->OnComponentBeginOverlap.AddDynamic(this, &AChopItLogPickup::HandleMagnetBeginOverlap);
 	MagnetSphere->OnComponentEndOverlap.AddDynamic(this, &AChopItLogPickup::HandleMagnetEndOverlap);
+	GetWorldTimerManager().SetTimer(
+		GroundSafetyTimerHandle,
+		this,
+		&AChopItLogPickup::UpdateGroundSafety,
+		1.0f / 60.0f,
+		true);
 	UpdateLabel();
+	UpdateLabelFacingCamera();
 	if (UWorld* World = GetWorld())
 	{
 		if (UChopItForestRegistrySubsystem* Registry = World->GetSubsystem<UChopItForestRegistrySubsystem>())
@@ -63,6 +93,7 @@ void AChopItLogPickup::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(MagnetTimerHandle);
+		World->GetTimerManager().ClearTimer(GroundSafetyTimerHandle);
 		if (UChopItForestRegistrySubsystem* Registry = World->GetSubsystem<UChopItForestRegistrySubsystem>())
 		{
 			Registry->UnregisterLogPickup(this);
@@ -83,6 +114,18 @@ void AChopItLogPickup::InitializeReward(const int32 NewWoodUnits, const int32 Ne
 	UpdateLabel();
 }
 
+void AChopItLogPickup::LaunchFromImpact(
+	const FVector& LinearVelocity,
+	const FVector& AngularVelocityDegrees)
+{
+	CandidateCargo.Reset();
+	GetWorldTimerManager().ClearTimer(MagnetTimerHandle);
+	ConfigureDroppedPhysics();
+	PhysicsBody->SetPhysicsLinearVelocity(LinearVelocity, false);
+	PhysicsBody->SetPhysicsAngularVelocityInDegrees(AngularVelocityDegrees, false);
+	PhysicsBody->WakeAllRigidBodies();
+}
+
 void AChopItLogPickup::HandleMagnetBeginOverlap(
 	UPrimitiveComponent* OverlappedComponent,
 	AActor* OtherActor,
@@ -96,6 +139,11 @@ void AChopItLogPickup::HandleMagnetBeginOverlap(
 	{
 		return;
 	}
+	// The mesh is the physics root while dropped. Disable that body before the
+	// gameplay magnet starts moving the actor, avoiding forces against the player.
+	PhysicsBody->SetSimulatePhysics(false);
+	PhysicsBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	PreviousPhysicsLocation = GetActorLocation();
 	CandidateCargo = Cargo;
 	GetWorldTimerManager().SetTimer(MagnetTimerHandle, this, &AChopItLogPickup::UpdateMagnetism, 0.05f, true);
 }
@@ -110,6 +158,7 @@ void AChopItLogPickup::HandleMagnetEndOverlap(
 	{
 		CandidateCargo.Reset();
 		GetWorldTimerManager().ClearTimer(MagnetTimerHandle);
+		ResumeDroppedPhysics();
 	}
 }
 
@@ -119,17 +168,23 @@ void AChopItLogPickup::UpdateMagnetism()
 	AActor* CargoOwner = Cargo ? Cargo->GetOwner() : nullptr;
 	if (!Cargo || !IsValid(CargoOwner))
 	{
+		CandidateCargo.Reset();
 		GetWorldTimerManager().ClearTimer(MagnetTimerHandle);
+		ResumeDroppedPhysics();
 		return;
 	}
 	if (Cargo->GetAvailableCapacity() <= 0)
 	{
+		CandidateCargo.Reset();
+		GetWorldTimerManager().ClearTimer(MagnetTimerHandle);
+		ResumeDroppedPhysics();
 		return;
 	}
 
 	const FVector TargetLocation = CargoOwner->GetActorLocation() + FVector(0.0f, 0.0f, 45.0f);
 	const FVector NewLocation = FMath::VInterpConstantTo(GetActorLocation(), TargetLocation, 0.05f, MagnetSpeed);
 	SetActorLocation(NewLocation, false);
+	PreviousPhysicsLocation = NewLocation;
 	if (FVector::DistSquared(NewLocation, TargetLocation) <= FMath::Square(CollectionDistance))
 	{
 		const FChopItWoodTransferResult Transfer = Cargo->TryAddWood(WoodUnits);
@@ -162,7 +217,116 @@ void AChopItLogPickup::UpdateLabel()
 	if (UnitLabel)
 	{
 		UnitLabel->SetText(FText::FromString(ExperienceReward > 0
-			? FString::Printf(TEXT("Madera x%d  +%d XP"), WoodUnits, ExperienceReward)
-			: FString::Printf(TEXT("Madera x%d"), WoodUnits)));
+			? FString::Printf(TEXT("Wood x%d  +%d XP"), WoodUnits, ExperienceReward)
+			: FString::Printf(TEXT("Wood x%d"), WoodUnits)));
 	}
+}
+
+void AChopItLogPickup::UpdateLabelFacingCamera()
+{
+	if (!UnitLabel)
+	{
+		return;
+	}
+
+	const APlayerCameraManager* CameraManager = UGameplayStatics::GetPlayerCameraManager(this, 0);
+	if (!CameraManager)
+	{
+		return;
+	}
+
+	FVector ToCamera = CameraManager->GetCameraLocation() - UnitLabel->GetComponentLocation();
+	if (!ToCamera.Normalize())
+	{
+		return;
+	}
+	UnitLabel->SetWorldRotation(FRotationMatrix::MakeFromXZ(ToCamera, FVector::UpVector).Rotator());
+}
+
+void AChopItLogPickup::ResumeDroppedPhysics()
+{
+	if (!PhysicsBody)
+	{
+		return;
+	}
+	PreviousPhysicsLocation = GetActorLocation();
+	ConfigureDroppedPhysics();
+	PhysicsBody->WakeAllRigidBodies();
+}
+
+void AChopItLogPickup::UpdateGroundSafety()
+{
+	UWorld* World = GetWorld();
+	if (!World || !PhysicsBody)
+	{
+		return;
+	}
+	UpdateLabelFacingCamera();
+
+	FVector CurrentLocation = PhysicsBody->GetComponentLocation();
+	if (!PhysicsBody->IsSimulatingPhysics())
+	{
+		PreviousPhysicsLocation = CurrentLocation;
+		return;
+	}
+	if (FVector::DistSquared(PreviousPhysicsLocation, CurrentLocation) < 0.01f)
+	{
+		PreviousPhysicsLocation = CurrentLocation;
+		return;
+	}
+
+	FCollisionObjectQueryParams ObjectQuery;
+	ObjectQuery.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQuery.AddObjectTypesToQuery(ECC_WorldDynamic);
+
+	FCollisionQueryParams QueryParams(FName(TEXT("LogPickupGroundSafety")), false, this);
+	QueryParams.bFindInitialOverlaps = true;
+	FHitResult Hit;
+	const bool bBlocked = World->SweepSingleByObjectType(
+		Hit,
+		PreviousPhysicsLocation,
+		CurrentLocation,
+		FQuat::Identity,
+		ObjectQuery,
+		FCollisionShape::MakeSphere(26.0f),
+		QueryParams);
+	if (bBlocked && Hit.bBlockingHit)
+	{
+		const FVector SurfaceNormal = Hit.ImpactNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+		const FVector CorrectedLocation = Hit.bStartPenetrating
+			? CurrentLocation + SurfaceNormal * (Hit.PenetrationDepth + 2.0f)
+			: Hit.Location + SurfaceNormal * 2.0f;
+		SetActorLocation(CorrectedLocation, false, nullptr, ETeleportType::TeleportPhysics);
+
+		FVector LinearVelocity = PhysicsBody->GetPhysicsLinearVelocity();
+		const float InwardSpeed = FVector::DotProduct(LinearVelocity, SurfaceNormal);
+		if (InwardSpeed < 0.0f)
+		{
+			LinearVelocity -= SurfaceNormal * InwardSpeed;
+		}
+		PhysicsBody->SetPhysicsLinearVelocity(LinearVelocity * 0.65f, false);
+		PhysicsBody->SetPhysicsAngularVelocityInDegrees(
+			PhysicsBody->GetPhysicsAngularVelocityInDegrees() * 0.8f,
+			false);
+		CurrentLocation = CorrectedLocation;
+	}
+
+	PreviousPhysicsLocation = CurrentLocation;
+}
+
+void AChopItLogPickup::ConfigureDroppedPhysics()
+{
+	if (!PhysicsBody)
+	{
+		return;
+	}
+	PhysicsBody->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	PhysicsBody->SetCollisionObjectType(ChopItCollisionChannels::Pickup);
+	PhysicsBody->SetCollisionResponseToAllChannels(ECR_Ignore);
+	PhysicsBody->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+	PhysicsBody->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
+	PhysicsBody->SetEnableGravity(true);
+	PhysicsBody->SetUseCCD(true);
+	PhysicsBody->SetSimulatePhysics(true);
+	PhysicsBody->SetMassOverrideInKg(NAME_None, 4.0f, true);
 }

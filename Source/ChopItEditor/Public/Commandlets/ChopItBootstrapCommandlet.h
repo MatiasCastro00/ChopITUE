@@ -37,6 +37,8 @@ private:
 	bool CreateEconomyBlueprints() const;
 	bool CreateDayDefinition() const;
 	bool CreateBlockoutMaterials() const;
+	bool CreateDamageTextMaterial() const;
+	bool RebuildNavigationData(const FString& LongPackageName) const;
 	bool RebuildPhase1Map(
 		const FString& LongPackageName,
 		bool bFullSandbox,

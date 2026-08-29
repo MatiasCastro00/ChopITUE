@@ -1,6 +1,7 @@
 #include "Commandlets/ChopItBootstrapCommandlet.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "AI/NavigationSystemBase.h"
 #include "ChopItLogChannels.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkyLightComponent.h"
@@ -34,12 +35,15 @@
 #include "InputModifiers.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Materials/MaterialInstanceConstant.h"
+#include "Materials/Material.h"
 #include "Misc/PackageName.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
+#include "NavigationSystem.h"
 #include "Player/ChopItCharacter.h"
 #include "Progression/ChopItUpgradeDefinition.h"
 #include "Shop/ChopItShopTerminal.h"
 #include "Spawning/ChopItEnemyDirectorDefinition.h"
+#include "StaticMeshCompiler.h"
 #include "Pacts/ChopItPactDefinition.h"
 #include "Targets/ChopItCombatDummy.h"
 #include "UObject/SavePackage.h"
@@ -230,6 +234,13 @@ int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 	}
 	if (FParse::Param(*Params, TEXT("Phase10")) && !CreatePhase10Assets()) return 1;
 	if (FParse::Param(*Params, TEXT("Phase12")) && !CreatePhase12Assets()) return 1;
+	if (FParse::Param(*Params, TEXT("HarvestBlueprints")) && !CreateHarvestBlueprints()) return 1;
+	if (FParse::Param(*Params, TEXT("Presentation")) && !CreateDamageTextMaterial()) return 1;
+	if (FParse::Param(*Params, TEXT("CriticalBalance"))
+		&& (!CreateBasicAxeAsset() || !CreateSharedWeaponAssets())) return 1;
+	if (FParse::Param(*Params, TEXT("CycleBalance")) && !CreateDayDefinition()) return 1;
+	if (FParse::Param(*Params, TEXT("RebuildNavMesh"))
+		&& !RebuildNavigationData(ChopItBootstrap::ProgressionMap)) return 1;
 
 	UE_LOG(LogChopIt, Display, TEXT("ChopIt bootstrap assets are ready."));
 	return 0;
@@ -264,6 +275,7 @@ bool UChopItBootstrapCommandlet::CreateMapIfMissing(const FString& LongPackageNa
 bool UChopItBootstrapCommandlet::CreatePhase1Assets() const
 {
 	return CreateBlockoutMaterials()
+		&& CreateDamageTextMaterial()
 		&& CreateInputAssets()
 		&& CreateCharacterBlueprint()
 		&& RebuildPhase1Map(ChopItBootstrap::StartupMap, false)
@@ -298,7 +310,7 @@ bool UChopItBootstrapCommandlet::CreateBasicAxeAsset() const
 	BasicAxe->Range = 500.0f;
 	BasicAxe->ArcHalfAngleDegrees = 55.0f;
 	BasicAxe->MaxTargets = 3;
-	BasicAxe->CriticalChance = 0.0f;
+	BasicAxe->CriticalChance = 0.15f;
 	BasicAxe->CriticalMultiplier = 2.0f;
 	const bool bSaved = ChopItBootstrap::SaveAsset(BasicAxe);
 	UE_LOG(LogChopIt, Display, TEXT("Phase 2 basic axe asset: %s"), bSaved ? TEXT("OK") : TEXT("FAILED"));
@@ -343,7 +355,7 @@ bool UChopItBootstrapCommandlet::CreateSharedWeaponAssets() const
 		Weapon->Range = Spec.Range;
 		Weapon->ArcHalfAngleDegrees = Spec.Arc;
 		Weapon->MaxTargets = Spec.Targets;
-		Weapon->CriticalChance = 0.0f;
+		Weapon->CriticalChance = 0.15f;
 		Weapon->CriticalMultiplier = 2.0f;
 		if (!ChopItBootstrap::SaveAsset(Weapon)) { return false; }
 	}
@@ -649,9 +661,9 @@ bool UChopItBootstrapCommandlet::CreateDayDefinition() const
 	Day->MoneyPerWood = 4;
 	Day->TransferBatchSize = 1;
 	Day->TransferInterval = 0.15f;
-	Day->DayDuration = 30.0f;
-	Day->DuskMinimumDuration = 3.0f;
-	Day->DuskHardDeadline = 15.0f;
+	Day->DayDuration = 5.0f;
+	Day->DuskMinimumDuration = 2.0f;
+	Day->DuskHardDeadline = 2.0f;
 	Day->NightMinimumDuration = 20.0f;
 	Day->ElitePlaceholderDuration = 3.0f;
 	Day->ResolutionDuration = 2.0f;
@@ -826,6 +838,37 @@ bool UChopItBootstrapCommandlet::CreateBlockoutMaterials() const
 	return true;
 }
 
+bool UChopItBootstrapCommandlet::CreateDamageTextMaterial() const
+{
+	constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/Presentation/Materials/M_DamageText_AlwaysOnTop");
+	UMaterial* DamageTextMaterial = LoadObject<UMaterial>(
+		nullptr,
+		TEXT("/Game/ChopIt/Presentation/Materials/M_DamageText_AlwaysOnTop.M_DamageText_AlwaysOnTop"));
+	if (!DamageTextMaterial)
+	{
+		UMaterial* SourceMaterial = LoadObject<UMaterial>(
+			nullptr,
+			TEXT("/Engine/EngineMaterials/DefaultTextMaterialTranslucent.DefaultTextMaterialTranslucent"));
+		if (!SourceMaterial)
+		{
+			return false;
+		}
+		UPackage* Package = CreatePackage(PackageName);
+		DamageTextMaterial = DuplicateObject<UMaterial>(SourceMaterial, Package, TEXT("M_DamageText_AlwaysOnTop"));
+		if (!DamageTextMaterial)
+		{
+			return false;
+		}
+		FAssetRegistryModule::AssetCreated(DamageTextMaterial);
+	}
+
+	DamageTextMaterial->bDisableDepthTest = true;
+	DamageTextMaterial->PostEditChange();
+	const bool bSaved = ChopItBootstrap::SaveAsset(DamageTextMaterial);
+	UE_LOG(LogChopIt, Display, TEXT("Always-on-top damage text material: %s"), bSaved ? TEXT("OK") : TEXT("FAILED"));
+	return bSaved;
+}
+
 bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	const FString& LongPackageName,
 	const bool bFullSandbox,
@@ -994,8 +1037,54 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	ANavMeshBoundsVolume* NavBounds = World->SpawnActor<ANavMeshBoundsVolume>(FVector(0, 0, 200), FRotator::ZeroRotator, SpawnParameters);
 	NavBounds->SetActorLabel(TEXT("NavMeshBounds"));
 	NavBounds->SetActorScale3D(FVector(22, 22, 5));
+	FStaticMeshCompilingManager::Get().FinishAllCompilation();
+	FNavigationSystem::AddNavigationSystemToWorld(*World, FNavigationSystemRunMode::EditorMode);
+	if (UNavigationSystemV1* NavigationSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+	{
+		NavigationSystem->RemoveNavigationBuildLock(
+			ENavigationBuildLock::AsyncLoadLock,
+			UNavigationSystemV1::ELockRemovalRebuildAction::NoRebuild);
+	}
+	FNavigationSystem::Build(*World);
 
 	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, LongPackageName);
 	UE_LOG(LogChopIt, Display, TEXT("Rebuilt Phase 1 map %s: %s"), *LongPackageName, bSaved ? TEXT("OK") : TEXT("FAILED"));
+	return bSaved;
+}
+
+bool UChopItBootstrapCommandlet::RebuildNavigationData(const FString& LongPackageName) const
+{
+	if (!FPackageName::DoesPackageExist(LongPackageName))
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Cannot rebuild navigation; map does not exist: %s"), *LongPackageName);
+		return false;
+	}
+
+	UWorld* World = UEditorLoadingAndSavingUtils::LoadMap(LongPackageName);
+	if (!IsValid(World))
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Could not load map for navigation rebuild: %s"), *LongPackageName);
+		return false;
+	}
+
+	FStaticMeshCompilingManager::Get().FinishAllCompilation();
+	FNavigationSystem::AddNavigationSystemToWorld(*World, FNavigationSystemRunMode::EditorMode);
+	UNavigationSystemV1* NavigationSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	if (!NavigationSystem)
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Navigation system was not created for %s"), *LongPackageName);
+		return false;
+	}
+	NavigationSystem->RemoveNavigationBuildLock(
+		ENavigationBuildLock::AsyncLoadLock,
+		UNavigationSystemV1::ELockRemovalRebuildAction::NoRebuild);
+	FNavigationSystem::Build(*World);
+	if (!NavigationSystem->GetDefaultNavDataInstance(FNavigationSystem::DontCreate))
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Navigation build produced no navigation data for %s"), *LongPackageName);
+		return false;
+	}
+	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, LongPackageName);
+	UE_LOG(LogChopIt, Display, TEXT("Rebuilt navigation for %s: %s"), *LongPackageName, bSaved ? TEXT("OK") : TEXT("FAILED"));
 	return bSaved;
 }

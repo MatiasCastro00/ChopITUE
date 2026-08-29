@@ -8,9 +8,22 @@ class AChopItTree;
 class UBoxComponent;
 class UChopItHealthComponent;
 class UMaterialInterface;
+class UMaterialInstanceDynamic;
+class UPrimitiveComponent;
+class USphereComponent;
 class UStaticMeshComponent;
 class UTextRenderComponent;
 class UChopItHitFeedbackComponent;
+
+UENUM(BlueprintType)
+enum class EChopItTreeFoliageVariant : uint8
+{
+	Auto UMETA(DisplayName = "Auto"),
+	Pine UMETA(DisplayName = "Pine"),
+	Spring UMETA(DisplayName = "Spring"),
+	Summer UMETA(DisplayName = "Summer"),
+	Autumn UMETA(DisplayName = "Autumn")
+};
 
 UENUM(BlueprintType)
 enum class EChopItTreeHarvestState : uint8
@@ -34,8 +47,10 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	void SetBlockoutMaterials(UMaterialInterface* TrunkMaterial, UMaterialInterface* CrownMaterial);
+	void SetFoliageVariant(EChopItTreeFoliageVariant NewVariant);
 	UChopItHealthComponent* GetHealthComponent() const { return HealthComponent; }
 	UBoxComponent* GetPhysicsRoot() const { return PhysicsRoot; }
+	USphereComponent* GetCrownCollision() const { return CrownCollision; }
 	EChopItTreeHarvestState GetHarvestState() const { return HarvestState; }
 	bool HasSpawnedReward() const { return bRewardSpawned; }
 
@@ -44,9 +59,22 @@ public:
 private:
 	void HandleHealthChanged(float CurrentHealth, float MaxHealth, AActor* DamageSource);
 	void HandleDepleted(AActor* DeadActor, AActor* DamageSource);
+
+	UFUNCTION()
+	void HandleFallImpact(
+		UPrimitiveComponent* HitComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComponent,
+		FVector NormalImpulse,
+		const FHitResult& Hit);
+
 	void CheckFallSettled();
-	void SettleAndSpawnReward();
-	void SpawnRewardOnce();
+	bool TryResolveCrownContact();
+	bool IsImpactOnCrown(const FHitResult& Hit) const;
+	FLinearColor GetFoliageColor() const;
+	void ApplyFoliageColor();
+	void SpawnRewardOnce(const FVector& SpawnOrigin, const FVector& ImpactNormal);
+	void DestroyAtImpact(const FVector& ImpactLocation, const FVector& ImpactNormal);
 	void UpdateHealthLabel(float CurrentHealth, float MaxHealth);
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Tree")
@@ -59,6 +87,9 @@ private:
 	TObjectPtr<UStaticMeshComponent> CrownMesh;
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Tree")
+	TObjectPtr<USphereComponent> CrownCollision;
+
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Tree")
 	TObjectPtr<UTextRenderComponent> HealthLabel;
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Tree")
@@ -66,6 +97,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Tree")
 	TObjectPtr<UChopItHitFeedbackComponent> HitFeedbackComponent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Visual", meta = (AllowPrivateAccess = "true"))
+	EChopItTreeFoliageVariant FoliageVariant = EChopItTreeFoliageVariant::Auto;
 
 	UPROPERTY(EditAnywhere, Category = "ChopIt|Harvest")
 	TSubclassOf<AChopItLogPickup> LogPickupClass;
@@ -87,6 +121,9 @@ private:
 
 	bool bRewardSpawned = false;
 	TWeakObjectPtr<AActor> RewardRecipient;
+	TObjectPtr<UMaterialInterface> CrownMaterialSource;
+	TObjectPtr<UMaterialInstanceDynamic> CrownMaterialInstance;
 	double FallStartedAt = 0.0;
+	FVector PreviousCrownLocation = FVector::ZeroVector;
 	FTimerHandle FallSettleTimerHandle;
 };

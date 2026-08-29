@@ -1,4 +1,6 @@
+#include "ChopItCollision.h"
 #include "Components/BoxComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/Level.h"
@@ -60,10 +62,17 @@ bool FChopItPhase3HarvestDefaultsTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Trees begin without a reward"), Tree->HasSpawnedReward());
 		TestNotNull(TEXT("Tree has health"), Tree->GetHealthComponent());
 		TestNotNull(TEXT("Tree has a physics root"), Tree->GetPhysicsRoot());
+		TestNotNull(TEXT("Tree has a dedicated crown collision volume"), Tree->GetCrownCollision());
 		if (Tree->GetPhysicsRoot())
 		{
 			TestFalse(TEXT("Standing tree physics starts disabled"), Tree->GetPhysicsRoot()->IsSimulatingPhysics());
 			TestEqual(TEXT("Standing tree supports physics collision"), Tree->GetPhysicsRoot()->GetCollisionEnabled(), ECollisionEnabled::QueryAndPhysics);
+		}
+		if (Tree->GetCrownCollision())
+		{
+			TestEqual(TEXT("Crown collision is query-only"), Tree->GetCrownCollision()->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
+			TestEqual(TEXT("Crown detects the static world"), Tree->GetCrownCollision()->GetCollisionResponseToChannel(ECC_WorldStatic), ECR_Block);
+			TestEqual(TEXT("Crown detects other harvestable trees"), Tree->GetCrownCollision()->GetCollisionResponseToChannel(ChopItCollisionChannels::Harvestable), ECR_Block);
 		}
 	}
 
@@ -73,6 +82,13 @@ bool FChopItPhase3HarvestDefaultsTest::RunTest(const FString& Parameters)
 	{
 		TestFalse(TEXT("Log pickups do not Tick"), Pickup->PrimaryActorTick.bCanEverTick);
 		TestEqual(TEXT("Default log reward is integral"), Pickup->GetWoodUnits(), 3);
+		TestNotNull(TEXT("Pickup has a dedicated physics body"), Pickup->GetPhysicsBody());
+		TestEqual(TEXT("Pickup physics body is the actor root"), Pickup->GetRootComponent(), static_cast<USceneComponent*>(Pickup->GetPhysicsBody()));
+		if (Pickup->GetPhysicsBody())
+		{
+			TestEqual(TEXT("Pickup physics body blocks the static world"), Pickup->GetPhysicsBody()->GetCollisionResponseToChannel(ECC_WorldStatic), ECR_Block);
+			TestEqual(TEXT("Pickup physics body supports simulation"), Pickup->GetPhysicsBody()->GetCollisionEnabled(), ECollisionEnabled::QueryAndPhysics);
+		}
 		TestNotNull(TEXT("Pickup has magnet overlap sphere"), Pickup->GetMagnetSphere());
 		if (Pickup->GetMagnetSphere())
 		{

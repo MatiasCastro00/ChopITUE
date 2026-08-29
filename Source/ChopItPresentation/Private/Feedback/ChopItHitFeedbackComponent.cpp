@@ -115,6 +115,10 @@ void UChopItHitFeedbackComponent::HandleDamageReceived(const float Damage, const
 
 void UChopItHitFeedbackComponent::HandleDeath(AActor* DeadActor, AActor*)
 {
+	if (!bEnableDeathEffects)
+	{
+		return;
+	}
 	const UChopItDeveloperSettings* Settings = GetDefault<UChopItDeveloperSettings>();
 	if (!Settings || Settings->EffectsDensity <= 0.0f || !GetWorld() || !DeadActor)
 	{

@@ -28,13 +28,13 @@ public:
 	float TransferInterval = 0.15f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChopIt|Cycle", meta = (ClampMin = "1.0"))
-	float DayDuration = 30.0f;
+	float DayDuration = 5.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChopIt|Cycle", meta = (ClampMin = "0.0"))
-	float DuskMinimumDuration = 3.0f;
+	float DuskMinimumDuration = 2.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChopIt|Cycle", meta = (ClampMin = "0.1"))
-	float DuskHardDeadline = 15.0f;
+	float DuskHardDeadline = 2.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ChopIt|Cycle", meta = (ClampMin = "0.0"))
 	float NightMinimumDuration = 6.0f;
