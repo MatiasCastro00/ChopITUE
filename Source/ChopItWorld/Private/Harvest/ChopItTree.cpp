@@ -1,15 +1,21 @@
 #include "Harvest/ChopItTree.h"
 
 #include "ChopItCollision.h"
+#include "ChopItDeveloperSettings.h"
 #include "ChopItLogChannels.h"
 #include "Combat/ChopItHealthComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Harvest/ChopItForestRegistrySubsystem.h"
 #include "Harvest/ChopItLogPickup.h"
 #include "Feedback/ChopItHitFeedbackComponent.h"
+#include "Feedback/ChopItFeedbackBurst.h"
+#include "Feedback/ChopItLeafFall.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -23,6 +29,7 @@ AChopItTree::AChopItTree()
 	PhysicsRoot->SetCollisionProfileName(ChopItCollisionProfiles::Harvestable);
 	PhysicsRoot->SetMobility(EComponentMobility::Movable);
 	PhysicsRoot->SetSimulatePhysics(false);
+	PhysicsRoot->SetNotifyRigidBodyCollision(true);
 	PhysicsRoot->SetLinearDamping(0.45f);
 	PhysicsRoot->SetAngularDamping(1.2f);
 
@@ -37,6 +44,21 @@ AChopItTree::AChopItTree()
 	CrownMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 120.0f));
 	CrownMesh->SetRelativeScale3D(FVector(2.2f, 2.2f, 2.7f));
 	CrownMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// A separate query shape represents the leaves. The trunk remains the rigid
+	// body that makes the tree fall, but only contact with this volume is allowed
+	// to resolve the harvest and release the drops.
+	CrownCollision = CreateDefaultSubobject<USphereComponent>(TEXT("CrownCollision"));
+	CrownCollision->SetupAttachment(PhysicsRoot);
+	CrownCollision->InitSphereRadius(125.0f);
+	CrownCollision->SetRelativeLocation(FVector(0.0f, 0.0f, 120.0f));
+	CrownCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	CrownCollision->SetCollisionObjectType(ChopItCollisionChannels::Harvestable);
+	CrownCollision->SetCollisionResponseToAllChannels(ECR_Ignore);
+	CrownCollision->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+	CrownCollision->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
+	CrownCollision->SetCollisionResponseToChannel(ChopItCollisionChannels::Harvestable, ECR_Block);
+	CrownCollision->SetGenerateOverlapEvents(false);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -62,6 +84,8 @@ AChopItTree::AChopItTree()
 	HitFeedbackComponent->SetVisualComponent(PhysicsRoot);
 	HitFeedbackComponent->SetWoodenTarget(true);
 	HitFeedbackComponent->SetFoliageComponent(CrownMesh);
+	// Tree death is resolved on its physical impact, not when health reaches zero.
+	HitFeedbackComponent->SetDeathEffectsEnabled(false);
 	LogPickupClass = AChopItLogPickup::StaticClass();
 }
 
@@ -70,6 +94,8 @@ void AChopItTree::BeginPlay()
 	Super::BeginPlay();
 	HealthComponent->OnHealthChanged.AddUObject(this, &AChopItTree::HandleHealthChanged);
 	HealthComponent->OnDeath.AddUObject(this, &AChopItTree::HandleDepleted);
+	PhysicsRoot->OnComponentHit.AddDynamic(this, &AChopItTree::HandleFallImpact);
+	ApplyFoliageColor();
 	UpdateHealthLabel(HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth());
 	if (UWorld* World = GetWorld())
 	{
@@ -96,7 +122,68 @@ void AChopItTree::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AChopItTree::SetBlockoutMaterials(UMaterialInterface* TrunkMaterial, UMaterialInterface* CrownMaterial)
 {
 	TrunkMesh->SetMaterial(0, TrunkMaterial);
-	CrownMesh->SetMaterial(0, CrownMaterial);
+	CrownMaterialSource = CrownMaterial;
+	ApplyFoliageColor();
+}
+
+void AChopItTree::SetFoliageVariant(const EChopItTreeFoliageVariant NewVariant)
+{
+	FoliageVariant = NewVariant;
+	ApplyFoliageColor();
+}
+
+FLinearColor AChopItTree::GetFoliageColor() const
+{
+	EChopItTreeFoliageVariant ResolvedVariant = FoliageVariant;
+	if (ResolvedVariant == EChopItTreeFoliageVariant::Auto)
+	{
+		constexpr EChopItTreeFoliageVariant AutoVariants[] =
+		{
+			EChopItTreeFoliageVariant::Pine,
+			EChopItTreeFoliageVariant::Spring,
+			EChopItTreeFoliageVariant::Summer,
+			EChopItTreeFoliageVariant::Autumn
+		};
+		ResolvedVariant = AutoVariants[GetTypeHash(GetFName()) % UE_ARRAY_COUNT(AutoVariants)];
+	}
+
+	switch (ResolvedVariant)
+	{
+	case EChopItTreeFoliageVariant::Pine:
+		return FLinearColor(0.015f, 0.12f, 0.025f);
+	case EChopItTreeFoliageVariant::Spring:
+		return FLinearColor(0.14f, 0.52f, 0.045f);
+	case EChopItTreeFoliageVariant::Summer:
+		return FLinearColor(0.035f, 0.29f, 0.055f);
+	case EChopItTreeFoliageVariant::Autumn:
+		return FLinearColor(0.62f, 0.13f, 0.015f);
+	default:
+		return FLinearColor(0.015f, 0.12f, 0.025f);
+	}
+}
+
+void AChopItTree::ApplyFoliageColor()
+{
+	if (!CrownMesh)
+	{
+		return;
+	}
+
+	if (!CrownMaterialSource)
+	{
+		CrownMaterialSource = CrownMesh->GetMaterial(0);
+	}
+	if (!CrownMaterialSource)
+	{
+		return;
+	}
+
+	CrownMaterialInstance = UMaterialInstanceDynamic::Create(CrownMaterialSource, this);
+	if (CrownMaterialInstance)
+	{
+		CrownMaterialInstance->SetVectorParameterValue(TEXT("Color"), GetFoliageColor());
+		CrownMesh->SetMaterial(0, CrownMaterialInstance);
+	}
 }
 
 void AChopItTree::HandleHealthChanged(const float CurrentHealth, const float MaxHealth, AActor* DamageSource)
@@ -118,6 +205,7 @@ void AChopItTree::HandleDepleted(AActor* DeadActor, AActor* DamageSource)
 	PhysicsRoot->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	PhysicsRoot->SetSimulatePhysics(true);
 	PhysicsRoot->WakeAllRigidBodies();
+	PreviousCrownLocation = CrownCollision->GetComponentLocation();
 
 	FVector FallDirection = DamageSource
 		? GetActorLocation() - DamageSource->GetActorLocation()
@@ -133,46 +221,146 @@ void AChopItTree::HandleDepleted(AActor* DeadActor, AActor* DamageSource)
 		FallSettleTimerHandle,
 		this,
 		&AChopItTree::CheckFallSettled,
-		0.2f,
+		0.025f,
 		true,
-		MinimumFallDuration);
+		0.025f);
 	UE_LOG(LogChopIt, Display, TEXT("Tree %s entered Falling."), *GetName());
+}
+
+void AChopItTree::HandleFallImpact(
+	UPrimitiveComponent* HitComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComponent,
+	FVector NormalImpulse,
+	const FHitResult& Hit)
+{
+	if ((HarvestState != EChopItTreeHarvestState::Falling && HarvestState != EChopItTreeHarvestState::Settled)
+		|| bRewardSpawned || !GetWorld())
+	{
+		return;
+	}
+	if (!IsImpactOnCrown(Hit))
+	{
+		return;
+	}
+
+	// The standing trunk already touches the floor. Ignore that initial contact
+	// and emit the drop only once the falling motion has actually started.
+	const double Elapsed = GetWorld()->GetTimeSeconds() - FallStartedAt;
+	if (Elapsed < 0.15)
+	{
+		return;
+	}
+
+	FVector ImpactNormal = Hit.ImpactNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	if (ImpactNormal.Z < 0.15f)
+	{
+		ImpactNormal.Z = 0.15f;
+		ImpactNormal.Normalize();
+	}
+	const FVector SpawnOrigin = Hit.ImpactPoint + ImpactNormal * 42.0f + FVector(0.0f, 0.0f, 24.0f);
+	SpawnRewardOnce(SpawnOrigin, ImpactNormal);
+	DestroyAtImpact(Hit.ImpactPoint, ImpactNormal);
+	UE_LOG(LogChopIt, Display, TEXT("Tree %s released its reward on impact with %s."), *GetName(), *GetNameSafe(OtherActor));
 }
 
 void AChopItTree::CheckFallSettled()
 {
-	if (HarvestState != EChopItTreeHarvestState::Falling)
+	if (HarvestState != EChopItTreeHarvestState::Falling && HarvestState != EChopItTreeHarvestState::Settled)
 	{
 		GetWorldTimerManager().ClearTimer(FallSettleTimerHandle);
 		return;
 	}
 
+	if (TryResolveCrownContact())
+	{
+		return;
+	}
+
+	if (HarvestState == EChopItTreeHarvestState::Settled)
+	{
+		return;
+	}
+
+	// Never harvest due only to a timeout or because the trunk stopped moving.
+	// A resting tree remains and keeps a low-frequency crown-contact check so a
+	// later push can still complete the harvest through the leaves.
 	const double Elapsed = GetWorld()->GetTimeSeconds() - FallStartedAt;
 	const bool bMotionSettled = PhysicsRoot->GetPhysicsLinearVelocity().SizeSquared() < FMath::Square(15.0)
 		&& PhysicsRoot->GetPhysicsAngularVelocityInDegrees().SizeSquared() < FMath::Square(8.0);
 	if (bMotionSettled || Elapsed >= MaximumFallDuration)
 	{
-		SettleAndSpawnReward();
+		HarvestState = EChopItTreeHarvestState::Settled;
+		GetWorldTimerManager().SetTimer(
+			FallSettleTimerHandle,
+			this,
+			&AChopItTree::CheckFallSettled,
+			0.1f,
+			true);
 	}
 }
 
-void AChopItTree::SettleAndSpawnReward()
+bool AChopItTree::TryResolveCrownContact()
 {
-	if (HarvestState != EChopItTreeHarvestState::Falling)
+	UWorld* World = GetWorld();
+	if (!World || !CrownCollision
+		|| (HarvestState != EChopItTreeHarvestState::Falling && HarvestState != EChopItTreeHarvestState::Settled)
+		|| bRewardSpawned)
 	{
-		return;
+		return false;
 	}
-	GetWorldTimerManager().ClearTimer(FallSettleTimerHandle);
-	PhysicsRoot->SetSimulatePhysics(false);
-	PhysicsRoot->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	PhysicsRoot->SetCollisionResponseToAllChannels(ECR_Ignore);
-	HarvestState = EChopItTreeHarvestState::Settled;
-	SpawnRewardOnce();
+
+	const FVector CurrentCrownLocation = CrownCollision->GetComponentLocation();
+	FCollisionObjectQueryParams ObjectQuery;
+	ObjectQuery.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQuery.AddObjectTypesToQuery(ECC_WorldDynamic);
+	ObjectQuery.AddObjectTypesToQuery(ChopItCollisionChannels::Harvestable);
+	FCollisionQueryParams QueryParams(FName(TEXT("TreeCrownContact")), false, this);
+	QueryParams.bFindInitialOverlaps = true;
+	FHitResult Hit;
+	const bool bHit = World->SweepSingleByObjectType(
+		Hit,
+		PreviousCrownLocation,
+		CurrentCrownLocation,
+		FQuat::Identity,
+		ObjectQuery,
+		FCollisionShape::MakeSphere(CrownCollision->GetScaledSphereRadius()),
+		QueryParams);
+	PreviousCrownLocation = CurrentCrownLocation;
+	if (!bHit || !Hit.bBlockingHit)
+	{
+		return false;
+	}
+
+	FVector ImpactNormal = Hit.ImpactNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	if (ImpactNormal.Z < 0.15f)
+	{
+		ImpactNormal.Z = 0.15f;
+		ImpactNormal.Normalize();
+	}
+	const FVector ImpactPoint = Hit.ImpactPoint.IsNearlyZero()
+		? CurrentCrownLocation - ImpactNormal * CrownCollision->GetScaledSphereRadius()
+		: Hit.ImpactPoint;
+	const FVector SpawnOrigin = ImpactPoint + ImpactNormal * 42.0f + FVector(0.0f, 0.0f, 24.0f);
+	SpawnRewardOnce(SpawnOrigin, ImpactNormal);
+	DestroyAtImpact(ImpactPoint, ImpactNormal);
+	UE_LOG(LogChopIt, Display, TEXT("Tree %s released its reward after verified crown contact with %s."), *GetName(), *GetNameSafe(Hit.GetActor()));
+	return true;
 }
 
-void AChopItTree::SpawnRewardOnce()
+bool AChopItTree::IsImpactOnCrown(const FHitResult& Hit) const
 {
-	if (bRewardSpawned || HarvestState != EChopItTreeHarvestState::Settled)
+	if (!CrownCollision)
+	{
+		return false;
+	}
+	const float AllowedRadius = CrownCollision->GetScaledSphereRadius() + 12.0f;
+	return FVector::DistSquared(Hit.ImpactPoint, CrownCollision->GetComponentLocation()) <= FMath::Square(AllowedRadius);
+}
+
+void AChopItTree::SpawnRewardOnce(const FVector& SpawnOrigin, const FVector& ImpactNormal)
+{
+	if (bRewardSpawned)
 	{
 		return;
 	}
@@ -180,23 +368,78 @@ void AChopItTree::SpawnRewardOnce()
 
 	if (LogPickupClass)
 	{
-		FActorSpawnParameters SpawnParameters;
-		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		AChopItLogPickup* Pickup = GetWorld()->SpawnActor<AChopItLogPickup>(
-			LogPickupClass,
-			PhysicsRoot->GetComponentLocation() + FVector(0.0f, 0.0f, 60.0f),
-			FRotator::ZeroRotator,
-			SpawnParameters);
-		if (Pickup)
+		const int32 PickupCount = FMath::Max(1, WoodRewardUnits);
+		for (int32 Index = 0; Index < PickupCount; ++Index)
 		{
-			Pickup->InitializeReward(WoodRewardUnits, ExperienceReward);
+			FActorSpawnParameters SpawnParameters;
+			SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			const FVector HorizontalScatter(
+				FMath::FRandRange(-1.0f, 1.0f),
+				FMath::FRandRange(-1.0f, 1.0f),
+				0.0f);
+			FVector LaunchDirection = ImpactNormal * 0.35f + HorizontalScatter;
+			LaunchDirection.Z = FMath::Max(0.45f, LaunchDirection.Z + FMath::FRandRange(0.25f, 0.6f));
+			LaunchDirection.Normalize();
+			const FVector SpawnLocation = SpawnOrigin + HorizontalScatter.GetSafeNormal() * (Index * 8.0f);
+			AChopItLogPickup* Pickup = GetWorld()->SpawnActor<AChopItLogPickup>(
+				LogPickupClass,
+				SpawnLocation,
+				FRotator::ZeroRotator,
+				SpawnParameters);
+			if (Pickup)
+			{
+				Pickup->InitializeReward(1, Index == 0 ? ExperienceReward : 0);
+				Pickup->LaunchFromImpact(
+					LaunchDirection * FMath::FRandRange(180.0f, 280.0f),
+					FVector(
+						FMath::FRandRange(-240.0f, 240.0f),
+						FMath::FRandRange(-240.0f, 240.0f),
+						FMath::FRandRange(-320.0f, 320.0f)));
+			}
 		}
 	}
 
-	HarvestState = EChopItTreeHarvestState::Harvested;
 	OnHarvested.Broadcast(this, WoodRewardUnits, ExperienceReward);
 	UE_LOG(LogChopIt, Display, TEXT("Tree %s emitted one reward: wood=%d xp=%d."), *GetName(), WoodRewardUnits, ExperienceReward);
 	SetLifeSpan(8.0f);
+}
+
+void AChopItTree::DestroyAtImpact(const FVector& ImpactLocation, const FVector& ImpactNormal)
+{
+	if (!GetWorld())
+	{
+		Destroy();
+		return;
+	}
+
+	const UChopItDeveloperSettings* Settings = GetDefault<UChopItDeveloperSettings>();
+	const float Density = Settings ? Settings->EffectsDensity : 1.0f;
+	if (Density > 0.0f)
+	{
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (AChopItFeedbackBurst* Burst = GetWorld()->SpawnActor<AChopItFeedbackBurst>(
+			AChopItFeedbackBurst::StaticClass(), ImpactLocation, FRotator::ZeroRotator, SpawnParameters))
+		{
+			Burst->InitializeBurst(ImpactNormal, false, true, Density);
+		}
+		if (CrownMesh)
+		{
+			if (AChopItLeafFall* Leaves = GetWorld()->SpawnActor<AChopItLeafFall>(
+				AChopItLeafFall::StaticClass(), CrownMesh->GetComponentLocation(), FRotator::ZeroRotator, SpawnParameters))
+			{
+				Leaves->InitializeLeafFall(Density, true, GetFoliageColor());
+			}
+		}
+	}
+
+	GetWorldTimerManager().ClearTimer(FallSettleTimerHandle);
+	PhysicsRoot->SetSimulatePhysics(false);
+	PhysicsRoot->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	HarvestState = EChopItTreeHarvestState::Harvested;
+	SetActorEnableCollision(false);
+	SetActorHiddenInGame(true);
+	Destroy();
 }
 
 void AChopItTree::UpdateHealthLabel(const float CurrentHealth, const float MaxHealth)

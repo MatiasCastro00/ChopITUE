@@ -1,5 +1,6 @@
 #include "Cycle/ChopItWorldPresentationComponent.h"
 
+#include "Cycle/ChopItFireflySwarm.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/AudioComponent.h"
 #include "ChopItDeveloperSettings.h"
@@ -35,6 +36,16 @@ void UChopItWorldPresentationComponent::BeginPlay()
 	}
 }
 
+void UChopItWorldPresentationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (IsValid(FireflySwarm))
+	{
+		FireflySwarm->Destroy();
+		FireflySwarm = nullptr;
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
 void UChopItWorldPresentationComponent::HandlePhaseChanged(
 	const EChopItCyclePhase NewPhase,
 	const EChopItCyclePhase,
@@ -50,14 +61,15 @@ void UChopItWorldPresentationComponent::HandlePhaseChanged(
 	FLinearColor Color(1.0f, 0.88f, 0.70f);
 	switch (NewPhase)
 	{
-	case EChopItCyclePhase::Dusk: Intensity = 2.0f; Color = FLinearColor(1.0f, 0.28f, 0.06f); break;
-	case EChopItCyclePhase::Night: Intensity = 0.35f; Color = FLinearColor(0.12f, 0.22f, 1.0f); break;
-	case EChopItCyclePhase::Elite: Intensity = 0.7f; Color = FLinearColor(1.0f, 0.02f, 0.02f); break;
+	case EChopItCyclePhase::Dusk: Intensity = 1.6f; Color = FLinearColor(1.0f, 0.68f, 0.42f); break;
+	case EChopItCyclePhase::Night: Intensity = 0.55f; Color = FLinearColor(0.46f, 0.57f, 0.76f); break;
+	case EChopItCyclePhase::Elite: Intensity = 0.42f; Color = FLinearColor(0.72f, 0.34f, 0.26f); break;
 	case EChopItCyclePhase::Resolution: Intensity = 3.0f; Color = FLinearColor(0.25f, 1.0f, 0.35f); break;
 	case EChopItCyclePhase::Death: Intensity = 0.1f; Color = FLinearColor(0.5f, 0.0f, 0.0f); break;
 	default: break;
 	}
 
+	UpdateFireflies(NewPhase);
 	if (!DirectionalLight.IsValid())
 	{
 		for (TActorIterator<ADirectionalLight> It(World); It; ++It)
@@ -81,6 +93,35 @@ void UChopItWorldPresentationComponent::HandlePhaseChanged(
 	if (const UChopItDeveloperSettings* Settings = GetDefault<UChopItDeveloperSettings>(); Settings && Settings->bEnableImpactSounds)
 	{
 		ChopItFeedbackAudio::PlayPhaseSting(this, GetOwner()->GetActorLocation(), static_cast<int32>(NewPhase), Settings->EffectsVolume);
+	}
+}
+
+void UChopItWorldPresentationComponent::UpdateFireflies(const EChopItCyclePhase NewPhase)
+{
+	const bool bNighttime = NewPhase == EChopItCyclePhase::Night || NewPhase == EChopItCyclePhase::Elite;
+	if (!bNighttime)
+	{
+		if (IsValid(FireflySwarm))
+		{
+			FireflySwarm->Destroy();
+			FireflySwarm = nullptr;
+		}
+		return;
+	}
+
+	if (!IsValid(FireflySwarm))
+	{
+		if (UWorld* World = GetWorld())
+		{
+			FActorSpawnParameters SpawnParameters;
+			SpawnParameters.Owner = GetOwner();
+			SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			FireflySwarm = World->SpawnActor<AChopItFireflySwarm>(FVector::ZeroVector, FRotator::ZeroRotator, SpawnParameters);
+			if (FireflySwarm)
+			{
+				FireflySwarm->Configure(FireflyCount, FireflyHorizontalRadius, FireflyMaximumHeight);
+			}
+		}
 	}
 }
 

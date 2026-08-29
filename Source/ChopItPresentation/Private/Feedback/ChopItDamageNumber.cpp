@@ -2,6 +2,8 @@
 
 #include "Components/TextRenderComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 
 AChopItDamageNumber::AChopItDamageNumber()
 {
@@ -14,6 +16,25 @@ AChopItDamageNumber::AChopItDamageNumber()
 	TextRender->SetWorldSize(38.0f);
 	TextRender->SetCastShadow(false);
 	TextRender->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// This material is a project copy of Unreal's translucent text material with
+	// depth testing disabled. The priority keeps simultaneous hit numbers ordered
+	// above every other translucent gameplay effect as well.
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> DamageTextMaterial(
+		TEXT("/Game/ChopIt/Presentation/Materials/M_DamageText_AlwaysOnTop.M_DamageText_AlwaysOnTop"));
+	if (DamageTextMaterial.Succeeded())
+	{
+		TextRender->SetMaterial(0, DamageTextMaterial.Object);
+	}
+	else
+	{
+		static ConstructorHelpers::FObjectFinder<UMaterialInterface> FallbackTextMaterial(
+			TEXT("/Engine/EngineMaterials/DefaultTextMaterialTranslucent.DefaultTextMaterialTranslucent"));
+		if (FallbackTextMaterial.Succeeded())
+		{
+			TextRender->SetMaterial(0, FallbackTextMaterial.Object);
+		}
+	}
+	TextRender->TranslucencySortPriority = 32767;
 }
 
 void AChopItDamageNumber::InitializeDamageNumber(const float Damage, const bool bCritical)
@@ -23,7 +44,7 @@ void AChopItDamageNumber::InitializeDamageNumber(const float Damage, const bool 
 	Drift = FVector(FMath::FRandRange(-18.0f, 18.0f), FMath::FRandRange(-18.0f, 18.0f), 78.0f);
 	BaseScale = (bCritical ? 1.34f : 1.0f) * FMath::FRandRange(0.91f, 1.10f);
 	RollOffset = FMath::FRandRange(-8.0f, 8.0f);
-	StartColor = bCritical ? FLinearColor(1.0f, 0.56f, 0.04f) : FLinearColor(1.0f, 0.22f, 0.10f);
+	StartColor = bCritical ? FLinearColor::Yellow : FLinearColor(1.0f, 0.22f, 0.10f);
 	TextRender->SetText(bCritical ? FText::FromString(FString::Printf(TEXT("CRIT! %.0f"), Damage)) : FText::AsNumber(FMath::RoundToInt(Damage)));
 	TextRender->SetWorldSize(bCritical ? 48.0f : 38.0f);
 }

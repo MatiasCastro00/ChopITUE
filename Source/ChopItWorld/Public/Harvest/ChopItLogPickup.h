@@ -19,8 +19,10 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	void InitializeWoodUnits(int32 NewWoodUnits);
 	void InitializeReward(int32 NewWoodUnits, int32 NewExperienceReward);
+	void LaunchFromImpact(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees);
 	int32 GetWoodUnits() const { return WoodUnits; }
 	USphereComponent* GetMagnetSphere() const { return MagnetSphere; }
+	USphereComponent* GetPhysicsBody() const { return PhysicsBody; }
 
 private:
 	UFUNCTION()
@@ -40,7 +42,14 @@ private:
 		int32 OtherBodyIndex);
 
 	void UpdateMagnetism();
+	void UpdateGroundSafety();
 	void UpdateLabel();
+	void UpdateLabelFacingCamera();
+	void ConfigureDroppedPhysics();
+	void ResumeDroppedPhysics();
+
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Pickup")
+	TObjectPtr<USphereComponent> PhysicsBody;
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Pickup")
 	TObjectPtr<USphereComponent> MagnetSphere;
@@ -65,4 +74,6 @@ private:
 
 	TWeakObjectPtr<UChopItWoodCargoComponent> CandidateCargo;
 	FTimerHandle MagnetTimerHandle;
+	FTimerHandle GroundSafetyTimerHandle;
+	FVector PreviousPhysicsLocation = FVector::ZeroVector;
 };

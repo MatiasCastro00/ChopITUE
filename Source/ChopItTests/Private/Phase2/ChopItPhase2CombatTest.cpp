@@ -117,7 +117,7 @@ bool FChopItPhase2AssetsAndMapTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Weapon has positive range"), Weapon->Range > 0.0f);
 	TestTrue(TEXT("Weapon has a frontal arc"), Weapon->ArcHalfAngleDegrees > 0.0f && Weapon->ArcHalfAngleDegrees < 90.0f);
 	TestEqual(TEXT("Basic axe cleave target cap"), Weapon->MaxTargets, 3);
-	TestFalse(TEXT("Criticals are disabled in the baseline"), Weapon->CriticalChance > 0.0f);
+	TestTrue(TEXT("Baseline critical chance is fifteen percent"), FMath::IsNearlyEqual(Weapon->CriticalChance, 0.15f));
 	TestEqual(TEXT("Weapon is registered under the expected primary type"), Weapon->GetPrimaryAssetId().PrimaryAssetType, FPrimaryAssetType(TEXT("ChopItWeapon")));
 
 	const FString CombatMapPackage = TEXT("/Game/ChopIt/World/Maps/L_Test_Combat");

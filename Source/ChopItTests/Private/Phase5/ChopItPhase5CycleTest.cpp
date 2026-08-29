@@ -119,7 +119,8 @@ bool FChopItPhase5AssetsAndMapTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("Day definition contains cycle timings"), Day);
 	if (Day)
 	{
-		TestTrue(TEXT("Day has positive duration"), Day->DayDuration > 0.0f);
+		TestEqual(TEXT("Day lasts five seconds for the current recording loop"), Day->DayDuration, 5.0f);
+		TestEqual(TEXT("Dusk lasts exactly two seconds"), Day->DuskHardDeadline, 2.0f);
 		TestTrue(TEXT("Dusk hard deadline follows minimum"), Day->DuskHardDeadline >= Day->DuskMinimumDuration);
 		TestTrue(TEXT("Night has a minimum duration"), Day->NightMinimumDuration > 0.0f);
 	}

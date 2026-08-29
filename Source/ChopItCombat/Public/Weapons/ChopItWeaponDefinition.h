@@ -55,7 +55,7 @@ public:
 	int32 MaxTargets = 3;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float CriticalChance = 0.0f;
+	float CriticalChance = 0.15f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (ClampMin = "1.0"))
 	float CriticalMultiplier = 2.0f;

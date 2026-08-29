@@ -2,6 +2,7 @@
 
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
 AChopItLeafFall::AChopItLeafFall()
@@ -18,9 +19,18 @@ AChopItLeafFall::AChopItLeafFall()
 	if (LeavesMaterial.Succeeded()) { Leaves->SetMaterial(0, LeavesMaterial.Object); }
 }
 
-void AChopItLeafFall::InitializeLeafFall(const float Density, const bool bHeavyFall)
+void AChopItLeafFall::InitializeLeafFall(const float Density, const bool bHeavyFall, const FLinearColor LeafColor)
 {
 	bHeavy = bHeavyFall;
+	if (Leaves && Leaves->GetMaterial(0))
+	{
+		LeafMaterialInstance = UMaterialInstanceDynamic::Create(Leaves->GetMaterial(0), this);
+		if (LeafMaterialInstance)
+		{
+			LeafMaterialInstance->SetVectorParameterValue(TEXT("Color"), LeafColor);
+			Leaves->SetMaterial(0, LeafMaterialInstance);
+		}
+	}
 	RemainingLeaves = FMath::Clamp(FMath::RoundToInt((bHeavy ? 18.0f : 7.0f) * Density), 0, 24);
 	if (RemainingLeaves == 0)
 	{

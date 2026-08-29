@@ -26,13 +26,13 @@ struct CHOPITWORLD_API FChopItCycleTimings
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float DayDuration = 30.0f;
+	float DayDuration = 5.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float DuskMinimumDuration = 3.0f;
+	float DuskMinimumDuration = 2.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float DuskHardDeadline = 15.0f;
+	float DuskHardDeadline = 2.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float NightMinimumDuration = 6.0f;
