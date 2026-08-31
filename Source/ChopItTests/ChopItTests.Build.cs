@@ -16,7 +16,8 @@ public class ChopItTests : ModuleRules
 			"ChopItPresentation",
 			"EnhancedInput",
 			"GameplayTags",
-			"InputCore"
+			"InputCore",
+			"UnrealEd"
 		});
 	}
 }
