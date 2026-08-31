@@ -19,6 +19,7 @@ class UStaticMeshComponent;
 class UTextRenderComponent;
 class UChopItHitFeedbackComponent;
 class UChopItAttackFeedbackComponent;
+class UChopItTetherReceiverComponent;
 
 /** Camera-relative top-down character used by the gameplay sandbox. */
 UCLASS(Blueprintable)
@@ -39,6 +40,7 @@ public:
 	UChopItHealthComponent* GetHealthComponent() const { return HealthComponent; }
 	UChopItWoodCargoComponent* GetWoodCargoComponent() const { return WoodCargoComponent; }
 	UChopItWeaponLoadoutComponent* GetWeaponLoadoutComponent() const { return WeaponLoadoutComponent; }
+	UChopItTetherReceiverComponent* GetTetherReceiverComponent() const { return TetherReceiverComponent; }
 	UTextRenderComponent* GetWoodCargoLabel() const { return WoodCargoLabel; }
 
 protected:
@@ -109,6 +111,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Harvest")
 	TObjectPtr<UChopItWoodCargoComponent> WoodCargoComponent;
+
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain")
+	TObjectPtr<UChopItTetherReceiverComponent> TetherReceiverComponent;
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Harvest")
 	TObjectPtr<UTextRenderComponent> WoodCargoLabel;

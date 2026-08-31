@@ -19,6 +19,9 @@ AChopItEnemyCharacter::AChopItEnemyCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 	GetCapsuleComponent()->InitCapsuleSize(38.0f, 68.0f);
 	GetCapsuleComponent()->SetCollisionProfileName(ChopItCollisionProfiles::Enemy);
+	// Keep this explicit as well as in DefaultEngine.ini so an old Blueprint CDO
+	// or stale profile cache can never make enemies disturb the simulated rope.
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ChopItCollisionChannels::Chain, ECR_Ignore);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->bRunPhysicsWithNoController = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);

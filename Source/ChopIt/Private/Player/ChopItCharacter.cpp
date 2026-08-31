@@ -13,6 +13,7 @@
 #include "Economy/ChopItEconomyComponent.h"
 #include "Economy/ChopItCabinHub.h"
 #include "Economy/ChopItQuotaComponent.h"
+#include "Economy/ChopItTetherReceiverComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
@@ -102,6 +103,7 @@ AChopItCharacter::AChopItCharacter()
 	AttackFeedbackComponent = CreateDefaultSubobject<UChopItAttackFeedbackComponent>(TEXT("AttackFeedbackComponent"));
 	WeaponLoadoutComponent = CreateDefaultSubobject<UChopItWeaponLoadoutComponent>(TEXT("WeaponLoadoutComponent"));
 	WoodCargoComponent = CreateDefaultSubobject<UChopItWoodCargoComponent>(TEXT("WoodCargoComponent"));
+	TetherReceiverComponent = CreateDefaultSubobject<UChopItTetherReceiverComponent>(TEXT("TetherReceiverComponent"));
 
 	WoodCargoLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("WoodCargoLabel"));
 	WoodCargoLabel->SetupAttachment(GetCapsuleComponent());
@@ -226,8 +228,12 @@ void AChopItCharacter::HandleMove(const FInputActionValue& Value)
 	CameraRight.Z = 0.0f;
 	CameraRight.Normalize();
 
-	AddMovementInput(CameraForward, MovementInput.Y);
-	AddMovementInput(CameraRight, MovementInput.X);
+	FVector WorldDirection = CameraForward * MovementInput.Y + CameraRight * MovementInput.X;
+	if (TetherReceiverComponent)
+	{
+		WorldDirection = TetherReceiverComponent->ConstrainMovementDirection(WorldDirection);
+	}
+	AddMovementInput(WorldDirection);
 }
 
 FVector2D AChopItCharacter::NormalizeMovementInput(const FVector2D& Input)

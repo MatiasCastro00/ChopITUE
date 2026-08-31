@@ -744,20 +744,42 @@ bool UChopItBootstrapCommandlet::CreateChainLabAssets() const
 	{
 		return false;
 	}
-	const bool bNewDefinition = !FPackageName::DoesPackageExist(ChopItBootstrap::DefaultChainDefinitionPackage);
 	UChopItChainDefinition* DefaultChainDefinition = ChopItBootstrap::LoadOrCreateAsset<UChopItChainDefinition>(
 		ChopItBootstrap::DefaultChainDefinitionPackage, TEXT("DA_Chain_Default"));
 	if (!DefaultChainDefinition)
 	{
 		return false;
 	}
-	if (bNewDefinition)
+	if (!DefaultChainDefinition->ChainLinkMesh)
 	{
 		DefaultChainDefinition->ChainLinkMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-		if (!DefaultChainDefinition->ChainLinkMesh || !ChopItBootstrap::SaveAsset(DefaultChainDefinition))
-		{
-			return false;
-		}
+	}
+	// The floor remains frictionless while obstacle contact gets enough lateral
+	// friction to preserve a wrap. These are the stable custom-rope defaults.
+	DefaultChainDefinition->CableSolverIterations = 32;
+	DefaultChainDefinition->CableConstraintVelocityDamping = 0.9f;
+	DefaultChainDefinition->CableMaximumSubsteps = 8;
+	DefaultChainDefinition->CableVelocityDamping = 0.02f;
+	DefaultChainDefinition->CableCollisionSkin = 1.0f;
+	DefaultChainDefinition->CableCollisionIterations = 5;
+	DefaultChainDefinition->CableGroundFriction = 0.0f;
+	DefaultChainDefinition->CableCollisionFriction = 0.08f;
+	DefaultChainDefinition->WrapSweepRadius = 6.0f;
+	DefaultChainDefinition->WrapAnchorSurfaceOffset = 0.75f;
+	DefaultChainDefinition->WrapMinimumAnchorSeparation = 12.0f;
+	DefaultChainDefinition->MaximumWrapAnchors = 32;
+	DefaultChainDefinition->MaximumWrapInsertionsPerFrame = 4;
+	DefaultChainDefinition->UnwrapConfirmationFrames = 2;
+	DefaultChainDefinition->CableXPBDStiffness = 1.0f;
+	DefaultChainDefinition->MinimumVisualParticlesPerSpan = 5;
+	DefaultChainDefinition->TensionSoftBand = 30.0f;
+	DefaultChainDefinition->PlayerPullAcceleration = 1800.0f;
+	DefaultChainDefinition->PlayerPullDamping = 8.0f;
+	DefaultChainDefinition->MaximumPropTensionForce = 250000.0f;
+	DefaultChainDefinition->PhysicsPropForceScale = 1.0f;
+	if (!DefaultChainDefinition->ChainLinkMesh || !ChopItBootstrap::SaveAsset(DefaultChainDefinition))
+	{
+		return false;
 	}
 
 	UBlueprint* ChainLabMachineBlueprint = LoadObject<UBlueprint>(
@@ -1193,6 +1215,19 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("TierBlock_High"), FVector(1120, 920, 150), FVector(1.8f, 1.8f, 3.0f), Stone);
 	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_Ramps"), TEXT("04  RAMPS + TIERS"), FVector(760, 1210, 420));
 
+	// Movable prop: authoritative tension should pull this box at its wrap point,
+	// while visual particles remain collision-only and never add a second force.
+	AStaticMeshActor* PhysicsBox = ChopItBootstrap::SpawnBlockoutMesh(
+		World, Cube, TEXT("PhysicsProp_TetherPull"), FVector(1450, 760, 90), FVector(1.4f, 1.4f, 1.4f), Stone);
+	if (PhysicsBox && PhysicsBox->GetStaticMeshComponent())
+	{
+		UStaticMeshComponent* Mesh = PhysicsBox->GetStaticMeshComponent();
+		Mesh->SetMobility(EComponentMobility::Movable);
+		Mesh->SetSimulatePhysics(true);
+		Mesh->SetMassOverrideInKg(NAME_None, 50.0f, true);
+	}
+	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_PhysicsProp"), TEXT("PHYSICS PROP - WRAP AND PULL"), FVector(1450, 980, 330));
+
 	// 05: trunks with collision and harmless canopies recreate the important tree case.
 	const FVector TreeLocations[] = { FVector(-1180, 820, 230), FVector(-1540, 520, 230), FVector(-1450, 1110, 230) };
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(TreeLocations); ++Index)
@@ -1249,7 +1284,6 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 		NavBounds->SetActorLabel(TEXT("NavMeshBounds"));
 		NavBounds->SetActorScale3D(FVector(25, 25, 5));
 	}
-
 	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, ChopItBootstrap::ChainLabMap);
 	UE_LOG(LogChopIt, Display, TEXT("Rebuilt Chain Lab %s: %s"), ChopItBootstrap::ChainLabMap, bSaved ? TEXT("OK") : TEXT("FAILED"));
 	return bSaved;

@@ -6,16 +6,16 @@
 #include "TimerManager.h"
 #include "ChopItQuotaMachine.generated.h"
 
-class UChopItQuotaComponent;
 class UChopItChainDefinition;
-class UCableComponent;
+class UChopItRopeComponent;
+class UChopItTetherPathComponent;
+class UChopItTetherReceiverComponent;
 class UInstancedStaticMeshComponent;
 class USceneComponent;
-class UStaticMesh;
 class UStaticMeshComponent;
 class UTextRenderComponent;
 
-/** Diegetic quota facade; it observes quota state but never mutates cargo. */
+/** Diegetic quota facade and owner of the single player tether reel. */
 UCLASS(Blueprintable)
 class CHOPITWORLD_API AChopItQuotaMachine : public AActor, public IChopItInteractable
 {
@@ -33,68 +33,56 @@ public:
 private:
 	UFUNCTION()
 	void HandleQuotaChanged(int32 Progress, int32 Target, bool bComplete);
-
 	UFUNCTION()
 	void HandlePhaseChanged(EChopItCyclePhase NewPhase, EChopItCyclePhase PreviousPhase, int32 Generation);
-
 	UFUNCTION()
 	void HandleClockChanged(EChopItCyclePhase Phase, float RemainingSeconds);
 
 	void RefreshLeverLabel();
 	void TryCreatePlayerChain();
+	void CreatePlayerChain(AActor* PlayerActor);
+	void DestroyPlayerChain();
 	void UpdateRetractableChain(float DeltaSeconds);
-	void UpdateReel(float HorizontalDistance, float DeltaSeconds);
-	void EnforceCableTension(AActor* PlayerActor);
-	void EnforceMaximumCableLength(AActor* PlayerActor);
+	void UpdateReel(float RouteLength, float DeltaSeconds);
+	void UpdatePlayerTension(float RouteLength);
+	void CorrectHardLimit(float RouteLength);
 	void UpdateChainVisuals();
-	int32 CalculateRequiredLinkCount(float HorizontalDistance) const;
-	void CreatePlayerChain(AActor* PlayerActor, int32 DesiredLinkCount);
-	bool SampleCableAtDistance(
-		const TArray<FVector>& Points,
-		float Distance,
-		FVector& OutLocation,
-		FVector& OutDirection) const;
+	bool SampleCableAtDistance(const TArray<FVector>& Points, float Distance, FVector& OutLocation, FVector& OutDirection) const;
 	float GetFixedLinkLength() const;
 	const UChopItChainDefinition* GetChainDefinition() const;
-	void DestroyPlayerChain();
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")
 	TObjectPtr<USceneComponent> SceneRoot;
-
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")
 	TObjectPtr<UStaticMeshComponent> MachineVisual;
-
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")
 	TObjectPtr<UTextRenderComponent> QuotaLabel;
-
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Cycle")
 	TObjectPtr<UTextRenderComponent> LeverLabel;
 
-	/** Verlet simulation used for gravity, wrapping and world collision. */
+	/** Authoritative collision route. */
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|07 Components")
-	TObjectPtr<UCableComponent> ChainCable;
-
-	/** Collisionless visual links sampled along the simulated cable. */
+	TObjectPtr<UChopItTetherPathComponent> TetherPath;
+	/** Per-span simulation used only to place the visual chain skin. */
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|07 Components")
+	TObjectPtr<UChopItRopeComponent> RopeSimulation;
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|07 Components")
 	TObjectPtr<UInstancedStaticMeshComponent> ChainLinkVisuals;
-
-	/** All chain behavior and appearance comes from this shared Data Asset. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UChopItChainDefinition> ChainDefinition;
 
 	UPROPERTY(Transient)
 	TObjectPtr<AActor> ChainedPlayer;
+	UPROPERTY(Transient)
+	TObjectPtr<UChopItTetherReceiverComponent> TetherReceiver;
 
 	int32 DeployedChainLinkCount = 0;
 	int32 TargetChainLinkCount = 0;
 	float CurrentCableLength = 0.0f;
 	float TargetCableLength = 0.0f;
 	float CableReelVelocity = 0.0f;
-	int32 TensionMinimumLinkCount = 0;
-	float TensionReleaseReferenceDistance = 0.0f;
-	bool bWasChainAtLimit = false;
-	FVector LastAcceptedPlayerLocation = FVector::ZeroVector;
-	bool bHasLastAcceptedPlayerLocation = false;
-
+	bool bHardLimited = false;
+	FVector LastValidPlayerLocation = FVector::ZeroVector;
+	bool bHasLastValidPlayerLocation = false;
 	FTimerHandle ChainCreationTimer;
 };

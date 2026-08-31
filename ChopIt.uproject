@@ -52,10 +52,6 @@
 	],
 	"Plugins": [
 		{
-			"Name": "CableComponent",
-			"Enabled": true
-		},
-		{
 			"Name": "EnhancedInput",
 			"Enabled": true
 		},
