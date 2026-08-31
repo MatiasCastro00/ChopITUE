@@ -29,6 +29,7 @@ private:
 	bool CreateEnemyAssets() const;
 	bool CreateProgressionAssets() const;
 	bool CreateInputAssets() const;
+	bool CreateCameraAssets() const;
 	bool CreateCharacterBlueprint() const;
 	bool CreateBasicAxeAsset() const;
 	bool CreateSharedWeaponAssets() const;

@@ -11,6 +11,13 @@
 #include "Player/ChopItCharacter.h"
 #include "Framework/ChopItGameState.h"
 #include "Cycle/ChopItCycleStateMachineComponent.h"
+#include "Camera/ChopItCameraDirectorSubsystem.h"
+#include "GameFramework/GameplayCamerasPlayerCameraManager.h"
+
+AChopItPlayerController::AChopItPlayerController()
+{
+	PlayerCameraManagerClass = AGameplayCamerasPlayerCameraManager::StaticClass();
+}
 
 void AChopItPlayerController::BeginPlay()
 {
@@ -69,6 +76,7 @@ void AChopItPlayerController::SelectUpgradeThree()
 
 void AChopItPlayerController::SelectUpgrade(const int32 Index)
 {
+	if (ULocalPlayer* LP = GetLocalPlayer()) if (const UChopItCameraDirectorSubsystem* Camera = LP->GetSubsystem<UChopItCameraDirectorSubsystem>(); Camera && Camera->IsInputLocked(EChopItCameraInputLock::Actions)) return;
 	if (const AChopItGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr)
 	{
 		if (UChopItCycleStateMachineComponent* Cycle = GameState->GetCycleStateMachine();
@@ -103,6 +111,7 @@ void AChopItPlayerController::SelectUpgrade(const int32 Index)
 
 void AChopItPlayerController::CloseShop()
 {
+	if (ULocalPlayer* LP = GetLocalPlayer()) if (const UChopItCameraDirectorSubsystem* Camera = LP->GetSubsystem<UChopItCameraDirectorSubsystem>(); Camera && Camera->IsInputLocked(EChopItCameraInputLock::Actions)) return;
 	if (const AChopItPlayerState* State = Cast<AChopItPlayerState>(PlayerState))
 	{
 		if (UChopItShopComponent* Shop = State->GetShopComponent()) { Shop->CloseShop(); }

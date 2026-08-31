@@ -1,6 +1,6 @@
 #include "Player/ChopItCharacter.h"
 
-#include "Camera/CameraComponent.h"
+#include "Camera/ChopItCameraComponent.h"
 #include "ChopItCollision.h"
 #include "ChopItLogChannels.h"
 #include "Combat/ChopItCombatStatsComponent.h"
@@ -19,7 +19,6 @@
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
-#include "GameFramework/SpringArmComponent.h"
 #include "Harvest/ChopItWoodCargoComponent.h"
 #include "InputAction.h"
 #include "Interaction/ChopItInteractionComponent.h"
@@ -57,19 +56,8 @@ AChopItCharacter::AChopItCharacter()
 	Movement->JumpZVelocity = 600.0f;
 	Movement->AirControl = 0.35f;
 
-	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->SetUsingAbsoluteRotation(true);
-	CameraBoom->TargetArmLength = 2300.0f;
-	CameraBoom->SetRelativeRotation(FRotator(-58.0f, -45.0f, 0.0f));
-	CameraBoom->bDoCollisionTest = false;
-	CameraBoom->bEnableCameraLag = true;
-	CameraBoom->CameraLagSpeed = 8.0f;
-
-	TopDownCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("TopDownCamera"));
-	TopDownCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-	TopDownCamera->bUsePawnControlRotation = false;
-	TopDownCamera->FieldOfView = 35.0f;
+	CameraComponent = CreateDefaultSubobject<UChopItCameraComponent>(TEXT("ChopItCamera"));
+	CameraComponent->SetupAttachment(RootComponent);
 
 	BodyVisual = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyVisual"));
 	BodyVisual->SetupAttachment(GetCapsuleComponent());
@@ -205,6 +193,9 @@ void AChopItCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 	MoveAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_Move.IA_Move"));
 	InteractAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_Interact.IA_Interact"));
+	CameraLookAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraLook.IA_CameraLook"));
+	CameraZoomAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraZoom.IA_CameraZoom"));
+	CameraResetAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraReset.IA_CameraReset"));
 
 	if (MoveAction)
 	{
@@ -214,17 +205,25 @@ void AChopItCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	{
 		EnhancedInput->BindAction(InteractAction, ETriggerEvent::Started, this, &AChopItCharacter::HandleInteract);
 	}
+	if (CameraLookAction) EnhancedInput->BindAction(CameraLookAction, ETriggerEvent::Triggered, this, &AChopItCharacter::HandleCameraLook);
+	if (CameraZoomAction) EnhancedInput->BindAction(CameraZoomAction, ETriggerEvent::Triggered, this, &AChopItCharacter::HandleCameraZoom);
+	if (CameraResetAction) EnhancedInput->BindAction(CameraResetAction, ETriggerEvent::Started, this, &AChopItCharacter::HandleCameraReset);
 }
 
 void AChopItCharacter::HandleMove(const FInputActionValue& Value)
 {
 	const FVector2D MovementInput = NormalizeMovementInput(Value.Get<FVector2D>());
+	if (CameraComponent && CameraComponent->IsInputLocked(EChopItCameraInputLock::Movement)) return;
 
-	FVector CameraForward = TopDownCamera->GetForwardVector();
+	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	const FRotator CameraRotation = PlayerController && PlayerController->PlayerCameraManager
+		? PlayerController->PlayerCameraManager->GetCameraRotation()
+		: FRotator(0.0f, CameraComponent ? CameraComponent->GetGameplayView().Yaw : GetActorRotation().Yaw, 0.0f);
+	FVector CameraForward = FRotationMatrix(FRotator(0.0f, CameraRotation.Yaw, 0.0f)).GetUnitAxis(EAxis::X);
 	CameraForward.Z = 0.0f;
 	CameraForward.Normalize();
 
-	FVector CameraRight = TopDownCamera->GetRightVector();
+	FVector CameraRight = FRotationMatrix(FRotator(0.0f, CameraRotation.Yaw, 0.0f)).GetUnitAxis(EAxis::Y);
 	CameraRight.Z = 0.0f;
 	CameraRight.Normalize();
 
@@ -243,10 +242,35 @@ FVector2D AChopItCharacter::NormalizeMovementInput(const FVector2D& Input)
 
 void AChopItCharacter::HandleInteract(const FInputActionValue& Value)
 {
-	if (Value.Get<bool>() && InteractionComponent)
+	if (Value.Get<bool>() && InteractionComponent && (!CameraComponent || !CameraComponent->IsInputLocked(EChopItCameraInputLock::Actions)))
 	{
 		InteractionComponent->TryInteract();
 	}
+}
+
+void AChopItCharacter::HandleCameraLook(const FInputActionValue& Value)
+{
+	if (!CameraComponent) return;
+	const float DeltaSeconds = GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.0f;
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (const APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+	{
+		PlayerController->GetInputMouseDelta(MouseX, MouseY);
+	}
+	const FVector2D MouseDelta(MouseX, MouseY);
+	if (!MouseDelta.IsNearlyZero()) CameraComponent->AddMouseLookInput(MouseDelta, DeltaSeconds);
+	else CameraComponent->AddGamepadLookInput(Value.Get<FVector2D>(), DeltaSeconds);
+}
+
+void AChopItCharacter::HandleCameraZoom(const FInputActionValue& Value)
+{
+	if (CameraComponent) CameraComponent->AddZoomInput(Value.Get<float>());
+}
+
+void AChopItCharacter::HandleCameraReset(const FInputActionValue& Value)
+{
+	if (CameraComponent && Value.Get<bool>()) CameraComponent->ResetGameplayCamera();
 }
 
 void AChopItCharacter::HandleWoodCargoChanged(const int32 CurrentWood, const int32 Capacity)
@@ -393,10 +417,11 @@ void AChopItCharacter::RefreshEconomyDebugLabel()
 		ToCabin.Z = 0.0f;
 		const float DistanceMeters = ToCabin.Size() / 100.0f;
 		ToCabin.Normalize();
-		FVector CameraForward = TopDownCamera->GetForwardVector();
+		const float CameraYaw = CameraComponent ? CameraComponent->GetGameplayView().Yaw : GetActorRotation().Yaw;
+		FVector CameraForward = FRotationMatrix(FRotator(0.0f, CameraYaw, 0.0f)).GetUnitAxis(EAxis::X);
 		CameraForward.Z = 0.0f;
 		CameraForward.Normalize();
-		FVector CameraRight = TopDownCamera->GetRightVector();
+		FVector CameraRight = FRotationMatrix(FRotator(0.0f, CameraYaw, 0.0f)).GetUnitAxis(EAxis::Y);
 		CameraRight.Z = 0.0f;
 		CameraRight.Normalize();
 		const float ForwardDot = FVector::DotProduct(ToCabin, CameraForward);

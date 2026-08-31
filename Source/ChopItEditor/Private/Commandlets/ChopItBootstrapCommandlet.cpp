@@ -2,6 +2,7 @@
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AI/NavigationSystemBase.h"
+#include "ChopItCollision.h"
 #include "ChopItLogChannels.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkyLightComponent.h"
@@ -39,6 +40,9 @@
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialExpressionConstant.h"
+#include "Materials/MaterialExpressionConstant3Vector.h"
+#include "MaterialEditingLibrary.h"
 #include "Misc/PackageName.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavigationSystem.h"
@@ -51,6 +55,26 @@
 #include "Targets/ChopItCombatDummy.h"
 #include "UObject/SavePackage.h"
 #include "Weapons/ChopItWeaponDefinition.h"
+#include "Build/CameraAssetAssembleUtils.h"
+#include "Camera/ChopItCameraCue.h"
+#include "Camera/ChopItCameraDemoTrigger.h"
+#include "Camera/ChopItCameraStateTreeNodes.h"
+#include "Core/CameraAsset.h"
+#include "Core/CameraRigAsset.h"
+#include "Core/CameraShakeAsset.h"
+#include "Directors/CameraDirectorStateTreeSchema.h"
+#include "Directors/StateTreeCameraDirector.h"
+#include "Nodes/Common/FieldOfViewCameraNode.h"
+#include "Nodes/Common/PostProcessCameraNode.h"
+#include "Nodes/Common/ArrayCameraNode.h"
+#include "Nodes/Collision/OcclusionMaterialCameraNode.h"
+#include "Nodes/Shakes/EnvelopeShakeCameraNode.h"
+#include "Nodes/Shakes/PerlinNoiseLocationShakeCameraNode.h"
+#include "StateTree.h"
+#include "StateTreeCompiler.h"
+#include "StateTreeCompilerLog.h"
+#include "StateTreeEditorData.h"
+#include "StateTreeState.h"
 
 namespace ChopItBootstrap
 {
@@ -66,7 +90,12 @@ namespace ChopItBootstrap
 	constexpr TCHAR ChainLabMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_ChainLab");
 	constexpr TCHAR MoveActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Move");
 	constexpr TCHAR InteractActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Interact");
+	constexpr TCHAR CameraLookActionPackage[] = TEXT("/Game/ChopIt/Input/IA_CameraLook");
+	constexpr TCHAR CameraZoomActionPackage[] = TEXT("/Game/ChopIt/Input/IA_CameraZoom");
+	constexpr TCHAR CameraResetActionPackage[] = TEXT("/Game/ChopIt/Input/IA_CameraReset");
 	constexpr TCHAR GameplayContextPackage[] = TEXT("/Game/ChopIt/Input/IMC_Gameplay");
+	constexpr TCHAR CameraAssetPackage[] = TEXT("/Game/ChopIt/Presentation/Camera/CA_PlayerCameras");
+	constexpr TCHAR CameraStateTreePackage[] = TEXT("/Game/ChopIt/Presentation/Camera/ST_CameraDirector");
 	constexpr TCHAR CharacterBlueprintPackage[] = TEXT("/Game/ChopIt/Characters/Blueprints/BP_ChopItCharacter");
 	constexpr TCHAR BasicAxePackage[] = TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_BasicAxe");
 	constexpr TCHAR HandSawPackage[] = TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_HandSaw");
@@ -267,6 +296,9 @@ int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 	if (FParse::Param(*Params, TEXT("Phase12")) && !CreatePhase12Assets()) return 1;
 if (FParse::Param(*Params, TEXT("HarvestBlueprints")) && !CreateHarvestBlueprints()) return 1;
 if (FParse::Param(*Params, TEXT("Presentation")) && !CreateDamageTextMaterial()) return 1;
+if (FParse::Param(*Params, TEXT("Camera")) && !CreateCameraAssets()) return 1;
+if (FParse::Param(*Params, TEXT("CameraInput")) && !CreateInputAssets()) return 1;
+if (FParse::Param(*Params, TEXT("CameraDemoMap")) && !RebuildPhase1Map(ChopItBootstrap::SandboxMap, true)) return 1;
 if (FParse::Param(*Params, TEXT("CriticalBalance"))
 	&& (!CreateBasicAxeAsset() || !CreateSharedWeaponAssets())) return 1;
 if (FParse::Param(*Params, TEXT("CycleBalance")) && !CreateDayDefinition()) return 1;
@@ -313,6 +345,7 @@ bool UChopItBootstrapCommandlet::CreatePhase1Assets() const
 	return CreateBlockoutMaterials()
 		&& CreateDamageTextMaterial()
 		&& CreateInputAssets()
+		&& CreateCameraAssets()
 		&& CreateCharacterBlueprint()
 		&& RebuildPhase1Map(ChopItBootstrap::StartupMap, false)
 		&& RebuildPhase1Map(ChopItBootstrap::SandboxMap, true);
@@ -832,15 +865,21 @@ bool UChopItBootstrapCommandlet::CreateInputAssets() const
 		ChopItBootstrap::MoveActionPackage, TEXT("IA_Move"));
 	UInputAction* InteractAction = ChopItBootstrap::LoadOrCreateAsset<UInputAction>(
 		ChopItBootstrap::InteractActionPackage, TEXT("IA_Interact"));
+	UInputAction* CameraLookAction = ChopItBootstrap::LoadOrCreateAsset<UInputAction>(ChopItBootstrap::CameraLookActionPackage, TEXT("IA_CameraLook"));
+	UInputAction* CameraZoomAction = ChopItBootstrap::LoadOrCreateAsset<UInputAction>(ChopItBootstrap::CameraZoomActionPackage, TEXT("IA_CameraZoom"));
+	UInputAction* CameraResetAction = ChopItBootstrap::LoadOrCreateAsset<UInputAction>(ChopItBootstrap::CameraResetActionPackage, TEXT("IA_CameraReset"));
 	UInputMappingContext* GameplayContext = ChopItBootstrap::LoadOrCreateAsset<UInputMappingContext>(
 		ChopItBootstrap::GameplayContextPackage, TEXT("IMC_Gameplay"));
-	if (!MoveAction || !InteractAction || !GameplayContext)
+	if (!MoveAction || !InteractAction || !CameraLookAction || !CameraZoomAction || !CameraResetAction || !GameplayContext)
 	{
 		return false;
 	}
 
 	MoveAction->ValueType = EInputActionValueType::Axis2D;
 	InteractAction->ValueType = EInputActionValueType::Boolean;
+	CameraLookAction->ValueType = EInputActionValueType::Axis2D;
+	CameraZoomAction->ValueType = EInputActionValueType::Axis1D;
+	CameraResetAction->ValueType = EInputActionValueType::Boolean;
 	GameplayContext->UnmapAll();
 
 	auto AddSwizzle = [GameplayContext](FEnhancedActionKeyMapping& Mapping)
@@ -869,9 +908,20 @@ bool UChopItBootstrapCommandlet::CreateInputAssets() const
 	GameplayContext->MapKey(MoveAction, EKeys::Gamepad_Left2D);
 	GameplayContext->MapKey(InteractAction, EKeys::E);
 	GameplayContext->MapKey(InteractAction, EKeys::Gamepad_FaceButton_Bottom);
+	GameplayContext->MapKey(CameraLookAction, EKeys::Mouse2D);
+	GameplayContext->MapKey(CameraLookAction, EKeys::Gamepad_Right2D);
+	GameplayContext->MapKey(CameraZoomAction, EKeys::MouseWheelAxis);
+	GameplayContext->MapKey(CameraZoomAction, EKeys::Gamepad_DPad_Up);
+	FEnhancedActionKeyMapping& ZoomOut = GameplayContext->MapKey(CameraZoomAction, EKeys::Gamepad_DPad_Down);
+	AddNegate(ZoomOut, true, false);
+	GameplayContext->MapKey(CameraResetAction, EKeys::MiddleMouseButton);
+	GameplayContext->MapKey(CameraResetAction, EKeys::Gamepad_RightThumbstick);
 
 	const bool bSaved = ChopItBootstrap::SaveAsset(MoveAction)
 		&& ChopItBootstrap::SaveAsset(InteractAction)
+		&& ChopItBootstrap::SaveAsset(CameraLookAction)
+		&& ChopItBootstrap::SaveAsset(CameraZoomAction)
+		&& ChopItBootstrap::SaveAsset(CameraResetAction)
 		&& ChopItBootstrap::SaveAsset(GameplayContext);
 	UE_LOG(LogChopIt, Display, TEXT("Phase 1 Enhanced Input assets: %s"), bSaved ? TEXT("OK") : TEXT("FAILED"));
 	return bSaved;
@@ -905,6 +955,183 @@ bool UChopItBootstrapCommandlet::CreateCharacterBlueprint() const
 	FKismetEditorUtilities::CompileBlueprint(CharacterBlueprint);
 	const bool bSaved = ChopItBootstrap::SaveAsset(CharacterBlueprint);
 	UE_LOG(LogChopIt, Display, TEXT("Phase 1 character Blueprint: %s"), bSaved ? TEXT("OK") : TEXT("FAILED"));
+	return bSaved;
+}
+
+bool UChopItBootstrapCommandlet::CreateCameraAssets() const
+{
+	auto CreateRig = [](const TCHAR* PackagePath, const TCHAR* AssetName, const float FOV) -> UCameraRigAsset*
+	{
+		UPackage* Package = CreatePackage(PackagePath);
+		UCameraRigAsset* Existing = FindObject<UCameraRigAsset>(Package, AssetName);
+		if (Existing) return Existing;
+		UE::Cameras::FCameraRigAssetAssembler Assembler(FName(AssetName), Package);
+		UCameraRigAsset* Rig = Assembler.Get();
+		Rig->SetFlags(RF_Public | RF_Standalone);
+		Assembler.MakeArrayRootNode().AddArrayChild<UFieldOfViewCameraNode>()
+			.SetParameter(&UFieldOfViewCameraNode::FieldOfView, FOV).Done().Done().BuildCameraRig();
+		FAssetRegistryModule::AssetCreated(Rig);
+		return Rig;
+	};
+
+	UCameraRigAsset* GameplayRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_GameplayOrbit"), TEXT("CR_GameplayOrbit"), 85.0f);
+	UCameraRigAsset* ScriptedRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_DialogueAnchor"), TEXT("CR_DialogueAnchor"), 65.0f);
+	UCameraRigAsset* CinematicRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_Cinematic"), TEXT("CR_Cinematic"), 60.0f);
+	UCameraRigAsset* DeathRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_Death"), TEXT("CR_Death"), 55.0f);
+	if (!GameplayRig || !ScriptedRig || !CinematicRig || !DeathRig) return false;
+	UMaterial* OcclusionMaterial = ChopItBootstrap::LoadOrCreateAsset<UMaterial>(TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion"), TEXT("M_CameraFoliageOcclusion"));
+	if (OcclusionMaterial->GetExpressionCollection().Expressions.IsEmpty())
+	{
+		OcclusionMaterial->BlendMode = BLEND_Translucent;
+		OcclusionMaterial->SetShadingModel(MSM_Unlit);
+		OcclusionMaterial->TwoSided = true;
+		UMaterialExpressionConstant3Vector* Color = CastChecked<UMaterialExpressionConstant3Vector>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionConstant3Vector::StaticClass(), -240, 0));
+		Color->Constant = FLinearColor(0.03f, 0.12f, 0.025f);
+		UMaterialEditingLibrary::ConnectMaterialProperty(Color, TEXT(""), MP_EmissiveColor);
+		UMaterialExpressionConstant* Opacity = CastChecked<UMaterialExpressionConstant>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionConstant::StaticClass(), -240, 160));
+		Opacity->R = 0.16f;
+		UMaterialEditingLibrary::ConnectMaterialProperty(Opacity, TEXT(""), MP_Opacity);
+		UMaterialEditingLibrary::RecompileMaterial(OcclusionMaterial);
+	}
+	if (UArrayCameraNode* GameplayRoot = Cast<UArrayCameraNode>(GameplayRig->RootNode))
+	{
+		UOcclusionMaterialCameraNode* Occlusion = nullptr;
+		for (UCameraNode* Node : GameplayRoot->Children)
+		{
+			if (UOcclusionMaterialCameraNode* Existing = Cast<UOcclusionMaterialCameraNode>(Node))
+			{
+				Occlusion = Existing;
+				break;
+			}
+		}
+		if (!Occlusion)
+		{
+			Occlusion = NewObject<UOcclusionMaterialCameraNode>(GameplayRig, TEXT("TreeOcclusion"));
+			GameplayRoot->Children.Add(Occlusion);
+		}
+		Occlusion->OcclusionTransparencyMaterial = OcclusionMaterial;
+		Occlusion->OcclusionSphereRadius.Value = 48.0f;
+		Occlusion->OcclusionChannel = ChopItCollisionChannels::CameraOcclusion;
+		Occlusion->OcclusionTargetPosition = ECameraNodeOriginPosition::Pawn;
+		Occlusion->OcclusionTargetOffset.Value = FVector3d(0.0, 0.0, 65.0);
+		GameplayRig->BuildCameraRig();
+	}
+
+	UStateTree* StateTree = ChopItBootstrap::LoadOrCreateAsset<UStateTree>(ChopItBootstrap::CameraStateTreePackage, TEXT("ST_CameraDirector"));
+	UStateTreeEditorData* EditorData = NewObject<UStateTreeEditorData>(StateTree, TEXT("EditorData"), RF_Transactional);
+	StateTree->EditorData = EditorData;
+	EditorData->Schema = NewObject<UCameraDirectorStateTreeSchema>(EditorData);
+	UStateTreeState& Root = EditorData->AddSubTree(TEXT("CameraRoot"));
+	struct FCameraStateDefinition
+	{
+		const TCHAR* Name;
+		EChopItCameraMode Mode;
+		UCameraRigAsset* Rig;
+	};
+	const FCameraStateDefinition Definitions[] =
+	{
+		{ TEXT("GameplayOrbit"), EChopItCameraMode::GameplayOrbit, GameplayRig },
+		{ TEXT("Scripted"), EChopItCameraMode::Scripted, ScriptedRig },
+		{ TEXT("Cinematic"), EChopItCameraMode::Cinematic, CinematicRig },
+		{ TEXT("Death"), EChopItCameraMode::Death, DeathRig }
+	};
+	TArray<UStateTreeState*> CameraStates;
+	for (const FCameraStateDefinition& Definition : Definitions)
+	{
+		UStateTreeState& State = Root.AddChildState(FName(Definition.Name));
+		State.AddEnterCondition<FChopItCameraModeCondition>().GetInstanceData().ExpectedMode = Definition.Mode;
+		State.AddTask<FChopItActivateCameraRigTask>().GetInstanceData().CameraRig = Definition.Rig;
+		CameraStates.Add(&State);
+	}
+	for (int32 FromIndex = 0; FromIndex < CameraStates.Num(); ++FromIndex)
+	{
+		for (int32 ToIndex = 0; ToIndex < CameraStates.Num(); ++ToIndex)
+		{
+			if (FromIndex == ToIndex) continue;
+			FStateTreeTransition& Transition = CameraStates[FromIndex]->AddTransition(
+				EStateTreeTransitionTrigger::OnTick,
+				EStateTreeTransitionType::GotoState,
+				CameraStates[ToIndex]);
+			Transition.AddConditionWithOuter<FChopItCameraModeCondition>(CameraStates[FromIndex]).GetInstanceData().ExpectedMode = Definitions[ToIndex].Mode;
+		}
+	}
+	FStateTreeCompilerLog CompilerLog;
+	FStateTreeCompiler Compiler(CompilerLog);
+	if (!Compiler.Compile(*StateTree))
+	{
+		CompilerLog.DumpToLog(StateTree, LogChopIt);
+		UE_LOG(LogChopIt, Error, TEXT("Camera StateTree failed to compile."));
+		return false;
+	}
+
+	UCameraAsset* CameraAsset = ChopItBootstrap::LoadOrCreateAsset<UCameraAsset>(ChopItBootstrap::CameraAssetPackage, TEXT("CA_PlayerCameras"));
+	UStateTreeCameraDirector* Director = FindObject<UStateTreeCameraDirector>(CameraAsset, TEXT("StateTreeDirector"));
+	if (!Director)
+	{
+		Director = CastChecked<UStateTreeCameraDirector>(
+			NewObject<UObject>(CameraAsset, UStateTreeCameraDirector::StaticClass(), TEXT("StateTreeDirector")));
+	}
+	Director->StateTreeReference.SetStateTree(StateTree);
+	CameraAsset->SetCameraDirector(Director);
+	CameraAsset->BuildCamera();
+
+	auto CreateShake = [](const TCHAR* PackagePath, const TCHAR* AssetName, const float Amplitude, const float Frequency, const float Duration) -> UCameraShakeAsset*
+	{
+		UCameraShakeAsset* Asset = ChopItBootstrap::LoadOrCreateAsset<UCameraShakeAsset>(PackagePath, FName(AssetName));
+		UEnvelopeShakeCameraNode* Envelope = NewObject<UEnvelopeShakeCameraNode>(Asset, TEXT("Envelope"));
+		UPerlinNoiseLocationShakeCameraNode* Noise = NewObject<UPerlinNoiseLocationShakeCameraNode>(Asset, TEXT("Noise"));
+		Noise->X = {Amplitude, Frequency}; Noise->Y = {Amplitude, Frequency}; Noise->Z = {Amplitude * 0.35f, Frequency};
+		Noise->Octaves.Value = 2;
+		Envelope->EaseInTime.Value = 0.02f; Envelope->EaseOutTime.Value = FMath::Min(0.12f, Duration * 0.5f); Envelope->TotalTime.Value = Duration; Envelope->Shake = Noise;
+		Asset->RootNode = Envelope;
+		Asset->BuildCameraShake();
+		return Asset;
+	};
+	UCameraShakeAsset* NormalShake = CreateShake(TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Normal"), TEXT("CS_Normal"), 4.0f, 24.0f, 0.16f);
+	UCameraShakeAsset* CriticalShake = CreateShake(TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical"), TEXT("CS_Critical"), 9.0f, 20.0f, 0.28f);
+	UCameraShakeAsset* HeavyShake = CreateShake(TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_HeavyImpact"), TEXT("CS_HeavyImpact"), 15.0f, 15.0f, 0.42f);
+
+	auto CreateEffect = [](const TCHAR* RigPackage, const TCHAR* RigName, const TCHAR* PresetPackage, const TCHAR* PresetName, const float Vignette, const float Saturation, const float Duration, const int32 Order)
+	{
+		UPackage* Package = CreatePackage(RigPackage);
+		UCameraRigAsset* Rig = FindObject<UCameraRigAsset>(Package, RigName);
+		if (!Rig)
+		{
+			UE::Cameras::FCameraRigAssetAssembler Assembler(FName(RigName), Package);
+			Rig = Assembler.Get(); Rig->SetFlags(RF_Public | RF_Standalone);
+			Assembler.MakeArrayRootNode().AddArrayChild<UPostProcessCameraNode>().Setup([Vignette, Saturation](UPostProcessCameraNode* Node)
+			{
+				Node->PostProcessSettings.bOverride_VignetteIntensity = true;
+				Node->PostProcessSettings.VignetteIntensity = Vignette;
+				Node->PostProcessSettings.bOverride_ColorSaturation = true;
+				Node->PostProcessSettings.ColorSaturation = FVector4(Saturation, Saturation, Saturation, 1.0f);
+			}).Done().Done().BuildCameraRig();
+			FAssetRegistryModule::AssetCreated(Rig);
+		}
+		UChopItCameraEffectPreset* Preset = ChopItBootstrap::LoadOrCreateAsset<UChopItCameraEffectPreset>(PresetPackage, FName(PresetName));
+		Preset->ModifierRig = Rig; Preset->DefaultDuration = Duration; Preset->OrderKey = Order;
+		return ChopItBootstrap::SaveAsset(Rig) && ChopItBootstrap::SaveAsset(Preset);
+	};
+	const bool bEffects =
+		CreateEffect(TEXT("/Game/ChopIt/Presentation/Camera/Effects/CRV_DialogueFocus"), TEXT("CRV_DialogueFocus"), TEXT("/Game/ChopIt/Presentation/Camera/Effects/CE_DialogueFocus"), TEXT("CE_DialogueFocus"), 0.55f, 0.85f, 0.0f, 200)
+		&& CreateEffect(TEXT("/Game/ChopIt/Presentation/Camera/Effects/CRV_DamageFlash"), TEXT("CRV_DamageFlash"), TEXT("/Game/ChopIt/Presentation/Camera/Effects/CE_DamageFlash"), TEXT("CE_DamageFlash"), 0.8f, 0.45f, 0.18f, 300)
+		&& CreateEffect(TEXT("/Game/ChopIt/Presentation/Camera/Effects/CRV_Danger"), TEXT("CRV_Danger"), TEXT("/Game/ChopIt/Presentation/Camera/Effects/CE_Danger"), TEXT("CE_Danger"), 0.72f, 0.65f, 0.0f, 100);
+
+	UChopItCameraCue* DialogueCue = ChopItBootstrap::LoadOrCreateAsset<UChopItCameraCue>(TEXT("/Game/ChopIt/Presentation/Camera/Cues/CC_DialogueCloseup"), TEXT("CC_DialogueCloseup"));
+	DialogueCue->Mode = EChopItCameraMode::Scripted; DialogueCue->CameraRig = ScriptedRig; DialogueCue->Priority = 300; DialogueCue->FieldOfView = 55.0f;
+	DialogueCue->InputLocks = static_cast<int32>(EChopItCameraInputLock::Camera | EChopItCameraInputLock::Movement | EChopItCameraInputLock::Actions);
+
+	auto SaveGenerated = [](UObject* Asset)
+	{
+		return ChopItBootstrap::SaveAsset(Asset) || (Asset && FPackageName::DoesPackageExist(Asset->GetOutermost()->GetName()));
+	};
+	const bool bSaved = bEffects && SaveGenerated(OcclusionMaterial)
+		&& SaveGenerated(GameplayRig) && SaveGenerated(ScriptedRig)
+		&& SaveGenerated(CinematicRig) && SaveGenerated(DeathRig)
+		&& SaveGenerated(StateTree) && SaveGenerated(CameraAsset)
+		&& SaveGenerated(NormalShake) && SaveGenerated(CriticalShake)
+		&& SaveGenerated(HeavyShake) && SaveGenerated(DialogueCue);
+	UE_LOG(LogChopIt, Display, TEXT("Gameplay Cameras assets: %s"), bSaved ? TEXT("OK") : TEXT("FAILED"));
 	return bSaved;
 }
 
@@ -1075,6 +1302,13 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	SpawnParameters.Name = TEXT("PlayerStart");
 	APlayerStart* PlayerStart = World->SpawnActor<APlayerStart>(FVector(750, 0, 100), FRotator(0, 0, 0), SpawnParameters);
 	PlayerStart->SetActorLabel(TEXT("PlayerStart"));
+	if (LongPackageName == ChopItBootstrap::SandboxMap)
+	{
+		SpawnParameters.Name = TEXT("CameraSystemDemo");
+		AChopItCameraDemoTrigger* Demo = World->SpawnActor<AChopItCameraDemoTrigger>(FVector(930, 180, 60), FRotator::ZeroRotator, SpawnParameters);
+		if (!Demo) return false;
+		Demo->SetActorLabel(TEXT("Camera Demo: interact to play shot/effect/shake/restore"));
+	}
 
 	if (bIncludeCombatDummies)
 	{
@@ -1375,8 +1609,5 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 	}
 	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, ChopItBootstrap::ChainLabMap);
 	UE_LOG(LogChopIt, Display, TEXT("Rebuilt Chain Lab %s: %s"), ChopItBootstrap::ChainLabMap, bSaved ? TEXT("OK") : TEXT("FAILED"));
-	return bSaved;
-}
-
 	return bSaved;
 }

@@ -16,6 +16,8 @@ public class ChopItTests : ModuleRules
 			"ChopItPresentation",
 			"EnhancedInput",
 			"GameplayTags",
+			"GameplayCameras",
+			"StateTreeModule",
 			"InputCore",
 			"UnrealEd"
 		});

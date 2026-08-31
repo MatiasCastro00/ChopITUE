@@ -50,6 +50,8 @@ public:
 	void SetFoliageVariant(EChopItTreeFoliageVariant NewVariant);
 	UChopItHealthComponent* GetHealthComponent() const { return HealthComponent; }
 	UBoxComponent* GetPhysicsRoot() const { return PhysicsRoot; }
+	UStaticMeshComponent* GetTrunkMesh() const { return TrunkMesh; }
+	UStaticMeshComponent* GetCrownMesh() const { return CrownMesh; }
 	USphereComponent* GetCrownCollision() const { return CrownCollision; }
 	EChopItTreeHarvestState GetHarvestState() const { return HarvestState; }
 	bool HasSpawnedReward() const { return bRewardSpawned; }
@@ -73,6 +75,7 @@ private:
 	bool IsImpactOnCrown(const FHitResult& Hit) const;
 	FLinearColor GetFoliageColor() const;
 	void ApplyFoliageColor();
+	void ConfigureCameraOcclusion();
 	void SpawnRewardOnce(const FVector& SpawnOrigin, const FVector& ImpactNormal);
 	void DestroyAtImpact(const FVector& ImpactLocation, const FVector& ImpactNormal);
 	void UpdateHealthLabel(float CurrentHealth, float MaxHealth);

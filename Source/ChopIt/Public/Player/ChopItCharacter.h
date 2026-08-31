@@ -5,7 +5,6 @@
 #include "Cycle/ChopItCycleStateMachineComponent.h"
 #include "ChopItCharacter.generated.h"
 
-class UCameraComponent;
 class AChopItCabinHub;
 class UChopItAutoAttackComponent;
 class UChopItCombatStatsComponent;
@@ -14,7 +13,7 @@ class UChopItInteractionComponent;
 class UChopItWoodCargoComponent;
 class UChopItWeaponLoadoutComponent;
 class UInputAction;
-class USpringArmComponent;
+class UChopItCameraComponent;
 class UStaticMeshComponent;
 class UTextRenderComponent;
 class UChopItHitFeedbackComponent;
@@ -32,8 +31,7 @@ public:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	static FVector2D NormalizeMovementInput(const FVector2D& Input);
 
-	UCameraComponent* GetTopDownCamera() const { return TopDownCamera; }
-	USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
+	UChopItCameraComponent* GetChopItCamera() const { return CameraComponent; }
 	UChopItInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
 	UChopItAutoAttackComponent* GetAutoAttackComponent() const { return AutoAttackComponent; }
 	UChopItCombatStatsComponent* GetCombatStatsComponent() const { return CombatStatsComponent; }
@@ -50,6 +48,9 @@ protected:
 private:
 	void HandleMove(const FInputActionValue& Value);
 	void HandleInteract(const FInputActionValue& Value);
+	void HandleCameraLook(const FInputActionValue& Value);
+	void HandleCameraZoom(const FInputActionValue& Value);
+	void HandleCameraReset(const FInputActionValue& Value);
 
 	UFUNCTION()
 	void HandleWoodCargoChanged(int32 CurrentWood, int32 Capacity);
@@ -77,10 +78,7 @@ private:
 	void RefreshMovementStats();
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Camera")
-	TObjectPtr<USpringArmComponent> CameraBoom;
-
-	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Camera")
-	TObjectPtr<UCameraComponent> TopDownCamera;
+	TObjectPtr<UChopItCameraComponent> CameraComponent;
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Visual")
 	TObjectPtr<UStaticMeshComponent> BodyVisual;
@@ -126,6 +124,15 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> InteractAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CameraLookAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CameraZoomAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CameraResetAction;
 
 	float BaseWalkSpeed = 650.0f;
 };

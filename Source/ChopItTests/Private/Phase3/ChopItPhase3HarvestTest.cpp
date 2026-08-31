@@ -2,6 +2,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
@@ -67,12 +68,24 @@ bool FChopItPhase3HarvestDefaultsTest::RunTest(const FString& Parameters)
 		{
 			TestFalse(TEXT("Standing tree physics starts disabled"), Tree->GetPhysicsRoot()->IsSimulatingPhysics());
 			TestEqual(TEXT("Standing tree supports physics collision"), Tree->GetPhysicsRoot()->GetCollisionEnabled(), ECollisionEnabled::QueryAndPhysics);
+			TestEqual(TEXT("Tree physics never pushes the camera"), Tree->GetPhysicsRoot()->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
+		}
+		for (const UStaticMeshComponent* VisualMesh : { Tree->GetTrunkMesh(), Tree->GetCrownMesh() })
+		{
+			TestNotNull(TEXT("Tree visual mesh exists"), VisualMesh);
+			if (VisualMesh)
+			{
+				TestEqual(TEXT("Tree visual is query-only"), VisualMesh->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
+				TestEqual(TEXT("Tree visual ignores camera push"), VisualMesh->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
+				TestEqual(TEXT("Tree visual participates in transparency"), VisualMesh->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraOcclusion), ECR_Block);
+			}
 		}
 		if (Tree->GetCrownCollision())
 		{
 			TestEqual(TEXT("Crown collision is query-only"), Tree->GetCrownCollision()->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
 			TestEqual(TEXT("Crown detects the static world"), Tree->GetCrownCollision()->GetCollisionResponseToChannel(ECC_WorldStatic), ECR_Block);
 			TestEqual(TEXT("Crown detects other harvestable trees"), Tree->GetCrownCollision()->GetCollisionResponseToChannel(ChopItCollisionChannels::Harvestable), ECR_Block);
+			TestEqual(TEXT("Harvest volume does not steal camera transparency hits"), Tree->GetCrownCollision()->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraOcclusion), ECR_Ignore);
 		}
 	}
 

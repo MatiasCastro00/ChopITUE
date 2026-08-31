@@ -7,7 +7,10 @@
 #include "Feedback/ChopItFeedbackBurst.h"
 #include "Feedback/ChopItDamageNumber.h"
 #include "Feedback/ChopItLeafFall.h"
-#include "GameFramework/SpringArmComponent.h"
+#include "Camera/ChopItCameraDirectorSubsystem.h"
+#include "Core/CameraShakeAsset.h"
+#include "Engine/LocalPlayer.h"
+#include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 
 UChopItHitFeedbackComponent::UChopItHitFeedbackComponent()
@@ -31,11 +34,6 @@ void UChopItHitFeedbackComponent::BeginPlay()
 	{
 		OriginalVisualScale = VisualComponent->GetRelativeScale3D();
 	}
-	CameraBoom = GetOwner()->FindComponentByClass<USpringArmComponent>();
-	if (CameraBoom.IsValid())
-	{
-		OriginalCameraOffset = CameraBoom->TargetOffset;
-	}
 	if (UChopItHealthComponent* Health = GetOwner()->FindComponentByClass<UChopItHealthComponent>())
 	{
 		Health->OnDamageReceived.AddUObject(this, &UChopItHitFeedbackComponent::HandleDamageReceived);
@@ -48,7 +46,6 @@ void UChopItHitFeedbackComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(PulseTimerHandle);
-		World->GetTimerManager().ClearTimer(CameraTimerHandle);
 	}
 	if (UChopItHealthComponent* Health = GetOwner()->FindComponentByClass<UChopItHealthComponent>())
 	{
@@ -56,7 +53,6 @@ void UChopItHitFeedbackComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 		Health->OnDeath.RemoveAll(this);
 	}
 	RestorePulse();
-	RestoreCamera();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -104,12 +100,18 @@ void UChopItHitFeedbackComponent::HandleDamageReceived(const float Damage, const
 			}
 		}
 	}
-	if (Settings->bEnableCameraShake && CameraBoom.IsValid() && Settings->CameraShakeStrength > 0.0f)
+	if (Settings->bEnableCameraShake && Settings->CameraShakeStrength > 0.0f)
 	{
-		const float Magnitude = (bCritical ? 16.0f : 9.0f) * Settings->CameraShakeStrength;
-		CameraBoom->TargetOffset = OriginalCameraOffset + FVector(
-			FMath::FRandRange(-Magnitude, Magnitude), FMath::FRandRange(-Magnitude, Magnitude), 0.0f);
-		World->GetTimerManager().SetTimer(CameraTimerHandle, this, &UChopItHitFeedbackComponent::RestoreCamera, 0.07f, false);
+		const TCHAR* ShakePath = bCritical
+			? TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical.CS_Critical")
+			: TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Normal.CS_Normal");
+		if (const UCameraShakeAsset* Shake = LoadObject<UCameraShakeAsset>(nullptr, ShakePath))
+		{
+			if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+			{
+				if (ULocalPlayer* LP = PC->GetLocalPlayer()) if (UChopItCameraDirectorSubsystem* Camera = LP->GetSubsystem<UChopItCameraDirectorSubsystem>()) Camera->PlayCameraShake(Shake, Settings->CameraShakeStrength, ImpactLocation);
+			}
+		}
 	}
 }
 
@@ -144,13 +146,5 @@ void UChopItHitFeedbackComponent::RestorePulse()
 	if (VisualComponent.IsValid())
 	{
 		VisualComponent->SetRelativeScale3D(OriginalVisualScale);
-	}
-}
-
-void UChopItHitFeedbackComponent::RestoreCamera()
-{
-	if (CameraBoom.IsValid())
-	{
-		CameraBoom->TargetOffset = OriginalCameraOffset;
 	}
 }

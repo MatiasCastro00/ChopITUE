@@ -52,6 +52,22 @@
 	],
 	"Plugins": [
 		{
+			"Name": "GameplayCameras",
+			"Enabled": true
+		},
+		{
+			"Name": "StateTree",
+			"Enabled": true
+		},
+		{
+			"Name": "TemplateSequence",
+			"Enabled": true
+		},
+		{
+			"Name": "PropertyBindingUtils",
+			"Enabled": true
+		},
+		{
 			"Name": "EnhancedInput",
 			"Enabled": true
 		},

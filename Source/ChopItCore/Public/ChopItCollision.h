@@ -13,6 +13,8 @@ namespace ChopItCollisionChannels
 	inline constexpr ECollisionChannel DeliveryZone = ECC_GameTraceChannel5;
 	inline constexpr ECollisionChannel Interaction = ECC_GameTraceChannel6;
 	inline constexpr ECollisionChannel Chain = ECC_GameTraceChannel7;
+	inline constexpr ECollisionChannel CameraSolid = ECC_GameTraceChannel8;
+	inline constexpr ECollisionChannel CameraOcclusion = ECC_GameTraceChannel9;
 }
 
 namespace ChopItCollisionProfiles

@@ -4,7 +4,6 @@
 #include "ChopItHitFeedbackComponent.generated.h"
 
 class UPrimitiveComponent;
-class USpringArmComponent;
 
 /** Presentation-only response to health events. Never changes combat state. */
 UCLASS(ClassGroup=(ChopIt), meta=(BlueprintSpawnableComponent))
@@ -25,7 +24,6 @@ private:
 	void HandleDamageReceived(float Damage, bool bCritical, AActor* DamageSource, const FVector& ImpactLocation);
 	void HandleDeath(AActor* DeadActor, AActor* DamageSource);
 	void RestorePulse();
-	void RestoreCamera();
 
 	UPROPERTY(EditAnywhere, Category="ChopIt|Feedback", meta=(ClampMin="0.02", ClampMax="0.5"))
 	float PulseDuration = 0.09f;
@@ -35,9 +33,6 @@ private:
 
 	TWeakObjectPtr<UPrimitiveComponent> VisualComponent;
 	TWeakObjectPtr<UPrimitiveComponent> FoliageComponent;
-	TWeakObjectPtr<USpringArmComponent> CameraBoom;
 	FVector OriginalVisualScale = FVector::OneVector;
-	FVector OriginalCameraOffset = FVector::ZeroVector;
 	FTimerHandle PulseTimerHandle;
-	FTimerHandle CameraTimerHandle;
 };

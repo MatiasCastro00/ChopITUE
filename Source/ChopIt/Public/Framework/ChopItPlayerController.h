@@ -9,6 +9,9 @@ class CHOPIT_API AChopItPlayerController final : public APlayerController
 {
 	GENERATED_BODY()
 
+public:
+	AChopItPlayerController();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;

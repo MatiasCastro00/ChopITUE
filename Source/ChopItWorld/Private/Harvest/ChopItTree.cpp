@@ -37,13 +37,11 @@ AChopItTree::AChopItTree()
 	TrunkMesh->SetupAttachment(PhysicsRoot);
 	TrunkMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -190.0f));
 	TrunkMesh->SetRelativeScale3D(FVector(0.7f, 0.7f, 3.8f));
-	TrunkMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	CrownMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CrownMesh"));
 	CrownMesh->SetupAttachment(PhysicsRoot);
 	CrownMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 120.0f));
 	CrownMesh->SetRelativeScale3D(FVector(2.2f, 2.2f, 2.7f));
-	CrownMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// A separate query shape represents the leaves. The trunk remains the rigid
 	// body that makes the tree fall, but only contact with this volume is allowed
@@ -59,6 +57,7 @@ AChopItTree::AChopItTree()
 	CrownCollision->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
 	CrownCollision->SetCollisionResponseToChannel(ChopItCollisionChannels::Harvestable, ECR_Block);
 	CrownCollision->SetGenerateOverlapEvents(false);
+	ConfigureCameraOcclusion();
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -92,6 +91,9 @@ AChopItTree::AChopItTree()
 void AChopItTree::BeginPlay()
 {
 	Super::BeginPlay();
+	// Reapply these responses at runtime so existing Blueprint defaults created
+	// before the camera channels were introduced cannot make trees push the camera.
+	ConfigureCameraOcclusion();
 	HealthComponent->OnHealthChanged.AddUObject(this, &AChopItTree::HandleHealthChanged);
 	HealthComponent->OnDeath.AddUObject(this, &AChopItTree::HandleDepleted);
 	PhysicsRoot->OnComponentHit.AddDynamic(this, &AChopItTree::HandleFallImpact);
@@ -104,6 +106,28 @@ void AChopItTree::BeginPlay()
 			Registry->RegisterTree(this);
 		}
 	}
+}
+
+void AChopItTree::ConfigureCameraOcclusion()
+{
+	// The physical root still blocks pawns, weapons and the world, but it must not
+	// participate in either camera query: its box includes most of the crown.
+	PhysicsRoot->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
+	PhysicsRoot->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraOcclusion, ECR_Ignore);
+
+	// Gameplay Cameras must hit the rendered primitives themselves so its
+	// OcclusionMaterial node can replace and later restore their materials.
+	for (UStaticMeshComponent* VisualMesh : { TrunkMesh.Get(), CrownMesh.Get() })
+	{
+		VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		VisualMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+		VisualMesh->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraOcclusion, ECR_Block);
+	}
+
+	// This volume is exclusively for harvest/fall contact. Hitting it would apply
+	// transparency to a component with no material instead of to the visible tree.
+	CrownCollision->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
+	CrownCollision->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraOcclusion, ECR_Ignore);
 }
 
 void AChopItTree::EndPlay(const EEndPlayReason::Type EndPlayReason)

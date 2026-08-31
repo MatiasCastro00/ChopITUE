@@ -1,4 +1,4 @@
-#include "Camera/CameraComponent.h"
+#include "Camera/ChopItCameraComponent.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
@@ -10,7 +10,6 @@
 #include "Framework/ChopItPlayerState.h"
 #include "GameFramework/PlayerStart.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "GameFramework/SpringArmComponent.h"
 #include "Harvest/ChopItTree.h"
 #include "InputAction.h"
 #include "InputCoreTypes.h"
@@ -43,15 +42,15 @@ bool FChopItPhase1GameplayFrameworkTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("Character CDO exists"), Character);
 	if (Character)
 	{
-		TestNotNull(TEXT("Top-down camera exists"), Character->GetTopDownCamera());
-		TestNotNull(TEXT("Fixed camera boom exists"), Character->GetCameraBoom());
+		TestNotNull(TEXT("Gameplay Cameras host exists"), Character->GetChopItCamera());
 		TestNotNull(TEXT("Interaction seam exists"), Character->GetInteractionComponent());
 		TestFalse(TEXT("Character has no actor Tick"), Character->PrimaryActorTick.bCanEverTick);
 		TestFalse(TEXT("Character is not snapped into the ground plane"), Character->GetCharacterMovement()->bConstrainToPlane);
 		TestEqual(TEXT("Character uses normal gravity"), Character->GetCharacterMovement()->GravityScale, 1.0f);
 		TestEqual(TEXT("Character lands in walking mode"), Character->GetCharacterMovement()->DefaultLandMovementMode, MOVE_Walking);
-		TestEqual(TEXT("Perspective spike FOV"), Character->GetTopDownCamera()->FieldOfView, 35.0f);
-		TestEqual(TEXT("Camera arm length"), Character->GetCameraBoom()->TargetArmLength, 2300.0f);
+		TestTrue(TEXT("Camera host ticks independently"), Character->GetChopItCamera()->PrimaryComponentTick.bCanEverTick);
+		TestEqual(TEXT("Default pitch"), Character->GetChopItCamera()->GetGameplayView().Pitch, -32.0f);
+		TestEqual(TEXT("Default camera distance"), Character->GetChopItCamera()->GetGameplayView().Distance, 850.0f);
 	}
 
 	TestEqual(TEXT("Unit input remains unit input"), AChopItCharacter::NormalizeMovementInput(FVector2D(0.0, 1.0)), FVector2D(0.0, 1.0));
@@ -69,20 +68,30 @@ bool FChopItPhase1InputAssetsTest::RunTest(const FString& Parameters)
 {
 	const UInputAction* Move = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_Move.IA_Move"));
 	const UInputAction* Interact = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_Interact.IA_Interact"));
+	const UInputAction* CameraLook = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraLook.IA_CameraLook"));
+	const UInputAction* CameraZoom = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraZoom.IA_CameraZoom"));
+	const UInputAction* CameraReset = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraReset.IA_CameraReset"));
 	const UInputMappingContext* Context = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/ChopIt/Input/IMC_Gameplay.IMC_Gameplay"));
 	TestNotNull(TEXT("IA_Move exists"), Move);
 	TestNotNull(TEXT("IA_Interact exists"), Interact);
+	TestNotNull(TEXT("IA_CameraLook exists"), CameraLook);
+	TestNotNull(TEXT("IA_CameraZoom exists"), CameraZoom);
+	TestNotNull(TEXT("IA_CameraReset exists"), CameraReset);
 	TestNotNull(TEXT("IMC_Gameplay exists"), Context);
-	if (!Move || !Interact || !Context)
+	if (!Move || !Interact || !CameraLook || !CameraZoom || !CameraReset || !Context)
 	{
 		return false;
 	}
 
 	TestEqual(TEXT("Move is Axis2D"), Move->ValueType, EInputActionValueType::Axis2D);
 	TestEqual(TEXT("Interact is Boolean"), Interact->ValueType, EInputActionValueType::Boolean);
+	TestEqual(TEXT("Camera look is Axis2D"), CameraLook->ValueType, EInputActionValueType::Axis2D);
+	TestEqual(TEXT("Camera zoom is Axis1D"), CameraZoom->ValueType, EInputActionValueType::Axis1D);
+	TestEqual(TEXT("Camera reset is Boolean"), CameraReset->ValueType, EInputActionValueType::Boolean);
 
 	TSet<FKey> MoveKeys;
 	TSet<FKey> InteractKeys;
+	TSet<FKey> CameraKeys;
 	for (const FEnhancedActionKeyMapping& Mapping : Context->GetMappings())
 	{
 		if (Mapping.Action == Move)
@@ -93,6 +102,7 @@ bool FChopItPhase1InputAssetsTest::RunTest(const FString& Parameters)
 		{
 			InteractKeys.Add(Mapping.Key);
 		}
+		else if (Mapping.Action == CameraLook || Mapping.Action == CameraZoom || Mapping.Action == CameraReset) CameraKeys.Add(Mapping.Key);
 	}
 
 	for (const FKey Key : { EKeys::W, EKeys::A, EKeys::S, EKeys::D, EKeys::Gamepad_Left2D })
@@ -101,6 +111,10 @@ bool FChopItPhase1InputAssetsTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("Keyboard interaction mapped"), InteractKeys.Contains(EKeys::E));
 	TestTrue(TEXT("Gamepad interaction mapped"), InteractKeys.Contains(EKeys::Gamepad_FaceButton_Bottom));
+	for (const FKey Key : { EKeys::Mouse2D, EKeys::Gamepad_Right2D, EKeys::MouseWheelAxis, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down, EKeys::MiddleMouseButton, EKeys::Gamepad_RightThumbstick })
+	{
+		TestTrue(FString::Printf(TEXT("Camera key mapped: %s"), *Key.ToString()), CameraKeys.Contains(Key));
+	}
 	return true;
 }
 
