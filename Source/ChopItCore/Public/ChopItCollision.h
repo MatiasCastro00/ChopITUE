@@ -15,6 +15,7 @@ namespace ChopItCollisionChannels
 	inline constexpr ECollisionChannel Chain = ECC_GameTraceChannel7;
 	inline constexpr ECollisionChannel CameraSolid = ECC_GameTraceChannel8;
 	inline constexpr ECollisionChannel CameraOcclusion = ECC_GameTraceChannel9;
+	inline const FName CameraSolidTag(TEXT("ChopItCameraSolid"));
 }
 
 namespace ChopItCollisionProfiles

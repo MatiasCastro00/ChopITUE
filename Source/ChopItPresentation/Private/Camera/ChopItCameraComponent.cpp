@@ -5,11 +5,15 @@
 #include "Camera/ChopItCameraUserSettings.h"
 #include "ChopItCollision.h"
 #include "CineCameraComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Core/CameraShakeAsset.h"
 #include "Core/CameraAsset.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UObject/ObjectSaveContext.h"
 
@@ -30,6 +34,8 @@ UChopItCameraComponent::UChopItCameraComponent(const FObjectInitializer& ObjectI
 	SetAbsolute(true, true, false);
 	static ConstructorHelpers::FObjectFinder<UCameraAsset> CameraAssetFinder(TEXT("/Game/ChopIt/Presentation/Camera/CA_PlayerCameras.CA_PlayerCameras"));
 	if (CameraAssetFinder.Succeeded()) CameraReference.SetCameraAsset(CameraAssetFinder.Object);
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> OcclusionMaterialFinder(TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
+	if (OcclusionMaterialFinder.Succeeded()) OcclusionMaterial = OcclusionMaterialFinder.Object;
 }
 
 // UGameplayCameraComponent is MinimalAPI in 5.8 and does not export these virtual
@@ -47,6 +53,7 @@ void UChopItCameraComponent::OnUpdateEvaluationContext(bool) {}
 void UChopItCameraComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	ConfigureWorldCameraCollision();
 	if (const UChopItCameraUserSettings* Settings = Cast<UChopItCameraUserSettings>(UGameUserSettings::GetGameUserSettings()))
 	{
 		GameplayView.Distance = FMath::Clamp(Settings->PreferredDistance, MinDistance, MaxDistance);
@@ -66,6 +73,7 @@ void UChopItCameraComponent::BeginPlay()
 
 void UChopItCameraComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	RestoreOcclusionMaterials();
 	for (const TPair<FGuid, FEffectRequest>& Pair : EffectRequests)
 	{
 		if (Pair.Value.Rig.IsValid()) StopCameraModifierRig(Pair.Value.Rig, true);
@@ -86,6 +94,7 @@ void UChopItCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	else UpdateScriptedTransform();
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (UCineCameraComponent* Output = GetOutputCameraComponent()) Output->SetFieldOfView(ActiveFieldOfView);
+	UpdateOcclusionTransparency();
 }
 
 FChopItCameraHandle UChopItCameraComponent::NewHandle() const
@@ -282,6 +291,162 @@ void UChopItCameraComponent::UpdateScriptedTransform()
 	FRotator Rotation = ActiveAnchor->CameraTransform->GetComponentRotation();
 	if (ActiveSubject.IsValid()) Rotation = (ActiveSubject->GetActorLocation() - Location).Rotation();
 	SetWorldLocationAndRotation(Location, Rotation);
+}
+
+void UChopItCameraComponent::ConfigureWorldCameraCollision()
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+	{
+		AActor* Actor = *ActorIt;
+		if (!IsValid(Actor)) continue;
+
+		const FString ActorName = Actor->GetName();
+		// Name checks migrate existing generated maps. New authored surfaces use the tag.
+		const bool bLegacyCameraSolid = ActorName.StartsWith(TEXT("Ground"))
+			|| ActorName.StartsWith(TEXT("ChainLab_Ground"))
+			|| ActorName.StartsWith(TEXT("Boundary_"))
+			|| ActorName.StartsWith(TEXT("ChainLab_Boundary"));
+		const bool bActorCameraSolid = Actor->ActorHasTag(ChopItCollisionChannels::CameraSolidTag) || bLegacyCameraSolid;
+
+		TInlineComponentArray<UPrimitiveComponent*> Primitives(Actor);
+		for (UPrimitiveComponent* Primitive : Primitives)
+		{
+			if (!IsValid(Primitive) || Primitive->GetCollisionEnabled() == ECollisionEnabled::NoCollision) continue;
+			const bool bCameraSolid = bActorCameraSolid || Primitive->ComponentHasTag(ChopItCollisionChannels::CameraSolidTag);
+			Primitive->SetCollisionResponseToChannel(
+				ChopItCollisionChannels::CameraSolid,
+				bCameraSolid ? ECR_Block : ECR_Ignore);
+		}
+	}
+}
+
+void UChopItCameraComponent::UpdateOcclusionTransparency()
+{
+	UWorld* World = GetWorld();
+	AActor* CameraTarget = ActiveSubject.IsValid() ? ActiveSubject.Get() : GetOwner();
+	if (!World || !IsValid(CameraTarget) || !IsValid(OcclusionMaterial))
+	{
+		RestoreOcclusionMaterials();
+		return;
+	}
+
+	const FVector TargetLocation = CameraTarget->GetActorLocation() + FVector(0.0, 0.0, PivotHeight);
+	const UCineCameraComponent* OutputCamera = GetOutputCameraComponent();
+	const FVector CameraLocation = OutputCamera ? OutputCamera->GetComponentLocation() : GetComponentLocation();
+	const FVector Segment = TargetLocation - CameraLocation;
+	const float SegmentLength = Segment.Size();
+	if (SegmentLength <= KINDA_SMALL_NUMBER)
+	{
+		RestoreOcclusionMaterials();
+		return;
+	}
+
+	// Sample the subject's screen-facing silhouette instead of using a constant-width
+	// capsule. These rays converge at the camera, so nearby lateral objects do not fade.
+	FCollisionObjectQueryParams ObjectQuery;
+	ObjectQuery.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQuery.AddObjectTypesToQuery(ECC_WorldDynamic);
+	ObjectQuery.AddObjectTypesToQuery(ECC_PhysicsBody);
+	FCollisionQueryParams BaseQuery(SCENE_QUERY_STAT(ChopItCameraOcclusion), false);
+	BaseQuery.AddIgnoredActor(GetOwner());
+	if (CameraTarget != GetOwner()) BaseQuery.AddIgnoredActor(CameraTarget);
+
+	const float SilhouetteRadius = FMath::Max(1.0f, OcclusionCorridorRadius);
+	const FVector CameraRight = OutputCamera ? OutputCamera->GetRightVector() : GetRightVector();
+	const FVector CameraUp = OutputCamera ? OutputCamera->GetUpVector() : GetUpVector();
+	static const FVector2D SilhouetteSamples[] =
+	{
+		FVector2D(0.0, 0.0),
+		FVector2D(-1.0, 0.0), FVector2D(1.0, 0.0),
+		FVector2D(0.0, -1.0), FVector2D(0.0, 1.0),
+		FVector2D(-0.7, -0.7), FVector2D(0.7, -0.7),
+		FVector2D(-0.7, 0.7), FVector2D(0.7, 0.7)
+	};
+	TSet<AActor*> OccludingActors;
+	for (const FVector2D& Sample : SilhouetteSamples)
+	{
+		const FVector SampleTarget = TargetLocation
+			+ CameraRight * (Sample.X * SilhouetteRadius)
+			+ CameraUp * (Sample.Y * SilhouetteRadius * 1.35f);
+		FCollisionQueryParams RayQuery = BaseQuery;
+		// Continue behind each hit so multiple aligned props can fade simultaneously.
+		for (int32 Layer = 0; Layer < 8; ++Layer)
+		{
+			FHitResult Hit;
+			if (!World->LineTraceSingleByObjectType(Hit, CameraLocation, SampleTarget, ObjectQuery, RayQuery)) break;
+			AActor* HitActor = Hit.GetActor();
+			if (!IsValid(HitActor)) break;
+			OccludingActors.Add(HitActor);
+			RayQuery.AddIgnoredActor(HitActor);
+		}
+	}
+
+	TSet<UPrimitiveComponent*> CurrentOccluders;
+	auto AddRenderablePrimitive = [this, &CurrentOccluders](UPrimitiveComponent* Primitive)
+	{
+		if (!IsValid(Primitive) || !Primitive->IsRegistered() || !Primitive->IsVisible() || Primitive->GetNumMaterials() <= 0
+			|| Primitive->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid) == ECR_Block)
+		{
+			return;
+		}
+		CurrentOccluders.Add(Primitive);
+		const bool bAlreadyOccluded = OccludedPrimitives.ContainsByPredicate(
+			[Primitive](const FChopItOccludedPrimitiveState& State) { return State.Component.Get() == Primitive; });
+		if (bAlreadyOccluded) return;
+
+		FChopItOccludedPrimitiveState& State = OccludedPrimitives.AddDefaulted_GetRef();
+		State.Component = Primitive;
+		const int32 MaterialCount = Primitive->GetNumMaterials();
+		State.OriginalMaterials.Reserve(MaterialCount);
+		for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
+		{
+			State.OriginalMaterials.Add(Primitive->GetMaterial(MaterialIndex));
+			Primitive->SetMaterial(MaterialIndex, OcclusionMaterial);
+		}
+	};
+
+	for (AActor* HitActor : OccludingActors)
+	{
+		if (!IsValid(HitActor) || HitActor == GetOwner() || HitActor == CameraTarget) continue;
+
+		// Occlusion is actor-wide: a tree or compound prop must not leave its trunk or
+		// another visual piece opaque merely because the corridor touched its crown first.
+		TInlineComponentArray<UPrimitiveComponent*> RenderPrimitives(HitActor);
+		for (UPrimitiveComponent* Primitive : RenderPrimitives) AddRenderablePrimitive(Primitive);
+	}
+
+	for (int32 StateIndex = OccludedPrimitives.Num() - 1; StateIndex >= 0; --StateIndex)
+	{
+		FChopItOccludedPrimitiveState& State = OccludedPrimitives[StateIndex];
+		UPrimitiveComponent* Primitive = State.Component.Get();
+		if (IsValid(Primitive) && CurrentOccluders.Contains(Primitive)) continue;
+		if (IsValid(Primitive))
+		{
+			for (int32 MaterialIndex = 0; MaterialIndex < State.OriginalMaterials.Num(); ++MaterialIndex)
+			{
+				Primitive->SetMaterial(MaterialIndex, State.OriginalMaterials[MaterialIndex]);
+			}
+		}
+		OccludedPrimitives.RemoveAtSwap(StateIndex, 1, EAllowShrinking::No);
+	}
+}
+
+void UChopItCameraComponent::RestoreOcclusionMaterials()
+{
+	for (FChopItOccludedPrimitiveState& State : OccludedPrimitives)
+	{
+		if (UPrimitiveComponent* Primitive = State.Component.Get())
+		{
+			for (int32 MaterialIndex = 0; MaterialIndex < State.OriginalMaterials.Num(); ++MaterialIndex)
+			{
+				Primitive->SetMaterial(MaterialIndex, State.OriginalMaterials[MaterialIndex]);
+			}
+		}
+	}
+	OccludedPrimitives.Reset();
 }
 
 void UChopItCameraComponent::PruneInvalidRequests()

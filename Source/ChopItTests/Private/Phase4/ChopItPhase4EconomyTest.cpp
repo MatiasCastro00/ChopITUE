@@ -1,4 +1,6 @@
+#include "ChopItCollision.h"
 #include "Components/SphereComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Economy/ChopItCabinHub.h"
 #include "Economy/ChopItDayDefinition.h"
 #include "Economy/ChopItDeliveryZone.h"
@@ -99,6 +101,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FChopItPhase4AssetsAndMapTest::RunTest(const FString& Parameters)
 {
+	const AChopItCabinHub* CabinDefaults = GetDefault<AChopItCabinHub>();
+	const UStaticMeshComponent* CabinVisual = CabinDefaults ? CabinDefaults->FindComponentByClass<UStaticMeshComponent>() : nullptr;
+	TestNotNull(TEXT("Cabin has a camera-occludable visual"), CabinVisual);
+	if (CabinVisual)
+	{
+		TestEqual(TEXT("Cabin never pushes the camera"), CabinVisual->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
+	}
+	const AChopItQuotaMachine* MachineDefaults = GetDefault<AChopItQuotaMachine>();
+	const UStaticMeshComponent* MachineVisual = MachineDefaults ? MachineDefaults->FindComponentByClass<UStaticMeshComponent>() : nullptr;
+	TestNotNull(TEXT("Quota lever has a camera-occludable visual"), MachineVisual);
+	if (MachineVisual)
+	{
+		TestEqual(TEXT("Quota lever never pushes the camera"), MachineVisual->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
+	}
+
 	const UChopItDayDefinition* Day = LoadObject<UChopItDayDefinition>(
 		nullptr, TEXT("/Game/ChopIt/Economy/Days/DA_Day_01.DA_Day_01"));
 	TestNotNull(TEXT("Day one definition exists"), Day);

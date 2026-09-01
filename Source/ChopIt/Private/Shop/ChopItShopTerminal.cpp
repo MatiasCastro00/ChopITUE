@@ -1,5 +1,6 @@
 #include "Shop/ChopItShopTerminal.h"
 
+#include "ChopItCollision.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -18,6 +19,7 @@ AChopItShopTerminal::AChopItShopTerminal()
 	TerminalVisual->SetRelativeLocation(FVector(0.0f, 0.0f, 110.0f));
 	TerminalVisual->SetRelativeScale3D(FVector(0.9f, 0.9f, 2.2f));
 	TerminalVisual->SetCollisionProfileName(TEXT("BlockAll"));
+	TerminalVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 	TerminalLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("TerminalLabel"));
 	TerminalLabel->SetupAttachment(SceneRoot);
 	TerminalLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 290.0f));
@@ -34,6 +36,8 @@ AChopItShopTerminal::AChopItShopTerminal()
 void AChopItShopTerminal::BeginPlay()
 {
 	Super::BeginPlay();
+	// Existing Blueprint defaults may predate the opt-in camera channel.
+	TerminalVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 	static const TCHAR* Paths[] =
 	{
 		TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_HandSaw.DA_Weapon_HandSaw"),

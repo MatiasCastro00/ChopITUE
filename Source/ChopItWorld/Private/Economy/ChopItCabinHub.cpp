@@ -1,5 +1,6 @@
 #include "Economy/ChopItCabinHub.h"
 
+#include "ChopItCollision.h"
 #include "Components/SceneComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -18,6 +19,7 @@ AChopItCabinHub::AChopItCabinHub()
 	CabinVisual->SetRelativeLocation(FVector(0.0f, 0.0f, 180.0f));
 	CabinVisual->SetRelativeScale3D(FVector(4.5f, 3.5f, 3.6f));
 	CabinVisual->SetCollisionProfileName(TEXT("BlockAll"));
+	CabinVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeMesh.Succeeded())
@@ -48,6 +50,8 @@ AChopItCabinHub::AChopItCabinHub()
 void AChopItCabinHub::BeginPlay()
 {
 	Super::BeginPlay();
+	// Existing Blueprint defaults may predate the opt-in camera channel.
+	CabinVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 	AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
 	if (UChopItCycleStateMachineComponent* Cycle = GameState
 		? GameState->FindComponentByClass<UChopItCycleStateMachineComponent>() : nullptr)

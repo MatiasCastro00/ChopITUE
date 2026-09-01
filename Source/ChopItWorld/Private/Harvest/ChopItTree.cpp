@@ -115,8 +115,8 @@ void AChopItTree::ConfigureCameraOcclusion()
 	PhysicsRoot->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 	PhysicsRoot->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraOcclusion, ECR_Ignore);
 
-	// Gameplay Cameras must hit the rendered primitives themselves so its
-	// OcclusionMaterial node can replace and later restore their materials.
+	// Keep the rendered primitives in the query scene so ChopIt's final-pose
+	// camera corridor can replace and later restore their materials.
 	for (UStaticMeshComponent* VisualMesh : { TrunkMesh.Get(), CrownMesh.Get() })
 	{
 		VisualMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
