@@ -34,6 +34,7 @@ AChopItQuotaMachine::AChopItQuotaMachine()
 	MachineVisual->SetRelativeScale3D(FVector(1.2f, 1.2f, 2.0f));
 	MachineVisual->SetCollisionProfileName(TEXT("BlockAll"));
 	MachineVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::Chain, ECR_Ignore);
+	MachineVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 
 	QuotaLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("QuotaLabel"));
 	QuotaLabel->SetupAttachment(SceneRoot);
@@ -77,6 +78,8 @@ AChopItQuotaMachine::AChopItQuotaMachine()
 void AChopItQuotaMachine::BeginPlay()
 {
 	Super::BeginPlay();
+	// Existing Blueprint defaults may predate the opt-in camera channel.
+	MachineVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 	const UChopItChainDefinition* Chain = GetChainDefinition();
 	if (!Chain)
 	{

@@ -10,6 +10,20 @@ class AChopItCameraAnchor;
 class UCameraShakeAsset;
 class UChopItCameraCue;
 class UChopItCameraEffectPreset;
+class UMaterialInterface;
+class UPrimitiveComponent;
+
+USTRUCT()
+struct FChopItOccludedPrimitiveState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UPrimitiveComponent> Component;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInterface>> OriginalMaterials;
+};
 
 UCLASS(ClassGroup=(ChopIt), meta=(BlueprintSpawnableComponent))
 class CHOPITPRESENTATION_API UChopItCameraComponent final : public UGameplayCameraComponent
@@ -75,6 +89,9 @@ private:
 	void ResolveActiveCue();
 	void UpdateGameplayTransform(float DeltaTime);
 	void UpdateScriptedTransform();
+	void ConfigureWorldCameraCollision();
+	void UpdateOcclusionTransparency();
+	void RestoreOcclusionMaterials();
 	void PruneInvalidRequests();
 	FChopItCameraHandle NewHandle() const;
 
@@ -92,4 +109,14 @@ private:
 	float ActiveFieldOfView = 85.0f;
 	FVector2D SmoothedMouseInput = FVector2D::ZeroVector;
 	uint64 NextSequence = 1;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> OcclusionMaterial;
+
+	UPROPERTY(Transient)
+	TArray<FChopItOccludedPrimitiveState> OccludedPrimitives;
+
+	/** Half-width of the sampled subject silhouette, in centimeters. */
+	UPROPERTY(EditAnywhere, Category="ChopIt|Camera|Occlusion", meta=(ClampMin="1.0", UIMin="10.0", UIMax="200.0"))
+	float OcclusionCorridorRadius = 60.0f;
 };

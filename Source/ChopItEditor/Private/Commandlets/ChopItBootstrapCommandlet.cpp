@@ -42,6 +42,9 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionConstant.h"
 #include "Materials/MaterialExpressionConstant3Vector.h"
+#include "Materials/MaterialExpressionMaterialFunctionCall.h"
+#include "Materials/MaterialExpressionScalarParameter.h"
+#include "Materials/MaterialFunctionInterface.h"
 #include "MaterialEditingLibrary.h"
 #include "Misc/PackageName.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
@@ -185,7 +188,18 @@ namespace ChopItBootstrap
 		Component->SetMaterial(0, Material);
 		Component->SetMobility(EComponentMobility::Static);
 		Component->SetCollisionProfileName(CollisionProfile);
+		// Camera collision is opt-in. Ordinary props retain their gameplay collision but
+		// never shorten the camera orbit; only authored floor/boundary surfaces override it.
+		Component->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 		return Actor;
+	}
+
+	void MarkCameraSolid(AStaticMeshActor* Actor)
+	{
+		if (!Actor || !Actor->GetStaticMeshComponent()) return;
+		Actor->Tags.AddUnique(ChopItCollisionChannels::CameraSolidTag);
+		Actor->GetStaticMeshComponent()->ComponentTags.AddUnique(ChopItCollisionChannels::CameraSolidTag);
+		Actor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Block);
 	}
 
 	ATextRenderActor* SpawnLabSign(
@@ -980,40 +994,59 @@ bool UChopItBootstrapCommandlet::CreateCameraAssets() const
 	UCameraRigAsset* DeathRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_Death"), TEXT("CR_Death"), 55.0f);
 	if (!GameplayRig || !ScriptedRig || !CinematicRig || !DeathRig) return false;
 	UMaterial* OcclusionMaterial = ChopItBootstrap::LoadOrCreateAsset<UMaterial>(TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion"), TEXT("M_CameraFoliageOcclusion"));
-	if (OcclusionMaterial->GetExpressionCollection().Expressions.IsEmpty())
+	if (OcclusionMaterial)
 	{
-		OcclusionMaterial->BlendMode = BLEND_Translucent;
+		// Rebuild this asset deterministically. A masked temporal dither keeps depth sorting
+		// stable and works for any opaque mesh without requiring bespoke translucent variants.
+		const TArray<TObjectPtr<UMaterialExpression>> ExistingExpressions = OcclusionMaterial->GetExpressionCollection().Expressions;
+		for (UMaterialExpression* Expression : ExistingExpressions)
+		{
+			UMaterialEditingLibrary::DeleteMaterialExpression(OcclusionMaterial, Expression);
+		}
+		OcclusionMaterial->BlendMode = BLEND_Masked;
 		OcclusionMaterial->SetShadingModel(MSM_Unlit);
 		OcclusionMaterial->TwoSided = true;
+		OcclusionMaterial->OpacityMaskClipValue = 0.3333f;
 		UMaterialExpressionConstant3Vector* Color = CastChecked<UMaterialExpressionConstant3Vector>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionConstant3Vector::StaticClass(), -240, 0));
-		Color->Constant = FLinearColor(0.03f, 0.12f, 0.025f);
+		Color->Constant = FLinearColor(0.08f, 0.09f, 0.1f);
 		UMaterialEditingLibrary::ConnectMaterialProperty(Color, TEXT(""), MP_EmissiveColor);
-		UMaterialExpressionConstant* Opacity = CastChecked<UMaterialExpressionConstant>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionConstant::StaticClass(), -240, 160));
-		Opacity->R = 0.16f;
-		UMaterialEditingLibrary::ConnectMaterialProperty(Opacity, TEXT(""), MP_Opacity);
+
+		UMaterialExpressionScalarParameter* Visibility = CastChecked<UMaterialExpressionScalarParameter>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionScalarParameter::StaticClass(), -420, 180));
+		Visibility->ParameterName = TEXT("Visibility");
+		Visibility->DefaultValue = 0.28f;
+		UMaterialFunctionInterface* DitherFunction = LoadObject<UMaterialFunctionInterface>(nullptr, TEXT("/Engine/Functions/Engine_MaterialFunctions02/Utility/DitherTemporalAA.DitherTemporalAA"));
+		if (DitherFunction)
+		{
+			UMaterialExpressionMaterialFunctionCall* Dither = CastChecked<UMaterialExpressionMaterialFunctionCall>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionMaterialFunctionCall::StaticClass(), -160, 180));
+			Dither->SetMaterialFunction(DitherFunction);
+			int32 AlphaInputIndex = INDEX_NONE;
+			for (int32 InputIndex = 0; InputIndex < Dither->FunctionInputs.Num(); ++InputIndex)
+			{
+				if (Dither->GetInputName(InputIndex).ToString().Contains(TEXT("Alpha")))
+				{
+					AlphaInputIndex = InputIndex;
+					break;
+				}
+			}
+			if (AlphaInputIndex == INDEX_NONE && !Dither->FunctionInputs.IsEmpty()) AlphaInputIndex = 0;
+			if (AlphaInputIndex != INDEX_NONE) Dither->FunctionInputs[AlphaInputIndex].Input.Connect(0, Visibility);
+			UMaterialEditingLibrary::ConnectMaterialProperty(Dither, TEXT(""), MP_OpacityMask);
+		}
+		else
+		{
+			UE_LOG(LogChopIt, Error, TEXT("Could not load the engine DitherTemporalAA material function"));
+		}
 		UMaterialEditingLibrary::RecompileMaterial(OcclusionMaterial);
 	}
 	if (UArrayCameraNode* GameplayRoot = Cast<UArrayCameraNode>(GameplayRig->RootNode))
 	{
-		UOcclusionMaterialCameraNode* Occlusion = nullptr;
-		for (UCameraNode* Node : GameplayRoot->Children)
+		// Occlusion is evaluated by UChopItCameraComponent after the final manual orbit
+		// transform. The plugin node evaluates an earlier rig pose and therefore cannot
+		// reliably see what is actually between the rendered camera and its subject.
+		for (int32 NodeIndex = GameplayRoot->Children.Num() - 1; NodeIndex >= 0; --NodeIndex)
 		{
-			if (UOcclusionMaterialCameraNode* Existing = Cast<UOcclusionMaterialCameraNode>(Node))
-			{
-				Occlusion = Existing;
-				break;
-			}
+			if (GameplayRoot->Children[NodeIndex] && GameplayRoot->Children[NodeIndex]->IsA<UOcclusionMaterialCameraNode>()) GameplayRoot->Children.RemoveAt(NodeIndex);
 		}
-		if (!Occlusion)
-		{
-			Occlusion = NewObject<UOcclusionMaterialCameraNode>(GameplayRig, TEXT("TreeOcclusion"));
-			GameplayRoot->Children.Add(Occlusion);
-		}
-		Occlusion->OcclusionTransparencyMaterial = OcclusionMaterial;
-		Occlusion->OcclusionSphereRadius.Value = 48.0f;
-		Occlusion->OcclusionChannel = ChopItCollisionChannels::CameraOcclusion;
-		Occlusion->OcclusionTargetPosition = ECameraNodeOriginPosition::Pawn;
-		Occlusion->OcclusionTargetOffset.Value = FVector3d(0.0, 0.0, 65.0);
 		GameplayRig->BuildCameraRig();
 	}
 
@@ -1239,7 +1272,8 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	UMaterialInterface* Roof = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Roof"));
 	UMaterialInterface* Stone = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Stone"));
 
-	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("Ground"), FVector(0, 0, -50), FVector(42, 42, 1), Ground);
+	AStaticMeshActor* GroundActor = ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("Ground"), FVector(0, 0, -50), FVector(42, 42, 1), Ground);
+	ChopItBootstrap::MarkCameraSolid(GroundActor);
 	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("Hub_Path"), FVector(450, 0, 2), FVector(9, 2.5f, 0.08f), Path, TEXT("NoCollision"));
 	if (!bEconomyTestLayout)
 	{
@@ -1295,7 +1329,11 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	{
 		AStaticMeshActor* BoundaryActor = ChopItBootstrap::SpawnBlockoutMesh(
 			World, Cube, Boundary.Name, Boundary.Location, Boundary.Scale, Stone);
-		BoundaryActor->SetActorHiddenInGame(true);
+		if (BoundaryActor)
+		{
+			ChopItBootstrap::MarkCameraSolid(BoundaryActor);
+			BoundaryActor->SetActorHiddenInGame(true);
+		}
 	}
 
 	FActorSpawnParameters SpawnParameters;
@@ -1464,7 +1502,8 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 
 	// All obstacle meshes use BlockAll. The ChopItChain profile therefore sweeps
 	// against them exactly like it will against normal world geometry in game.
-	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("ChainLab_Ground"), FVector(0, 0, -50), FVector(50, 50, 1), Ground);
+	AStaticMeshActor* GroundActor = ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("ChainLab_Ground"), FVector(0, 0, -50), FVector(50, 50, 1), Ground);
+	ChopItBootstrap::MarkCameraSolid(GroundActor);
 	ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("ChainLab_StartPath"), FVector(0, -1500, 3), FVector(3.0f, 8.0f, 0.08f), Path, TEXT("NoCollision"));
 
 	FActorSpawnParameters SpawnParameters;
@@ -1573,6 +1612,7 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 		AStaticMeshActor* Actor = ChopItBootstrap::SpawnBlockoutMesh(World, Cube, Boundary.Name, Boundary.Location, Boundary.Scale, Stone);
 		if (Actor)
 		{
+			ChopItBootstrap::MarkCameraSolid(Actor);
 			Actor->SetActorHiddenInGame(true);
 		}
 	}

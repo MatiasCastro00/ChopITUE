@@ -4,6 +4,9 @@
 #include "Core/CameraRigAsset.h"
 #include "Core/CameraShakeAsset.h"
 #include "Directors/StateTreeCameraDirector.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialExpressionMaterialFunctionCall.h"
+#include "Materials/MaterialFunctionInterface.h"
 #include "Misc/AutomationTest.h"
 #include "StateTree.h"
 
@@ -101,6 +104,20 @@ bool FChopItCameraAssetsTest::RunTest(const FString&)
 	})
 	{
 		TestNotNull(FString::Printf(TEXT("Camera shake loads: %s"), Path), LoadObject<UCameraShakeAsset>(nullptr, Path));
+	}
+
+	UMaterial* OcclusionMaterial = LoadObject<UMaterial>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
+	TestNotNull(TEXT("Generic camera occlusion material exists"), OcclusionMaterial);
+	if (OcclusionMaterial)
+	{
+		TestEqual(TEXT("Occlusion uses stable masked rendering"), OcclusionMaterial->BlendMode, BLEND_Masked);
+		const bool bUsesTemporalDither = OcclusionMaterial->GetExpressionCollection().Expressions.ContainsByPredicate(
+			[](const TObjectPtr<UMaterialExpression>& Expression)
+			{
+				const UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(Expression);
+				return FunctionCall && FunctionCall->MaterialFunction && FunctionCall->MaterialFunction->GetName().Contains(TEXT("DitherTemporalAA"));
+			});
+		TestTrue(TEXT("Occlusion mask is driven by DitherTemporalAA"), bUsesTemporalDither);
 	}
 	return true;
 }

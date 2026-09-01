@@ -22,7 +22,7 @@ Se reemplaza formalmente la cámara fija por el sistema integral de `ChopItPrese
 - Los efectos visuales viven en modifier rigs y los impactos usan `UCameraShakeAsset`; no modifican el estado base.
 - Los cues poseen locks independientes de cámara, movimiento y acciones, liberados por handle.
 - Las preferencias viven en `UChopItCameraUserSettings`; `DeveloperSettings` conserva defaults globales.
-- Paredes, pisos y geometría sólida usan `ChopItCameraSolid` y empujan la cámara. Las mallas visibles de los árboles ignoran ese canal, usan `ChopItCameraOcclusion` y reciben temporalmente el material translúcido cuando tapan al jugador.
+- `ChopItCameraSolid` es opt-in: únicamente el suelo y las paredes que limitan el mapa empujan la cámara. Cabaña, palanca, árboles, máquinas, enemigos y demás props conservan su colisión de gameplay pero ignoran ese canal. Después de resolver la posición final, `UChopItCameraComponent` consulta un corredor entre cámara y sujeto: si una pieza de un actor entra en él, todas sus primitivas visuales reciben temporalmente un material masked con dithering temporal y recuperan exactamente sus materiales originales al despejarse.
 
 Gameplay Cameras 5.8 expone partes necesarias como `MinimalAPI`. Para no modificar Engine, ChopIt reimplementa los overrides ABI no exportados y aporta una tarea y condición de StateTree propias dentro de `ChopItPresentation`. El StateTree selecciona realmente los rigs de `GameplayOrbit`, `Scripted`, `Cinematic` y `Death`, mientras la resolución de prioridades y handles permanece detrás de la fachada de ChopIt.
 
