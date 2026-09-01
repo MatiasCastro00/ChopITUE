@@ -5,6 +5,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Economy/ChopItEconomyComponent.h"
 #include "Economy/ChopItQuotaComponent.h"
 #include "GameFramework/GameStateBase.h"
@@ -27,7 +28,7 @@ AChopItSellZone::AChopItSellZone()
 	ZoneVisual->SetRelativeScale3D(FVector(2.3f, 2.3f, 0.08f));
 	ZoneVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	ZoneLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("ZoneLabel"));
+	ZoneLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("ZoneLabel"));
 	ZoneLabel->SetupAttachment(SellSphere);
 	ZoneLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f));
 	ZoneLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
@@ -85,8 +86,8 @@ void AChopItSellZone::HandleEndOverlap(UPrimitiveComponent*, AActor* OtherActor,
 void AChopItSellZone::HandleQuotaChanged(const int32, const int32, const bool bComplete)
 {
 	ZoneLabel->SetText(FText::FromString(bComplete
-		? FString::Printf(TEXT("VENDER MADERA  $%lld"), MoneyPerWood)
-		: TEXT("CAMIONETA BLOQUEADA")));
+		? FString::Printf(TEXT("SELL WOOD  $%lld"), MoneyPerWood)
+		: TEXT("TRUCK LOCKED")));
 	ZoneLabel->SetTextRenderColor(bComplete ? FColor::Green : FColor::Silver);
 }
 

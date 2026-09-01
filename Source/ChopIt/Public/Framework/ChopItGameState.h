@@ -24,6 +24,7 @@ public:
 	UChopItCycleStateMachineComponent* GetCycleStateMachine() const { return CycleStateMachine; }
 	UChopItRunStateComponent* GetRunStateComponent() const { return RunStateComponent; }
 	UChopItEnemyDirectorComponent* GetEnemyDirectorComponent() const { return EnemyDirectorComponent; }
+	static int32 ResolveQuotaTarget(int32 DayNumber, const UChopItDayDefinition* DayDefinition);
 
 private:
 	UFUNCTION() void HandleRunResult(EChopItRunResult Result, int32 DayNumber);

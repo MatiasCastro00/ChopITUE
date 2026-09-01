@@ -3,7 +3,7 @@
 #include "Core/CameraAsset.h"
 #include "Core/CameraRigAsset.h"
 #include "Core/CameraShakeAsset.h"
-#include "Directors/StateTreeCameraDirector.h"
+#include "Directors/SingleCameraDirector.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionMaterialFunctionCall.h"
 #include "Materials/MaterialFunctionInterface.h"
@@ -82,9 +82,13 @@ bool FChopItCameraAssetsTest::RunTest(const FString&)
 	TestNotNull(TEXT("Camera StateTree exists"), StateTree);
 	if (!CameraAsset || !StateTree) return false;
 
-	const UStateTreeCameraDirector* Director = Cast<UStateTreeCameraDirector>(CameraAsset->GetCameraDirector());
-	TestNotNull(TEXT("Camera asset is driven by StateTree director"), Director);
-	if (Director) TestTrue(TEXT("Director references ChopIt camera StateTree"), Director->StateTreeReference.GetStateTree() == StateTree);
+	const USingleCameraDirector* Director = Cast<USingleCameraDirector>(CameraAsset->GetCameraDirector());
+	TestNotNull(TEXT("Camera asset has a stable single-rig host director"), Director);
+	if (Director)
+	{
+		TestNotNull(TEXT("Host director references the gameplay base rig"), Director->CameraRig.Get());
+		TestEqual(TEXT("Host director uses the gameplay orbit rig"), Director->CameraRig->GetName(), FString(TEXT("CR_GameplayOrbit")));
+	}
 
 	for (const TCHAR* Path :
 	{

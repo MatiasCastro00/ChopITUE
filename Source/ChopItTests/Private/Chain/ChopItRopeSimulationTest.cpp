@@ -1,11 +1,52 @@
 #include "Misc/AutomationTest.h"
 
+#include "ChopItCollision.h"
 #include "Economy/ChopItChainDefinition.h"
 #include "Economy/ChopItRopeComponent.h"
 #include "Economy/ChopItTetherPathComponent.h"
 #include "Economy/ChopItTetherReceiverComponent.h"
 #include "Components/BoxComponent.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
 #include "Tests/AutomationEditorCommon.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FChopItStartupChainObstacleCourseTest,
+	"ChopIt.Chain.StartupObstacleCourse",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FChopItStartupChainObstacleCourseTest::RunTest(const FString& Parameters)
+{
+	const FString MapPackageName = TEXT("/Game/ChopIt/World/Maps/L_Startup");
+	UPackage* Package = LoadPackage(nullptr, *MapPackageName, LOAD_None);
+	UWorld* World = Package ? FindObject<UWorld>(Package, TEXT("L_Startup")) : nullptr;
+	TestNotNull(TEXT("Startup map with the chain course loads"), World);
+	if (!World)
+	{
+		return false;
+	}
+
+	int32 BlockingObstacleCount = 0;
+	for (AActor* Actor : World->PersistentLevel->Actors)
+	{
+		if (!IsValid(Actor) || !Actor->ActorHasTag(TEXT("ChopIt.ChainObstacle")))
+		{
+			continue;
+		}
+		++BlockingObstacleCount;
+		const AStaticMeshActor* Obstacle = Cast<AStaticMeshActor>(Actor);
+		TestNotNull(TEXT("Every chain obstacle is authored as static geometry"), Obstacle);
+		if (Obstacle && Obstacle->GetStaticMeshComponent())
+		{
+			TestEqual(
+				TEXT("Authored obstacle blocks the dedicated chain channel"),
+				Obstacle->GetStaticMeshComponent()->GetCollisionResponseToChannel(ChopItCollisionChannels::Chain),
+				ECR_Block);
+		}
+	}
+	TestEqual(TEXT("Startup has five posts and two hard-corner obstacles"), BlockingObstacleCount, 7);
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FChopItRopeDeploymentPreservesShapeTest,

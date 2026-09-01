@@ -5,6 +5,7 @@
 #include "Combat/ChopItHealthComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
 AChopItCombatDummy::AChopItCombatDummy()
@@ -22,7 +23,7 @@ AChopItCombatDummy::AChopItCombatDummy()
 		BodyMesh->SetStaticMesh(CylinderMesh.Object);
 	}
 
-	HealthLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("HealthLabel"));
+	HealthLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("HealthLabel"));
 	HealthLabel->SetupAttachment(BodyMesh);
 	HealthLabel->SetRelativeLocation(FVector(0, 0, 120));
 	HealthLabel->SetRelativeRotation(FRotator(0, 180, 0));

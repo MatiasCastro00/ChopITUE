@@ -30,13 +30,22 @@ void AChopItGameState::BeginPlay()
 		nullptr,
 		TEXT("/Game/ChopIt/Economy/Days/DA_Day_01.DA_Day_01"));
 	const int32 InitialDay = ResolveInitialDay(DayDefinition);
-	const int32 BaseQuota = DayDefinition ? DayDefinition->WoodQuota : 6;
-	QuotaComponent->InitializeQuota(BaseQuota + FMath::Max(0, InitialDay - 1));
+	// The authored first match is the complete furnace contract. Keep the value
+	// in runtime code so regenerating bootstrap content never overwrites the
+	// user's customized DA_Day_01 asset.
+	QuotaComponent->InitializeQuota(ResolveQuotaTarget(InitialDay, DayDefinition));
 	RunStateComponent->InitializeRun(InitialDay);
 	CycleStateMachine->ConfigureFromDay(DayDefinition);
 	CycleStateMachine->StartCycle();
 	RunStateComponent->OnResultChanged.AddUniqueDynamic(this,&AChopItGameState::HandleRunResult);
 	UE_LOG(LogChopIt, Display, TEXT("Economy day initialized: quota=%d."), QuotaComponent->GetTarget());
+}
+
+int32 AChopItGameState::ResolveQuotaTarget(const int32 DayNumber, const UChopItDayDefinition* DayDefinition)
+{
+	constexpr int32 FirstContractQuota = 200;
+	const int32 AuthoredBase = DayDefinition ? DayDefinition->WoodQuota : FirstContractQuota;
+	return FMath::Max(FirstContractQuota, AuthoredBase) + FMath::Max(0, DayNumber - 1);
 }
 
 int32 AChopItGameState::ResolveInitialDay(const UChopItDayDefinition* DayDefinition) const

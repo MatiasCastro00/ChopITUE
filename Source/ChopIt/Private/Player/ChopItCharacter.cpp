@@ -8,6 +8,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Cycle/ChopItCycleStateMachineComponent.h"
 #include "EnhancedInputComponent.h"
 #include "Economy/ChopItEconomyComponent.h"
@@ -93,7 +94,7 @@ AChopItCharacter::AChopItCharacter()
 	WoodCargoComponent = CreateDefaultSubobject<UChopItWoodCargoComponent>(TEXT("WoodCargoComponent"));
 	TetherReceiverComponent = CreateDefaultSubobject<UChopItTetherReceiverComponent>(TEXT("TetherReceiverComponent"));
 
-	WoodCargoLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("WoodCargoLabel"));
+	WoodCargoLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("WoodCargoLabel"));
 	WoodCargoLabel->SetupAttachment(GetCapsuleComponent());
 	WoodCargoLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 145.0f));
 	WoodCargoLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
@@ -383,7 +384,7 @@ void AChopItCharacter::RefreshEconomyDebugLabel()
 	}
 	if (UpgradeOffers && UpgradeOffers->HasActiveOffer())
 	{
-		FString OfferText = FString::Printf(TEXT("SUBISTE A NIVEL %d - ELIGE MEJORA\n"), Level);
+		FString OfferText = FString::Printf(TEXT("LEVEL %d REACHED - CHOOSE AN UPGRADE\n"), Level);
 		const TArray<TObjectPtr<UChopItUpgradeDefinition>>& Offers = UpgradeOffers->GetActiveOffers();
 		for (int32 Index = 0; Index < Offers.Num(); ++Index)
 		{
@@ -398,17 +399,17 @@ void AChopItCharacter::RefreshEconomyDebugLabel()
 		return;
 	}
 	WoodCargoLabel->SetTextRenderColor(FColor::Yellow);
-	const TCHAR* PhaseName = TEXT("INICIO");
+	const TCHAR* PhaseName = TEXT("STARTING");
 	FString Guidance;
 	switch (Phase)
 	{
-	case EChopItCyclePhase::Day: PhaseName = TEXT("DIA"); break;
-	case EChopItCyclePhase::Dusk: PhaseName = TEXT("ATARDECER"); break;
-	case EChopItCyclePhase::Night: PhaseName = TEXT("NOCHE"); break;
-	case EChopItCyclePhase::Elite: PhaseName = TEXT("ELITE PROVISIONAL"); break;
-	case EChopItCyclePhase::Resolution: PhaseName = TEXT("CICLO COMPLETO"); break;
-	case EChopItCyclePhase::Death: PhaseName = TEXT("DERROTA"); break;
-	case EChopItCyclePhase::Victory: PhaseName = TEXT("VICTORIA: BOSQUE VENCIDO"); break;
+	case EChopItCyclePhase::Day: PhaseName = TEXT("DAY"); break;
+	case EChopItCyclePhase::Dusk: PhaseName = TEXT("DUSK"); break;
+	case EChopItCyclePhase::Night: PhaseName = TEXT("NIGHT"); break;
+	case EChopItCyclePhase::Elite: PhaseName = TEXT("ELITE INCOMING"); break;
+	case EChopItCyclePhase::Resolution: PhaseName = TEXT("CYCLE COMPLETE"); break;
+	case EChopItCyclePhase::Death: PhaseName = TEXT("DEFEAT"); break;
+	case EChopItCyclePhase::Victory: PhaseName = TEXT("VICTORY: FOREST DEFEATED"); break;
 	default: break;
 	}
 	if ((Phase == EChopItCyclePhase::Dusk || Phase == EChopItCyclePhase::Night) && IsValid(CabinHub))
@@ -430,16 +431,16 @@ void AChopItCharacter::RefreshEconomyDebugLabel()
 			? (ForwardDot >= 0.0f ? TEXT("^") : TEXT("v"))
 			: (RightDot >= 0.0f ? TEXT(">") : TEXT("<"));
 		Guidance = Phase == EChopItCyclePhase::Night && bInfiniteMode
-			? TEXT("\nNOCHE INFINITA: SOBREVIVI")
+			? TEXT("\nENDLESS NIGHT: SURVIVE")
 			: Phase == EChopItCyclePhase::Night
-			? FString::Printf(TEXT("\nELITE APARECE EN %.0fs"), FMath::Max(0.0f, Remaining))
+			? FString::Printf(TEXT("\nELITE ARRIVES IN %.0fs"), FMath::Max(0.0f, Remaining))
 			: (DistanceMeters <= 4.0f
-				? TEXT("\nCABANA: LLEGASTE")
-				: FString::Printf(TEXT("\nCABANA / PALANCA: %.0fm [%s]"), DistanceMeters, Arrow));
+				? TEXT("\nCABIN: ARRIVED")
+				: FString::Printf(TEXT("\nCABIN / LEVER: %.0fm [%s]"), DistanceMeters, Arrow));
 	}
 	const FString ClockText = Remaining >= 0.0f ? FString::Printf(TEXT("  %.0fs"), Remaining) : FString();
 	WoodCargoLabel->SetText(FText::FromString(FString::Printf(
-		TEXT("%s%s%s\nNivel %d  XP %d / %d\nMadera %d / %d\nCuota %d / %d\nDinero $%lld"),
+		TEXT("%s%s%s\nLevel %d  XP %d / %d\nWood %d / %d\nQuota %d / %d\nMoney $%lld"),
 		PhaseName,
 		*ClockText,
 		*Guidance,

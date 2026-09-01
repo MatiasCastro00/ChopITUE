@@ -11,6 +11,7 @@ class UChopItRopeComponent;
 class UChopItTetherPathComponent;
 class UChopItTetherReceiverComponent;
 class UInstancedStaticMeshComponent;
+class UPointLightComponent;
 class USceneComponent;
 class UStaticMeshComponent;
 class UTextRenderComponent;
@@ -29,6 +30,11 @@ public:
 	virtual bool CanInteract_Implementation(AActor* Interactor) const override;
 	virtual bool Interact_Implementation(AActor* Interactor) override;
 	void SetChainDefinition(UChopItChainDefinition* InChainDefinition) { ChainDefinition = InChainDefinition; }
+	FVector GetDeliveryIntakeWorldLocation() const;
+	void NotifyWoodConsumed(int32 Units);
+	UInstancedStaticMeshComponent* GetWoodChipPool() const { return WoodChipPool; }
+	int32 GetWoodChipPoolSize() const { return WoodChipPoolSize; }
+	int32 GetActiveWoodChipCount() const;
 
 private:
 	UFUNCTION()
@@ -47,6 +53,10 @@ private:
 	void UpdatePlayerTension(float RouteLength);
 	void CorrectHardLimit(float RouteLength);
 	void UpdateChainVisuals();
+	void UpdateDeliveryReaction(float DeltaSeconds);
+	void SpawnWoodChips(int32 Count);
+	void UpdateWoodChips(float DeltaSeconds);
+	void HideWoodChip(int32 PoolIndex);
 	bool SampleCableAtDistance(const TArray<FVector>& Points, float Distance, FVector& OutLocation, FVector& OutDirection) const;
 	float GetFixedLinkLength() const;
 	const UChopItChainDefinition* GetChainDefinition() const;
@@ -59,6 +69,15 @@ private:
 	TObjectPtr<UTextRenderComponent> QuotaLabel;
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Cycle")
 	TObjectPtr<UTextRenderComponent> LeverLabel;
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")
+	TObjectPtr<UPointLightComponent> DeliveryGlow;
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")
+	TObjectPtr<UInstancedStaticMeshComponent> WoodChipPool;
+
+	UPROPERTY(EditAnywhere, Category = "ChopIt|Quota|Juice", meta = (ClampMin = "32", ClampMax = "256"))
+	int32 WoodChipPoolSize = 96;
+	UPROPERTY(EditAnywhere, Category = "ChopIt|Quota|Juice", meta = (ClampMin = "1", ClampMax = "12"))
+	int32 WoodChipsPerItem = 5;
 
 	/** Authoritative collision route. */
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|07 Components")
@@ -76,6 +95,26 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UChopItTetherReceiverComponent> TetherReceiver;
 
+	struct FWoodChipParticle
+	{
+		bool bActive = false;
+		FVector Location = FVector::ZeroVector;
+		FVector Velocity = FVector::ZeroVector;
+		FRotator Rotation = FRotator::ZeroRotator;
+		FRotator AngularVelocity = FRotator::ZeroRotator;
+		FVector BaseScale = FVector(0.02f, 0.02f, 0.05f);
+		float Age = 0.0f;
+		float Lifetime = 0.8f;
+	};
+
+	TArray<FWoodChipParticle> WoodChips;
+	FRandomStream DeliveryVisualRandom;
+	FVector MachineBaseLocation = FVector::ZeroVector;
+	FVector MachineBaseScale = FVector::OneVector;
+	FRotator MachineBaseRotation = FRotator::ZeroRotator;
+	float DeliveryReactionStrength = 0.0f;
+	float DeliveryAnimationTime = 0.0f;
+
 	int32 DeployedChainLinkCount = 0;
 	int32 TargetChainLinkCount = 0;
 	float CurrentCableLength = 0.0f;
@@ -84,5 +123,6 @@ private:
 	bool bHardLimited = false;
 	FVector LastValidPlayerLocation = FVector::ZeroVector;
 	bool bHasLastValidPlayerLocation = false;
+	float DeliveryGlowRemaining = 0.0f;
 	FTimerHandle ChainCreationTimer;
 };

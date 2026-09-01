@@ -8,6 +8,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Harvest/ChopItForestRegistrySubsystem.h"
 #include "Harvest/ChopItLogPickup.h"
 #include "Feedback/ChopItHitFeedbackComponent.h"
@@ -70,7 +71,7 @@ AChopItTree::AChopItTree()
 		CrownMesh->SetStaticMesh(SphereMesh.Object);
 	}
 
-	HealthLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("HealthLabel"));
+	HealthLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("HealthLabel"));
 	HealthLabel->SetupAttachment(PhysicsRoot);
 	HealthLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 400.0f));
 	HealthLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));

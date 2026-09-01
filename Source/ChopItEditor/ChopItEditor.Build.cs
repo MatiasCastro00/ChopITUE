@@ -9,6 +9,7 @@ public class ChopItEditor : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"AssetRegistry",
+			"AssetTools",
 			"ChopIt",
 			"ChopItCore",
 			"ChopItCombat",
@@ -17,6 +18,7 @@ public class ChopItEditor : ModuleRules
 			"ChopItPresentation",
 			"GameplayCameras",
 			"GameplayCamerasEditor",
+			"GameplayTags",
 			"StateTreeModule",
 			"StateTreeEditorModule",
 			"PropertyBindingUtils",

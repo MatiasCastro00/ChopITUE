@@ -11,4 +11,8 @@ void UChopItCameraUserSettings::SetToDefaults()
 	FieldOfView = 85.0f;
 	PreferredDistance = 850.0f;
 	ShakeStrength = 1.0f;
+	DialogueTextSpeed = 1.0f;
+	bReduceDialogueMotion = false;
+	bInstantDialogueText = false;
+	DialogueUIScale = 1.0f;
 }

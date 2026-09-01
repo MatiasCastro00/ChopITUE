@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Interaction/ChopItInteractable.h"
+#include "ChopItCollision.h"
 
 UChopItInteractionComponent::UChopItInteractionComponent()
 {
@@ -24,6 +25,7 @@ bool UChopItInteractionComponent::TryInteract()
 	FCollisionObjectQueryParams ObjectQuery;
 	ObjectQuery.AddObjectTypesToQuery(ECC_WorldDynamic);
 	ObjectQuery.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQuery.AddObjectTypesToQuery(ChopItCollisionChannels::DeliveryZone);
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ChopItInteraction), false, Owner);
 	World->OverlapMultiByObjectType(
 		Overlaps,

@@ -33,17 +33,17 @@ bool UChopItShopComponent::SelectOffer(const int32 Index, AActor* Purchaser, FSt
 		if (OutFailureReason) { *OutFailureReason = Reason; }
 		return false;
 	};
-	if (!ActiveOffers.IsValidIndex(Index) || !Purchaser) { return Fail(TEXT("Oferta invalida")); }
+	if (!ActiveOffers.IsValidIndex(Index) || !Purchaser) { return Fail(TEXT("Invalid offer")); }
 	UChopItWeaponDefinition* Weapon = ActiveOffers[Index];
 	UChopItEconomyComponent* Economy = GetOwner() ? GetOwner()->FindComponentByClass<UChopItEconomyComponent>() : nullptr;
 	UChopItWeaponLoadoutComponent* Loadout = Purchaser->FindComponentByClass<UChopItWeaponLoadoutComponent>();
-	if (!Weapon || !Economy || !Loadout) { return Fail(TEXT("Tienda no disponible")); }
-	if (Economy->GetBalance() < Weapon->ShopPrice) { return Fail(TEXT("Dinero insuficiente")); }
+	if (!Weapon || !Economy || !Loadout) { return Fail(TEXT("Shop unavailable")); }
+	if (Economy->GetBalance() < Weapon->ShopPrice) { return Fail(TEXT("Not enough money")); }
 	if (!Loadout->TryEquipWeapon(Weapon, OutFailureReason)) { return false; }
 	if (!Economy->ApplyTransaction(FGuid::NewGuid(), TEXT("WeaponPurchase"), -Weapon->ShopPrice))
 	{
 		Loadout->RemoveWeapon(Weapon->WeaponId);
-		return Fail(TEXT("No se pudo cobrar la compra"));
+		return Fail(TEXT("Purchase could not be charged"));
 	}
 	ActiveOffers.RemoveAt(Index);
 	OnOffersChanged.Broadcast();

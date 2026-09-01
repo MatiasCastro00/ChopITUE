@@ -37,6 +37,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "ChopIt|Wood")
 	bool SetCapacity(int32 NewCapacity);
 
+	/** Development-only supply zones may deliberately overfill cargo for stress testing. */
+	UFUNCTION(BlueprintCallable, Category = "ChopIt|Wood|Testing")
+	FChopItWoodTransferResult GrantWoodForTesting(int32 RequestedUnits);
+
 	int32 GetCurrentWood() const { return CurrentWood; }
 	int32 GetCapacity() const { return Capacity; }
 	int32 GetAvailableCapacity() const { return FMath::Max(0, Capacity - CurrentWood); }
@@ -46,7 +50,7 @@ public:
 
 private:
 	UPROPERTY(EditAnywhere, Category = "ChopIt|Wood", meta = (ClampMin = "0"))
-	int32 Capacity = 12;
+	int32 Capacity = 24;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "ChopIt|Wood")
 	int32 CurrentWood = 0;

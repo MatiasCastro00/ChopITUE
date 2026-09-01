@@ -52,8 +52,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FChopItPhase7AssetsTest::RunTest(const FString& Parameters)
 {
-	TestNotNull(TEXT("Hand saw asset exists"), LoadObject<UChopItWeaponDefinition>(nullptr, TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_HandSaw.DA_Weapon_HandSaw")));
-	TestNotNull(TEXT("Circular saw asset exists"), LoadObject<UChopItWeaponDefinition>(nullptr, TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_SawHalo.DA_Weapon_SawHalo")));
+	const UChopItWeaponDefinition* HandSaw = LoadObject<UChopItWeaponDefinition>(nullptr, TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_HandSaw.DA_Weapon_HandSaw"));
+	const UChopItWeaponDefinition* SawHalo = LoadObject<UChopItWeaponDefinition>(nullptr, TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_SawHalo.DA_Weapon_SawHalo"));
+	TestNotNull(TEXT("Hand saw asset exists"), HandSaw);
+	TestNotNull(TEXT("Circular saw asset exists"), SawHalo);
+	if (HandSaw) TestEqual(TEXT("Hand saw name is English"), HandSaw->DisplayName.ToString(), FString(TEXT("Hand Chainsaw")));
+	if (SawHalo) TestEqual(TEXT("Saw halo name is English"), SawHalo->DisplayName.ToString(), FString(TEXT("Saw Halo")));
 	TestTrue(TEXT("Shop map exists"), FPackageName::DoesPackageExist(TEXT("/Game/ChopIt/World/Maps/L_Test_Shop")));
 	const AChopItPlayerState* State = GetDefault<AChopItPlayerState>();
 	TestNotNull(TEXT("PlayerState owns shop session"), State->GetShopComponent());

@@ -15,13 +15,13 @@ bool UChopItWeaponLoadoutComponent::CanEquipWeapon(const UChopItWeaponDefinition
 		if (OutFailureReason) { *OutFailureReason = Reason; }
 		return false;
 	};
-	if (!Weapon || Weapon->WeaponId.IsNone()) { return Fail(TEXT("Arma invalida")); }
-	if (Weapon->bExclusiveToStartingCharacter) { return Fail(TEXT("Arma exclusiva")); }
-	if (!Weapon->bUsesLoadoutSlot) { return Fail(TEXT("Arma no equipable")); }
-	if (EquippedWeapons.Num() >= SlotCount) { return Fail(TEXT("Ranuras llenas")); }
+	if (!Weapon || Weapon->WeaponId.IsNone()) { return Fail(TEXT("Invalid weapon")); }
+	if (Weapon->bExclusiveToStartingCharacter) { return Fail(TEXT("Exclusive weapon")); }
+	if (!Weapon->bUsesLoadoutSlot) { return Fail(TEXT("Weapon cannot be equipped")); }
+	if (EquippedWeapons.Num() >= SlotCount) { return Fail(TEXT("All slots are full")); }
 	for (const UChopItWeaponDefinition* Equipped : EquippedWeapons)
 	{
-		if (Equipped && Equipped->WeaponId == Weapon->WeaponId) { return Fail(TEXT("Arma ya equipada")); }
+		if (Equipped && Equipped->WeaponId == Weapon->WeaponId) { return Fail(TEXT("Weapon already equipped")); }
 	}
 	return true;
 }

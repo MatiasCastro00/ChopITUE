@@ -4,6 +4,7 @@
 #include "Camera/ChopItCameraCue.h"
 #include "Camera/ChopItCameraUserSettings.h"
 #include "ChopItCollision.h"
+#include "ChopItLogChannels.h"
 #include "CineCameraComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Core/CameraShakeAsset.h"
@@ -14,6 +15,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/App.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UObject/ObjectSaveContext.h"
 
@@ -30,6 +32,7 @@ UChopItCameraComponent::UChopItCameraComponent(const FObjectInitializer& ObjectI
 	: Super(ObjectInitializer)
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bTickEvenWhenPaused = true;
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
 	SetAbsolute(true, true, false);
 	static ConstructorHelpers::FObjectFinder<UCameraAsset> CameraAssetFinder(TEXT("/Game/ChopIt/Presentation/Camera/CA_PlayerCameras.CA_PlayerCameras"));
@@ -92,8 +95,21 @@ void UChopItCameraComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	ResolveActiveCue();
 	if (ActiveMode == EChopItCameraMode::GameplayOrbit) UpdateGameplayTransform(DeltaTime);
 	else UpdateScriptedTransform();
+	const FTransform ScriptedTarget = GetComponentTransform();
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	if (UCineCameraComponent* Output = GetOutputCameraComponent()) Output->SetFieldOfView(ActiveFieldOfView);
+	if (UCineCameraComponent* Output = GetOutputCameraComponent())
+	{
+		// Gameplay Cameras writes its evaluated pose during Super::TickComponent. Scripted
+		// dialogue anchors are external to that graph, so apply their pose afterwards.
+		const FTransform TargetTransform = ActiveMode == EChopItCameraMode::GameplayOrbit
+			? Output->GetComponentTransform()
+			: ScriptedTarget;
+		const float RealDeltaTime = FMath::Clamp(
+			DeltaTime > KINDA_SMALL_NUMBER ? DeltaTime : static_cast<float>(FApp::GetDeltaTime()),
+			1.0f / 120.0f,
+			1.0f / 20.0f);
+		ApplyRenderedCameraPose(RealDeltaTime, TargetTransform, ActiveFieldOfView);
+	}
 	UpdateOcclusionTransparency();
 }
 
@@ -104,13 +120,20 @@ FChopItCameraHandle UChopItCameraComponent::NewHandle() const
 	return Handle;
 }
 
-FChopItCameraHandle UChopItCameraComponent::PushCue(const UChopItCameraCue* Cue, AChopItCameraAnchor* Anchor, AActor* Subject)
+FChopItCameraHandle UChopItCameraComponent::PushCue(
+	const UChopItCameraCue* Cue,
+	AChopItCameraAnchor* Anchor,
+	AActor* Subject,
+	const float FieldOfViewOverride,
+	const float BlendInTimeOverride)
 {
 	if (!IsValid(Cue)) return {};
 	if (CueRequests.IsEmpty()) SavedGameplayView = GameplayView;
 	FChopItCameraHandle Handle = NewHandle();
 	FCueRequest& Request = CueRequests.Add(Handle.Id);
 	Request.Cue = Cue; Request.Anchor = Anchor; Request.Subject = Subject; Request.Sequence = NextSequence++;
+	Request.FieldOfViewOverride = FieldOfViewOverride;
+	Request.BlendInTimeOverride = BlendInTimeOverride;
 	Request.bRequiresAnchor = Anchor != nullptr; Request.bRequiresSubject = Subject != nullptr;
 	if (Cue->DurationPolicy == EChopItCameraDurationPolicy::Timed && Cue->Duration > 0.0f && GetWorld())
 	{
@@ -118,6 +141,15 @@ FChopItCameraHandle UChopItCameraComponent::PushCue(const UChopItCameraCue* Cue,
 	}
 	if (Cue->AssociatedVisualRig) Request.AssociatedRig = StartVisualCameraModifierRig(Cue->AssociatedVisualRig, Cue->Priority);
 	ResolveActiveCue();
+	UE_LOG(LogChopIt, Display,
+		TEXT("Camera cue queued: cue=%s sequence=%llu mode=%d anchor=%s subject=%s paused=%d componentPauseTick=%d."),
+		*GetNameSafe(Cue),
+		Request.Sequence,
+		static_cast<int32>(Cue->Mode),
+		*GetNameSafe(Anchor),
+		*GetNameSafe(Subject),
+		GetWorld() && GetWorld()->IsPaused(),
+		PrimaryComponentTick.bTickEvenWhenPaused);
 	return Handle;
 }
 
@@ -152,12 +184,15 @@ FChopItCameraHandle UChopItCameraComponent::PlayShake(const UCameraShakeAsset* S
 	if (const UChopItCameraUserSettings* Settings = Cast<UChopItCameraUserSettings>(UGameUserSettings::GetGameUserSettings())) Scale *= Settings->ShakeStrength;
 	if (Scale <= KINDA_SMALL_NUMBER) return {};
 	FChopItCameraHandle Handle = NewHandle();
-	ShakeRequests.Add(Handle.Id).Shake = StartCameraShakeAsset(ShakeAsset, Scale);
+	FShakeRequest& Request = ShakeRequests.Add(Handle.Id);
+	Request.Scale = Scale;
+	Request.Shake = StartCameraShakeAsset(ShakeAsset, Scale);
 	return Handle;
 }
 
 void UChopItCameraComponent::StopRequest(const FChopItCameraHandle Handle, const bool bImmediate)
 {
+	if (ExternalInputLocks.Contains(Handle.Id)) { PopInputLock(Handle); return; }
 	if (CueRequests.Contains(Handle.Id)) { PopCue(Handle, bImmediate); return; }
 	if (FEffectRequest* Effect = EffectRequests.Find(Handle.Id))
 	{
@@ -169,6 +204,20 @@ void UChopItCameraComponent::StopRequest(const FChopItCameraHandle Handle, const
 		if (Shake->Shake.IsValid()) StopCameraShakeAsset(Shake->Shake, bImmediate);
 		ShakeRequests.Remove(Handle.Id);
 	}
+}
+
+FChopItCameraHandle UChopItCameraComponent::PushInputLock(const EChopItCameraInputLock Locks)
+{
+	if (Locks == EChopItCameraInputLock::None) return {};
+	const FChopItCameraHandle Handle = NewHandle();
+	ExternalInputLocks.Add(Handle.Id, Locks);
+	ResolveActiveCue();
+	return Handle;
+}
+
+void UChopItCameraComponent::PopInputLock(const FChopItCameraHandle Handle)
+{
+	if (ExternalInputLocks.Remove(Handle.Id) > 0) ResolveActiveCue();
 }
 
 void UChopItCameraComponent::ResetGameplayCamera()
@@ -244,6 +293,8 @@ bool UChopItCameraComponent::IsInputLocked(const EChopItCameraInputLock Lock) co
 
 void UChopItCameraComponent::ResolveActiveCue()
 {
+	EChopItCameraInputLock RequestedLocks = EChopItCameraInputLock::None;
+	for (const TPair<FGuid, EChopItCameraInputLock>& Pair : ExternalInputLocks) RequestedLocks |= Pair.Value;
 	const FCueRequest* Winner = nullptr;
 	for (const TPair<FGuid, FCueRequest>& Pair : CueRequests)
 	{
@@ -254,16 +305,22 @@ void UChopItCameraComponent::ResolveActiveCue()
 	if (!Winner)
 	{
 		if (SavedGameplayView.IsSet()) { GameplayView = SavedGameplayView.GetValue(); TargetDistance = GameplayView.Distance; SavedGameplayView.Reset(); }
-		ActiveMode = EChopItCameraMode::GameplayOrbit; ActiveLocks = EChopItCameraInputLock::None; ActiveAnchor.Reset(); ActiveSubject.Reset();
+		ActiveCueSequence = 0;
+		ActiveMode = EChopItCameraMode::GameplayOrbit; ActiveLocks = RequestedLocks; ActiveAnchor.Reset(); ActiveSubject.Reset();
 		if (const UChopItCameraUserSettings* Settings = Cast<UChopItCameraUserSettings>(UGameUserSettings::GetGameUserSettings())) ActiveFieldOfView = Settings->FieldOfView;
 		return;
 	}
 	const UChopItCameraCue* Cue = Winner->Cue.Get();
+	ActiveCueSequence = Winner->Sequence;
 	ActiveMode = Cue->Mode;
-	ActiveLocks = static_cast<EChopItCameraInputLock>(Cue->InputLocks);
+	ActiveLocks = static_cast<EChopItCameraInputLock>(Cue->InputLocks) | RequestedLocks;
 	ActiveAnchor = Winner->Anchor;
 	ActiveSubject = Winner->Subject.IsValid() ? Winner->Subject : (Winner->Anchor.IsValid() ? Winner->Anchor->DefaultSubject : nullptr);
-	ActiveFieldOfView = Cue->FieldOfView;
+	ActiveFieldOfView = Winner->FieldOfViewOverride > 0.0f ? Winner->FieldOfViewOverride : Cue->FieldOfView;
+	ActiveBlendInTime = Winner->BlendInTimeOverride >= 0.0f
+		? Winner->BlendInTimeOverride
+		: FMath::Max(0.0f, Cue->BlendInTime);
+	LastCueBlendOutTime = FMath::Max(0.0f, Cue->BlendOutTime);
 }
 
 void UChopItCameraComponent::UpdateGameplayTransform(const float DeltaTime)
@@ -289,8 +346,117 @@ void UChopItCameraComponent::UpdateScriptedTransform()
 	if (!ActiveAnchor.IsValid()) return;
 	FVector Location = ActiveAnchor->CameraTransform->GetComponentLocation();
 	FRotator Rotation = ActiveAnchor->CameraTransform->GetComponentRotation();
-	if (ActiveSubject.IsValid()) Rotation = (ActiveSubject->GetActorLocation() - Location).Rotation();
+	if (ActiveSubject.IsValid())
+	{
+		const FVector BaseFocus = ActiveAnchor->bUseActorLocationForSubject
+			? ActiveSubject->GetActorLocation()
+			: ResolveSubjectFocus(ActiveSubject.Get());
+		const FVector Focus = BaseFocus + ActiveAnchor->SubjectFocusOffset;
+		Rotation = (Focus - Location).Rotation();
+	}
 	SetWorldLocationAndRotation(Location, Rotation);
+}
+
+FVector UChopItCameraComponent::ResolveSubjectFocus(const AActor* Subject) const
+{
+	if (!IsValid(Subject)) return FVector::ZeroVector;
+	const FBox SubjectBounds = Subject->GetComponentsBoundingBox(true);
+	return SubjectBounds.IsValid ? SubjectBounds.GetCenter() : Subject->GetActorLocation() + FVector::UpVector * PivotHeight;
+}
+
+void UChopItCameraComponent::ApplyRenderedCameraPose(
+	const float DeltaTime,
+	const FTransform& TargetTransform,
+	const float TargetFieldOfView)
+{
+	UCineCameraComponent* Output = GetOutputCameraComponent();
+	if (!Output) return;
+
+	if (!bHasRenderedCameraPose)
+	{
+		LastRenderedTransform = TargetTransform;
+		LastRenderedFieldOfView = TargetFieldOfView;
+		LastRenderedMode = ActiveMode;
+		LastRenderedCueSequence = ActiveCueSequence;
+		LastRenderedAnchor = ActiveAnchor;
+		LastRenderedSubject = ActiveSubject;
+		bHasRenderedCameraPose = true;
+	}
+
+	const bool bTargetChanged = LastRenderedMode != ActiveMode
+		|| LastRenderedCueSequence != ActiveCueSequence
+		|| LastRenderedAnchor != ActiveAnchor
+		|| LastRenderedSubject != ActiveSubject;
+	if (bTargetChanged)
+	{
+		BlendStartTransform = LastRenderedTransform;
+		BlendStartFieldOfView = LastRenderedFieldOfView;
+		PoseBlendElapsed = 0.0f;
+		PoseBlendDuration = ActiveMode == EChopItCameraMode::GameplayOrbit
+			? LastCueBlendOutTime
+			: ActiveBlendInTime;
+		LastRenderedMode = ActiveMode;
+		LastRenderedCueSequence = ActiveCueSequence;
+		LastRenderedAnchor = ActiveAnchor;
+		LastRenderedSubject = ActiveSubject;
+		UE_LOG(LogChopIt, Display,
+			TEXT("Camera transition started: mode=%d sequence=%llu duration=%.2f from=%s to=%s paused=%d."),
+			static_cast<int32>(ActiveMode),
+			ActiveCueSequence,
+			PoseBlendDuration,
+			*BlendStartTransform.GetLocation().ToCompactString(),
+			*TargetTransform.GetLocation().ToCompactString(),
+			GetWorld() && GetWorld()->IsPaused());
+	}
+
+	float Alpha = 1.0f;
+	if (PoseBlendDuration > KINDA_SMALL_NUMBER && PoseBlendElapsed < PoseBlendDuration)
+	{
+		PoseBlendElapsed = FMath::Min(PoseBlendDuration, PoseBlendElapsed + DeltaTime);
+		const float LinearAlpha = PoseBlendElapsed / PoseBlendDuration;
+		Alpha = FMath::SmoothStep(0.0f, 1.0f, LinearAlpha);
+	}
+
+	if (Alpha < 1.0f)
+	{
+		const FVector Location = FMath::Lerp(BlendStartTransform.GetLocation(), TargetTransform.GetLocation(), Alpha);
+		const FQuat Rotation = FQuat::Slerp(BlendStartTransform.GetRotation(), TargetTransform.GetRotation(), Alpha).GetNormalized();
+		LastRenderedTransform = FTransform(Rotation, Location);
+		LastRenderedFieldOfView = FMath::Lerp(BlendStartFieldOfView, TargetFieldOfView, Alpha);
+	}
+	else
+	{
+		LastRenderedTransform = TargetTransform;
+		LastRenderedFieldOfView = TargetFieldOfView;
+	}
+
+	FTransform OutputTransform = LastRenderedTransform;
+	if (ActiveMode != EChopItCameraMode::GameplayOrbit && !ShakeRequests.IsEmpty())
+	{
+		// Gameplay Cameras evaluates shakes during Super::TickComponent, but ChopIt's
+		// authored anchor pose is intentionally applied afterwards. Reapply a compact
+		// real-time shake layer here so scripted dialogue shots retain their modifiers
+		// while the world is paused and without accumulating error into the base blend.
+		float CombinedScale = 0.0f;
+		for (const TPair<FGuid, FShakeRequest>& Pair : ShakeRequests)
+		{
+			CombinedScale += Pair.Value.Scale;
+		}
+		CombinedScale = FMath::Clamp(CombinedScale, 0.0f, 2.5f);
+		const double Now = FPlatformTime::Seconds();
+		const float Side = (FMath::Sin(Now * 67.0) * 3.6f + FMath::Sin(Now * 31.0) * 1.8f) * CombinedScale;
+		const float Up = (FMath::Cos(Now * 59.0) * 2.8f + FMath::Sin(Now * 43.0) * 1.4f) * CombinedScale;
+		const float Forward = FMath::Sin(Now * 37.0) * 1.2f * CombinedScale;
+		const FQuat BaseRotation = OutputTransform.GetRotation();
+		OutputTransform.AddToTranslation(BaseRotation.RotateVector(FVector(Forward, Side, Up)));
+		const FRotator AngularJitter(
+			FMath::Sin(Now * 53.0) * 0.75f * CombinedScale,
+			FMath::Cos(Now * 47.0) * 0.90f * CombinedScale,
+			FMath::Sin(Now * 61.0) * 0.45f * CombinedScale);
+		OutputTransform.SetRotation((BaseRotation * AngularJitter.Quaternion()).GetNormalized());
+	}
+	Output->SetWorldTransform(OutputTransform);
+	Output->SetFieldOfView(LastRenderedFieldOfView);
 }
 
 void UChopItCameraComponent::ConfigureWorldCameraCollision()
@@ -325,6 +491,15 @@ void UChopItCameraComponent::ConfigureWorldCameraCollision()
 
 void UChopItCameraComponent::UpdateOcclusionTransparency()
 {
+	// Authored dialogue/cinematic shots deliberately place the camera around their
+	// focal actors. Applying the gameplay foliage corridor here can replace pieces
+	// of the focal set (notably the quota oven) with the dither material.
+	if (ActiveMode != EChopItCameraMode::GameplayOrbit)
+	{
+		RestoreOcclusionMaterials();
+		return;
+	}
+
 	UWorld* World = GetWorld();
 	AActor* CameraTarget = ActiveSubject.IsValid() ? ActiveSubject.Get() : GetOwner();
 	if (!World || !IsValid(CameraTarget) || !IsValid(OcclusionMaterial))

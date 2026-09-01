@@ -106,10 +106,14 @@ bool FChopItPhase6AssetsTest::RunTest(const FString& Parameters)
 {
 	TestNotNull(TEXT("XP curve exists"), LoadObject<UCurveFloat>(nullptr, TEXT("/Game/ChopIt/Progression/Curves/Curve_XP_Levels.Curve_XP_Levels")));
 	static const TCHAR* Names[] = { TEXT("Filo"), TEXT("Ritmo"), TEXT("Alcance"), TEXT("Critico"), TEXT("Botas"), TEXT("Furia"), TEXT("Precision"), TEXT("Gigante") };
-	for (const TCHAR* Name : Names)
+	static const TCHAR* EnglishNames[] = { TEXT("Sharpened Edge"), TEXT("Tireless Arms"), TEXT("Extending Handle"), TEXT("Woodcutter's Eye"), TEXT("Oiled Boots"), TEXT("Clumsy Fury"), TEXT("Forest Compass"), TEXT("Giant Axe") };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Names); ++Index)
 	{
+		const TCHAR* Name = Names[Index];
 		const FString Path = FString::Printf(TEXT("/Game/ChopIt/Progression/Upgrades/DA_Upgrade_%s.DA_Upgrade_%s"), Name, Name);
-		TestNotNull(*FString::Printf(TEXT("Upgrade %s exists"), Name), LoadObject<UChopItUpgradeDefinition>(nullptr, *Path));
+		const UChopItUpgradeDefinition* Upgrade = LoadObject<UChopItUpgradeDefinition>(nullptr, *Path);
+		TestNotNull(*FString::Printf(TEXT("Upgrade %s exists"), Name), Upgrade);
+		if (Upgrade) TestEqual(TEXT("Upgrade display name is English"), Upgrade->DisplayName.ToString(), FString(EnglishNames[Index]));
 	}
 	TestTrue(TEXT("Progression test map exists"), FPackageName::DoesPackageExist(TEXT("/Game/ChopIt/World/Maps/L_Test_Progression")));
 	const AChopItPlayerState* State = GetDefault<AChopItPlayerState>();

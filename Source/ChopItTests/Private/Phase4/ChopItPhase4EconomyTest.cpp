@@ -1,6 +1,7 @@
 #include "ChopItCollision.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Economy/ChopItCabinHub.h"
 #include "Economy/ChopItDayDefinition.h"
 #include "Economy/ChopItDeliveryZone.h"
@@ -8,6 +9,7 @@
 #include "Economy/ChopItQuotaComponent.h"
 #include "Economy/ChopItQuotaMachine.h"
 #include "Economy/ChopItSellZone.h"
+#include "Economy/ChopItWoodGrantZone.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "Framework/ChopItGameState.h"
@@ -109,19 +111,34 @@ bool FChopItPhase4AssetsAndMapTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Cabin never pushes the camera"), CabinVisual->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
 	}
 	const AChopItQuotaMachine* MachineDefaults = GetDefault<AChopItQuotaMachine>();
+	TestNotNull(TEXT("Quota labels use camera-facing text"),
+		MachineDefaults->FindComponentByClass<UChopItCameraFacingTextComponent>());
+	for (const FVector CameraLocation : {FVector(300.0f, 0.0f, 150.0f), FVector(-300.0f, 0.0f, 150.0f)})
+	{
+		const FRotator Facing = UChopItCameraFacingTextComponent::CalculateFacingRotation(
+			FVector::ZeroVector, CameraLocation, true);
+		TestTrue(TEXT("Billboard forward axis points at camera from either side"),
+			FVector::DotProduct(Facing.Vector(), CameraLocation.GetSafeNormal()) > 0.999f);
+	}
 	const UStaticMeshComponent* MachineVisual = MachineDefaults ? MachineDefaults->FindComponentByClass<UStaticMeshComponent>() : nullptr;
 	TestNotNull(TEXT("Quota lever has a camera-occludable visual"), MachineVisual);
 	if (MachineVisual)
 	{
 		TestEqual(TEXT("Quota lever never pushes the camera"), MachineVisual->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
 	}
+	TestNotNull(TEXT("Oven owns a pooled wood-chip emitter"), MachineDefaults->GetWoodChipPool());
+	TestTrue(TEXT("Wood-chip pool supports sustained grinding"), MachineDefaults->GetWoodChipPoolSize() >= 32);
 
 	const UChopItDayDefinition* Day = LoadObject<UChopItDayDefinition>(
 		nullptr, TEXT("/Game/ChopIt/Economy/Days/DA_Day_01.DA_Day_01"));
 	TestNotNull(TEXT("Day one definition exists"), Day);
 	if (Day)
 	{
-		TestEqual(TEXT("Day one quota"), Day->WoodQuota, 3);
+		TestTrue(TEXT("Authored day quota remains valid"), Day->WoodQuota > 0);
+		TestEqual(TEXT("Runtime first contract quota is 200 without rewriting the asset"),
+			AChopItGameState::ResolveQuotaTarget(1, Day), 200);
+		TestEqual(TEXT("Following day increases from the complete contract"),
+			AChopItGameState::ResolveQuotaTarget(2, Day), 201);
 		TestEqual(TEXT("Day one wood value"), Day->MoneyPerWood, int64(4));
 		TestEqual(TEXT("Day definition primary type"), Day->GetPrimaryAssetId().PrimaryAssetType, FPrimaryAssetType(TEXT("ChopItDay")));
 	}
@@ -159,10 +176,20 @@ bool FChopItPhase4AssetsAndMapTest::RunTest(const FString& Parameters)
 
 	const AChopItDeliveryZone* DeliveryCDO = GetDefault<AChopItDeliveryZone>();
 	const AChopItSellZone* SellCDO = GetDefault<AChopItSellZone>();
-	TestFalse(TEXT("Delivery zone has no Tick"), DeliveryCDO->PrimaryActorTick.bCanEverTick);
+	TestTrue(TEXT("Delivery zone can Tick pooled flights"), DeliveryCDO->PrimaryActorTick.bCanEverTick);
+	TestFalse(TEXT("Delivery Tick starts disabled until needed"), DeliveryCDO->PrimaryActorTick.bStartWithTickEnabled);
 	TestFalse(TEXT("Sell zone has no Tick"), SellCDO->PrimaryActorTick.bCanEverTick);
 	TestEqual(TEXT("Delivery is query-only"), DeliveryCDO->GetDeliverySphere()->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
 	TestEqual(TEXT("Sell is query-only"), SellCDO->GetSellSphere()->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
+	TestTrue(TEXT("Delivery pool is pre-sized for concurrent arcs"), DeliveryCDO->GetPoolSize() >= 8);
+	TestNotNull(TEXT("Flying logs own a pooled trail renderer"), DeliveryCDO->GetTrailPool());
+	TestTrue(TEXT("Each log trail has several fading samples"), DeliveryCDO->GetTrailSegmentsPerLog() >= 3);
+	const FVector ArcMidpoint = AChopItDeliveryZone::EvaluateParabolicFlight(
+		FVector::ZeroVector, FVector(100.0f, 0.0f, 0.0f), FVector::ZeroVector, 100.0f, 0.5f);
+	TestTrue(TEXT("Delivery trajectory has a visible parabolic apex"), ArcMidpoint.Equals(FVector(50.0f, 0.0f, 100.0f), 0.01f));
+	const AChopItWoodGrantZone* GrantCDO = GetDefault<AChopItWoodGrantZone>();
+	TestEqual(TEXT("Startup stress zone grants 200 logs"), GrantCDO->GetTargetWood(), 200);
+	TestFalse(TEXT("Stress zone needs no Tick"), GrantCDO->PrimaryActorTick.bCanEverTick);
 
 	const AChopItGameState* GameState = GetDefault<AChopItGameState>();
 	const AChopItPlayerState* PlayerState = GetDefault<AChopItPlayerState>();

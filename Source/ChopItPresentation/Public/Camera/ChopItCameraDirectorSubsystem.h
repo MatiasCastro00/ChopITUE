@@ -16,11 +16,19 @@ class CHOPITPRESENTATION_API UChopItCameraDirectorSubsystem final : public ULoca
 	GENERATED_BODY()
 public:
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera") FChopItCameraHandle PushCameraCue(const UChopItCameraCue* Cue, AChopItCameraAnchor* Anchor, AActor* Subject);
+	FChopItCameraHandle PushCameraCueWithFieldOfView(
+		const UChopItCameraCue* Cue,
+		AChopItCameraAnchor* Anchor,
+		AActor* Subject,
+		float FieldOfViewOverride,
+		float BlendInTimeOverride = -1.0f);
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera") void PopCameraCue(FChopItCameraHandle Handle, bool bImmediate = false);
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera", meta=(AdvancedDisplay="DurationOverride")) FChopItCameraHandle PushCameraEffect(const UChopItCameraEffectPreset* Preset, float DurationOverride = -1.0f);
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera", meta=(AdvancedDisplay="WorldOrigin")) FChopItCameraHandle PlayCameraShake(const UCameraShakeAsset* ShakeAsset, float Scale = 1.0f, FVector WorldOrigin = FVector::ZeroVector);
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera") void PopCameraEffect(FChopItCameraHandle Handle, bool bImmediate = false);
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera") void StopCameraRequest(FChopItCameraHandle Handle);
+	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera") FChopItCameraHandle PushInputLock(EChopItCameraInputLock Locks);
+	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera") void PopInputLock(FChopItCameraHandle Handle);
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Camera") void ResetGameplayCamera();
 	UFUNCTION(BlueprintPure, Category="ChopIt|Camera") bool IsInputLocked(EChopItCameraInputLock Lock) const;
 	UChopItCameraComponent* GetCameraComponent() const;

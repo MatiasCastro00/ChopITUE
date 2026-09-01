@@ -4,6 +4,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Framework/ChopItPlayerState.h"
 #include "Shop/ChopItShopComponent.h"
 #include "UObject/ConstructorHelpers.h"
@@ -20,13 +21,13 @@ AChopItShopTerminal::AChopItShopTerminal()
 	TerminalVisual->SetRelativeScale3D(FVector(0.9f, 0.9f, 2.2f));
 	TerminalVisual->SetCollisionProfileName(TEXT("BlockAll"));
 	TerminalVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
-	TerminalLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("TerminalLabel"));
+	TerminalLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("TerminalLabel"));
 	TerminalLabel->SetupAttachment(SceneRoot);
 	TerminalLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 290.0f));
 	TerminalLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
 	TerminalLabel->SetHorizontalAlignment(EHTA_Center);
 	TerminalLabel->SetWorldSize(34.0f);
-	TerminalLabel->SetText(FText::FromString(TEXT("E: TIENDA DE HERRAMIENTAS")));
+	TerminalLabel->SetText(FText::FromString(TEXT("E: TOOL SHOP")));
 	TerminalLabel->SetTextRenderColor(FColor::Cyan);
 	TerminalLabel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));

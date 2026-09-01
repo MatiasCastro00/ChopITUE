@@ -26,6 +26,10 @@ private:
 	bool CreatePhase9Assets() const;
 	bool CreatePhase10Assets() const;
 	bool CreatePhase12Assets() const;
+	bool CreateDialogueAssets() const;
+	bool PlaceDeathInStartupMap() const;
+	bool PlaceDeliveryZonesInStartupMap() const;
+	bool PlaceChainObstaclesInStartupMap() const;
 	bool CreateEnemyAssets() const;
 	bool CreateProgressionAssets() const;
 	bool CreateInputAssets() const;

@@ -23,6 +23,7 @@ public class ChopIt : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"EnhancedInput",
+			"GameplayTags",
 			"GameplayCameras",
 			"InputCore",
 			"ChopItCore",

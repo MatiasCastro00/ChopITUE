@@ -5,6 +5,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -35,13 +36,13 @@ AChopItCabinHub::AChopItCabinHub()
 	GuidanceLight->SetAttenuationRadius(2200.0f);
 	GuidanceLight->SetCastShadows(false);
 
-	GuidanceLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("GuidanceLabel"));
+	GuidanceLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("GuidanceLabel"));
 	GuidanceLabel->SetupAttachment(SceneRoot);
 	GuidanceLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 850.0f));
 	GuidanceLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
 	GuidanceLabel->SetHorizontalAlignment(EHTA_Center);
 	GuidanceLabel->SetWorldSize(90.0f);
-	GuidanceLabel->SetText(FText::FromString(TEXT("v  CABANA / CUOTA  v")));
+	GuidanceLabel->SetText(FText::FromString(TEXT("v  CABIN / QUOTA  v")));
 	GuidanceLabel->SetTextRenderColor(FColor(255, 190, 30));
 	GuidanceLabel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetGuidanceActive(false);

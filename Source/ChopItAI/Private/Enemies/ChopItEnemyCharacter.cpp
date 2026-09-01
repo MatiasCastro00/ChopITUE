@@ -7,6 +7,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Enemies/ChopItEnemyDefinition.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -32,7 +33,7 @@ AChopItEnemyCharacter::AChopItEnemyCharacter()
 	BodyMesh->SetRelativeScale3D(FVector(0.72f, 0.72f, 1.2f));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cone(TEXT("/Engine/BasicShapes/Cone.Cone"));
 	if (Cone.Succeeded()) { BodyMesh->SetStaticMesh(Cone.Object); }
-	Label = CreateDefaultSubobject<UTextRenderComponent>(TEXT("Label"));
+	Label = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("Label"));
 	Label->SetupAttachment(GetCapsuleComponent());
 	Label->SetRelativeLocation(FVector(0.0f, 0.0f, 105.0f));
 	Label->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
@@ -96,7 +97,7 @@ void AChopItEnemyCharacter::HandleDeath(AActor* DeadActor, AActor* DamageSource)
 	AwardExperience();
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BodyMesh->SetVisibility(false);
-	Label->SetText(FText::FromString(TEXT("DERROTADO")));
+	Label->SetText(FText::FromString(TEXT("DEFEATED")));
 	SetLifeSpan(0.3f);
 	UE_LOG(LogChopIt, Display, TEXT("Enemy %s defeated; XP awarded once."), *GetName());
 }
@@ -118,6 +119,6 @@ void AChopItEnemyCharacter::UpdateLabel() const
 {
 	if (Label)
 	{
-		Label->SetText(FText::FromString(Definition ? Definition->DisplayName.ToString() : TEXT("ENEMIGO")));
+		Label->SetText(FText::FromString(Definition ? Definition->DisplayName.ToString() : TEXT("ENEMY")));
 	}
 }

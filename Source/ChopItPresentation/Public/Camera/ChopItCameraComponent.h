@@ -42,11 +42,18 @@ public:
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 
-	FChopItCameraHandle PushCue(const UChopItCameraCue* Cue, AChopItCameraAnchor* Anchor, AActor* Subject);
+	FChopItCameraHandle PushCue(
+		const UChopItCameraCue* Cue,
+		AChopItCameraAnchor* Anchor,
+		AActor* Subject,
+		float FieldOfViewOverride = -1.0f,
+		float BlendInTimeOverride = -1.0f);
 	void PopCue(FChopItCameraHandle Handle, bool bImmediate);
 	FChopItCameraHandle PushEffect(const UChopItCameraEffectPreset* Preset, float DurationOverride);
 	FChopItCameraHandle PlayShake(const UCameraShakeAsset* ShakeAsset, float Scale, const FVector& WorldOrigin);
 	void StopRequest(FChopItCameraHandle Handle, bool bImmediate = false);
+	FChopItCameraHandle PushInputLock(EChopItCameraInputLock Locks);
+	void PopInputLock(FChopItCameraHandle Handle);
 	void ResetGameplayCamera();
 
 	void AddMouseLookInput(const FVector2D& Input, float DeltaSeconds);
@@ -57,6 +64,11 @@ public:
 	bool IsInputLocked(EChopItCameraInputLock Lock) const;
 	EChopItCameraMode GetActiveMode() const { return ActiveMode; }
 	FChopItGameplayCameraView GetGameplayView() const { return GameplayView; }
+	bool ShouldOverridePlayerCameraManager() const
+	{
+		return ActiveMode != EChopItCameraMode::GameplayOrbit
+			|| (PoseBlendDuration > KINDA_SMALL_NUMBER && PoseBlendElapsed < PoseBlendDuration);
+	}
 
 	static constexpr float MinPitch = -65.0f;
 	// Nearly vertical: only avoids crossing the pole and flipping the orbit.
@@ -75,6 +87,8 @@ private:
 		TWeakObjectPtr<AActor> Subject;
 		uint64 Sequence = 0;
 		double ExpiresAt = 0.0;
+		float FieldOfViewOverride = -1.0f;
+		float BlendInTimeOverride = -1.0f;
 		bool bRequiresAnchor = false;
 		bool bRequiresSubject = false;
 		FCameraRigInstanceID AssociatedRig;
@@ -84,11 +98,17 @@ private:
 		FCameraRigInstanceID Rig;
 		double ExpiresAt = 0.0;
 	};
-	struct FShakeRequest { FCameraShakeInstanceID Shake; };
+	struct FShakeRequest
+	{
+		FCameraShakeInstanceID Shake;
+		float Scale = 1.0f;
+	};
 
 	void ResolveActiveCue();
 	void UpdateGameplayTransform(float DeltaTime);
 	void UpdateScriptedTransform();
+	FVector ResolveSubjectFocus(const AActor* Subject) const;
+	void ApplyRenderedCameraPose(float DeltaTime, const FTransform& TargetTransform, float TargetFieldOfView);
 	void ConfigureWorldCameraCollision();
 	void UpdateOcclusionTransparency();
 	void RestoreOcclusionMaterials();
@@ -98,17 +118,32 @@ private:
 	TMap<FGuid, FCueRequest> CueRequests;
 	TMap<FGuid, FEffectRequest> EffectRequests;
 	TMap<FGuid, FShakeRequest> ShakeRequests;
+	TMap<FGuid, EChopItCameraInputLock> ExternalInputLocks;
 	TOptional<FChopItGameplayCameraView> SavedGameplayView;
 	TWeakObjectPtr<AChopItCameraAnchor> ActiveAnchor;
 	TWeakObjectPtr<AActor> ActiveSubject;
+	TWeakObjectPtr<AChopItCameraAnchor> LastRenderedAnchor;
+	TWeakObjectPtr<AActor> LastRenderedSubject;
 	EChopItCameraMode ActiveMode = EChopItCameraMode::GameplayOrbit;
+	EChopItCameraMode LastRenderedMode = EChopItCameraMode::GameplayOrbit;
 	EChopItCameraInputLock ActiveLocks = EChopItCameraInputLock::None;
 	FChopItGameplayCameraView GameplayView;
 	float TargetDistance = 850.0f;
 	float CurrentCollisionDistance = 850.0f;
 	float ActiveFieldOfView = 85.0f;
+	float ActiveBlendInTime = 0.25f;
+	float LastCueBlendOutTime = 0.2f;
+	float PoseBlendDuration = 0.0f;
+	float PoseBlendElapsed = 0.0f;
+	float BlendStartFieldOfView = 85.0f;
+	float LastRenderedFieldOfView = 85.0f;
 	FVector2D SmoothedMouseInput = FVector2D::ZeroVector;
 	uint64 NextSequence = 1;
+	uint64 ActiveCueSequence = 0;
+	uint64 LastRenderedCueSequence = 0;
+	FTransform BlendStartTransform = FTransform::Identity;
+	FTransform LastRenderedTransform = FTransform::Identity;
+	bool bHasRenderedCameraPose = false;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> OcclusionMaterial;

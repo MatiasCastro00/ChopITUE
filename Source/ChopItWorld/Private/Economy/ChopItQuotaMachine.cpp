@@ -3,9 +3,11 @@
 #include "ChopItCollision.h"
 #include "ChopItLogChannels.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Cycle/ChopItCycleStateMachineComponent.h"
 #include "Economy/ChopItChainDefinition.h"
 #include "Economy/ChopItQuotaComponent.h"
@@ -16,6 +18,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
+#include "Materials/MaterialInterface.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -36,7 +39,7 @@ AChopItQuotaMachine::AChopItQuotaMachine()
 	MachineVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::Chain, ECR_Ignore);
 	MachineVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 
-	QuotaLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("QuotaLabel"));
+	QuotaLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("QuotaLabel"));
 	QuotaLabel->SetupAttachment(SceneRoot);
 	QuotaLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 245.0f));
 	QuotaLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
@@ -44,13 +47,28 @@ AChopItQuotaMachine::AChopItQuotaMachine()
 	QuotaLabel->SetWorldSize(42.0f);
 	QuotaLabel->SetTextRenderColor(FColor::Red);
 
-	LeverLabel = CreateDefaultSubobject<UTextRenderComponent>(TEXT("LeverLabel"));
+	LeverLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("LeverLabel"));
 	LeverLabel->SetupAttachment(SceneRoot);
 	LeverLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 295.0f));
 	LeverLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
 	LeverLabel->SetHorizontalAlignment(EHTA_Center);
 	LeverLabel->SetWorldSize(30.0f);
 	LeverLabel->SetTextRenderColor(FColor::Silver);
+
+	DeliveryGlow = CreateDefaultSubobject<UPointLightComponent>(TEXT("DeliveryGlow"));
+	DeliveryGlow->SetupAttachment(SceneRoot);
+	DeliveryGlow->SetRelativeLocation(FVector(0.0f, 0.0f, 270.0f));
+	DeliveryGlow->SetLightColor(FLinearColor(1.0f, 0.18f, 0.015f));
+	DeliveryGlow->SetAttenuationRadius(520.0f);
+	DeliveryGlow->SetIntensity(0.0f);
+	DeliveryGlow->SetCastShadows(false);
+
+	WoodChipPool = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("PooledWoodChips"));
+	WoodChipPool->SetupAttachment(SceneRoot);
+	WoodChipPool->SetMobility(EComponentMobility::Movable);
+	WoodChipPool->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	WoodChipPool->SetGenerateOverlapEvents(false);
+	WoodChipPool->SetCastShadow(false);
 
 	TetherPath = CreateDefaultSubobject<UChopItTetherPathComponent>(TEXT("AuthoritativeTetherPath"));
 	TetherPath->SetupAttachment(SceneRoot);
@@ -68,6 +86,7 @@ AChopItQuotaMachine::AChopItQuotaMachine()
 	if (CubeMesh.Succeeded())
 	{
 		MachineVisual->SetStaticMesh(CubeMesh.Object);
+		WoodChipPool->SetStaticMesh(CubeMesh.Object);
 	}
 	if (CylinderMesh.Succeeded())
 	{
@@ -78,6 +97,20 @@ AChopItQuotaMachine::AChopItQuotaMachine()
 void AChopItQuotaMachine::BeginPlay()
 {
 	Super::BeginPlay();
+	MachineBaseLocation = MachineVisual->GetRelativeLocation();
+	MachineBaseScale = MachineVisual->GetRelativeScale3D();
+	MachineBaseRotation = MachineVisual->GetRelativeRotation();
+	DeliveryVisualRandom.Initialize(GetUniqueID() * 104729 + 31);
+	WoodChips.SetNum(FMath::Max(32, WoodChipPoolSize));
+	for (int32 Index = 0; Index < WoodChips.Num(); ++Index)
+	{
+		WoodChipPool->AddInstance(FTransform(FRotator::ZeroRotator, FVector(0.0f, 0.0f, -100000.0f), FVector::ZeroVector));
+	}
+	if (UMaterialInterface* WoodMaterial = LoadObject<UMaterialInterface>(
+		nullptr, TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Wood.MI_Wood")))
+	{
+		WoodChipPool->SetMaterial(0, WoodMaterial);
+	}
 	// Existing Blueprint defaults may predate the opt-in camera channel.
 	MachineVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 	const UChopItChainDefinition* Chain = GetChainDefinition();
@@ -122,10 +155,154 @@ void AChopItQuotaMachine::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AChopItQuotaMachine::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	UpdateDeliveryReaction(DeltaSeconds);
+	UpdateWoodChips(DeltaSeconds);
+	if (DeliveryGlowRemaining > 0.0f)
+	{
+		DeliveryGlowRemaining = FMath::Max(0.0f, DeliveryGlowRemaining - DeltaSeconds);
+		const float Alpha = DeliveryGlowRemaining / 0.22f;
+		DeliveryGlow->SetIntensity((2200.0f + FMath::Sin(DeliveryGlowRemaining * 95.0f) * 450.0f) * Alpha);
+	}
+	else
+	{
+		DeliveryGlow->SetIntensity(0.0f);
+	}
 	if (const UChopItChainDefinition* Chain = GetChainDefinition(); Chain && Chain->bChainPlayerToMachine)
 	{
 		UpdateRetractableChain(DeltaSeconds);
 	}
+}
+
+FVector AChopItQuotaMachine::GetDeliveryIntakeWorldLocation() const
+{
+	return GetActorTransform().TransformPosition(FVector(0.0f, 0.0f, 285.0f));
+}
+
+void AChopItQuotaMachine::NotifyWoodConsumed(const int32 Units)
+{
+	if (Units <= 0) return;
+	DeliveryGlowRemaining = 0.22f;
+	DeliveryGlow->SetIntensity(2800.0f);
+	DeliveryReactionStrength = FMath::Clamp(
+		DeliveryReactionStrength + 0.34f * static_cast<float>(Units), 0.0f, 1.0f);
+	SpawnWoodChips(FMath::Clamp(Units * WoodChipsPerItem, 1, 20));
+}
+
+void AChopItQuotaMachine::UpdateDeliveryReaction(const float DeltaSeconds)
+{
+	DeliveryAnimationTime += DeltaSeconds;
+	DeliveryReactionStrength = FMath::FInterpTo(DeliveryReactionStrength, 0.0f, DeltaSeconds, 3.2f);
+	if (DeliveryReactionStrength <= 0.001f)
+	{
+		DeliveryReactionStrength = 0.0f;
+		MachineVisual->SetRelativeLocation(MachineBaseLocation);
+		MachineVisual->SetRelativeRotation(MachineBaseRotation);
+		MachineVisual->SetRelativeScale3D(MachineBaseScale);
+		return;
+	}
+
+	const float Chew = FMath::Sin(DeliveryAnimationTime * 23.0f);
+	const float Grind = FMath::Sin(DeliveryAnimationTime * 34.0f + 0.7f);
+	const float Compression = 0.5f + 0.5f * FMath::Abs(Chew);
+	MachineVisual->SetRelativeLocation(MachineBaseLocation + FVector(
+		Grind * 4.5f,
+		Chew * 3.0f,
+		FMath::Abs(Chew) * 10.0f) * DeliveryReactionStrength);
+	MachineVisual->SetRelativeRotation(MachineBaseRotation + FRotator(
+		Chew * 2.5f,
+		Grind * 2.0f,
+		FMath::Sin(DeliveryAnimationTime * 18.0f) * 5.0f) * DeliveryReactionStrength);
+	MachineVisual->SetRelativeScale3D(FVector(
+		MachineBaseScale.X * (1.0f + 0.085f * Compression * DeliveryReactionStrength),
+		MachineBaseScale.Y * (1.0f + 0.085f * Compression * DeliveryReactionStrength),
+		MachineBaseScale.Z * (1.0f - 0.065f * Compression * DeliveryReactionStrength)));
+}
+
+void AChopItQuotaMachine::SpawnWoodChips(const int32 Count)
+{
+	const FVector Intake = GetDeliveryIntakeWorldLocation();
+	for (int32 SpawnIndex = 0; SpawnIndex < Count; ++SpawnIndex)
+	{
+		int32 PoolIndex = WoodChips.IndexOfByPredicate([](const FWoodChipParticle& Chip) { return !Chip.bActive; });
+		if (PoolIndex == INDEX_NONE)
+		{
+			float OldestRatio = -1.0f;
+			for (int32 Index = 0; Index < WoodChips.Num(); ++Index)
+			{
+				const float Ratio = WoodChips[Index].Age / FMath::Max(0.01f, WoodChips[Index].Lifetime);
+				if (Ratio > OldestRatio) { OldestRatio = Ratio; PoolIndex = Index; }
+			}
+		}
+		if (!WoodChips.IsValidIndex(PoolIndex)) return;
+
+		FWoodChipParticle& Chip = WoodChips[PoolIndex];
+		Chip.bActive = true;
+		Chip.Location = Intake + FVector(
+			DeliveryVisualRandom.FRandRange(-30.0f, 30.0f),
+			DeliveryVisualRandom.FRandRange(-30.0f, 30.0f),
+			DeliveryVisualRandom.FRandRange(-8.0f, 18.0f));
+		Chip.Velocity = FVector(
+			DeliveryVisualRandom.FRandRange(-210.0f, 210.0f),
+			DeliveryVisualRandom.FRandRange(-210.0f, 210.0f),
+			DeliveryVisualRandom.FRandRange(360.0f, 650.0f));
+		Chip.Rotation = FRotator(
+			DeliveryVisualRandom.FRandRange(0.0f, 360.0f),
+			DeliveryVisualRandom.FRandRange(0.0f, 360.0f),
+			DeliveryVisualRandom.FRandRange(0.0f, 360.0f));
+		Chip.AngularVelocity = FRotator(
+			DeliveryVisualRandom.FRandRange(-620.0f, 620.0f),
+			DeliveryVisualRandom.FRandRange(-620.0f, 620.0f),
+			DeliveryVisualRandom.FRandRange(-620.0f, 620.0f));
+		const float Size = DeliveryVisualRandom.FRandRange(0.018f, 0.038f);
+		Chip.BaseScale = FVector(Size, Size * DeliveryVisualRandom.FRandRange(0.55f, 1.0f), Size * DeliveryVisualRandom.FRandRange(1.3f, 2.8f));
+		Chip.Age = 0.0f;
+		Chip.Lifetime = DeliveryVisualRandom.FRandRange(0.62f, 1.05f);
+		WoodChipPool->UpdateInstanceTransform(PoolIndex,
+			FTransform(Chip.Rotation, Chip.Location, Chip.BaseScale), true, false, true);
+	}
+	WoodChipPool->MarkRenderStateDirty();
+}
+
+void AChopItQuotaMachine::UpdateWoodChips(const float DeltaSeconds)
+{
+	bool bChanged = false;
+	for (int32 Index = 0; Index < WoodChips.Num(); ++Index)
+	{
+		FWoodChipParticle& Chip = WoodChips[Index];
+		if (!Chip.bActive) continue;
+		Chip.Age += DeltaSeconds;
+		if (Chip.Age >= Chip.Lifetime)
+		{
+			HideWoodChip(Index);
+			bChanged = true;
+			continue;
+		}
+		Chip.Velocity.Z -= 920.0f * DeltaSeconds;
+		Chip.Velocity *= FMath::Pow(0.82f, DeltaSeconds);
+		Chip.Location += Chip.Velocity * DeltaSeconds;
+		Chip.Rotation += Chip.AngularVelocity * DeltaSeconds;
+		const float LifeAlpha = Chip.Age / Chip.Lifetime;
+		const float ScaleAlpha = FMath::Clamp(1.0f - FMath::Square(LifeAlpha), 0.0f, 1.0f);
+		WoodChipPool->UpdateInstanceTransform(Index,
+			FTransform(Chip.Rotation, Chip.Location, Chip.BaseScale * ScaleAlpha), true, false, true);
+		bChanged = true;
+	}
+	if (bChanged) WoodChipPool->MarkRenderStateDirty();
+}
+
+void AChopItQuotaMachine::HideWoodChip(const int32 PoolIndex)
+{
+	if (!WoodChips.IsValidIndex(PoolIndex)) return;
+	WoodChips[PoolIndex].bActive = false;
+	WoodChipPool->UpdateInstanceTransform(PoolIndex,
+		FTransform(FRotator::ZeroRotator, FVector(0.0f, 0.0f, -100000.0f), FVector::ZeroVector), false, false, true);
+}
+
+int32 AChopItQuotaMachine::GetActiveWoodChipCount() const
+{
+	int32 Count = 0;
+	for (const FWoodChipParticle& Chip : WoodChips) Count += Chip.bActive ? 1 : 0;
+	return Count;
 }
 
 bool AChopItQuotaMachine::CanInteract_Implementation(AActor* Interactor) const
@@ -146,8 +323,8 @@ bool AChopItQuotaMachine::Interact_Implementation(AActor* Interactor)
 void AChopItQuotaMachine::HandleQuotaChanged(const int32 Progress, const int32 Target, const bool bComplete)
 {
 	QuotaLabel->SetText(FText::FromString(bComplete
-		? FString::Printf(TEXT("CUOTA PAGADA  %d / %d"), Progress, Target)
-		: FString::Printf(TEXT("CUOTA  %d / %d"), Progress, Target)));
+		? FString::Printf(TEXT("QUOTA PAID  %d / %d"), Progress, Target)
+		: FString::Printf(TEXT("QUOTA  %d / %d"), Progress, Target)));
 	QuotaLabel->SetTextRenderColor(bComplete ? FColor::Green : FColor::Red);
 	RefreshLeverLabel();
 }
@@ -173,17 +350,17 @@ void AChopItQuotaMachine::RefreshLeverLabel()
 		Cycle->GetCurrentPhase(), Quota && Quota->IsComplete(), Cycle->IsNightMinimumElapsed());
 	if (bAvailable)
 	{
-		LeverLabel->SetText(FText::FromString(TEXT("E: TIRAR PALANCA")));
+		LeverLabel->SetText(FText::FromString(TEXT("E: PULL LEVER")));
 		LeverLabel->SetTextRenderColor(FColor::Green);
 	}
 	else if (Cycle && Cycle->GetCurrentPhase() == EChopItCyclePhase::Night)
 	{
-		LeverLabel->SetText(FText::FromString(TEXT("PAGA LA CUOTA PARA LA PALANCA")));
+		LeverLabel->SetText(FText::FromString(TEXT("PAY THE QUOTA TO UNLOCK THE LEVER")));
 		LeverLabel->SetTextRenderColor(FColor::Yellow);
 	}
 	else
 	{
-		LeverLabel->SetText(FText::FromString(TEXT("PALANCA BLOQUEADA")));
+		LeverLabel->SetText(FText::FromString(TEXT("LEVER LOCKED")));
 		LeverLabel->SetTextRenderColor(FColor::Silver);
 	}
 }

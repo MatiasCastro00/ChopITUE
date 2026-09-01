@@ -24,7 +24,7 @@ bool FChopItPhase3CargoTransferTest::RunTest(const FString& Parameters)
 {
 	UChopItWoodCargoComponent* Cargo = NewObject<UChopItWoodCargoComponent>();
 	TestNotNull(TEXT("Cargo component exists"), Cargo);
-	TestEqual(TEXT("Baseline capacity"), Cargo->GetCapacity(), 12);
+	TestEqual(TEXT("Doubled baseline capacity"), Cargo->GetCapacity(), 24);
 	TestEqual(TEXT("Cargo starts empty"), Cargo->GetCurrentWood(), 0);
 	TestFalse(TEXT("Cargo component has no Tick"), Cargo->PrimaryComponentTick.bCanEverTick);
 
@@ -33,17 +33,19 @@ bool FChopItPhase3CargoTransferTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("First add has no remainder"), FirstAdd.Remainder, 0);
 	TestEqual(TEXT("Cargo stores ten units"), Cargo->GetCurrentWood(), 10);
 
-	const FChopItWoodTransferResult Overflow = Cargo->TryAddWood(5);
-	TestEqual(TEXT("Overflow only fills available slots"), Overflow.Transferred, 2);
-	TestEqual(TEXT("Overflow preserves three units as remainder"), Overflow.Remainder, 3);
-	TestEqual(TEXT("Cargo never exceeds capacity"), Cargo->GetCurrentWood(), 12);
-	TestFalse(TEXT("Capacity cannot shrink below current cargo"), Cargo->SetCapacity(11));
+	const FChopItWoodTransferResult Overflow = Cargo->TryAddWood(20);
+	TestEqual(TEXT("Overflow only fills available slots"), Overflow.Transferred, 14);
+	TestEqual(TEXT("Overflow preserves six units as remainder"), Overflow.Remainder, 6);
+	TestEqual(TEXT("Cargo never exceeds capacity"), Cargo->GetCurrentWood(), 24);
+	TestFalse(TEXT("Capacity cannot shrink below current cargo"), Cargo->SetCapacity(23));
 
-	const FChopItWoodTransferResult Removal = Cargo->TryRemoveWood(20);
-	TestEqual(TEXT("Removal transfers all stored units"), Removal.Transferred, 12);
-	TestEqual(TEXT("Removal reports unfulfilled units"), Removal.Remainder, 8);
+	const FChopItWoodTransferResult Removal = Cargo->TryRemoveWood(30);
+	TestEqual(TEXT("Removal transfers all stored units"), Removal.Transferred, 24);
+	TestEqual(TEXT("Removal reports unfulfilled units"), Removal.Remainder, 6);
 	TestEqual(TEXT("Cargo returns to empty"), Cargo->GetCurrentWood(), 0);
 	TestTrue(TEXT("Empty cargo may resize"), Cargo->SetCapacity(3));
+	TestEqual(TEXT("Test grant can deliberately exceed normal capacity"), Cargo->GrantWoodForTesting(200).Transferred, 200);
+	TestEqual(TEXT("Stress cargo contains all requested logs"), Cargo->GetCurrentWood(), 200);
 	return true;
 }
 

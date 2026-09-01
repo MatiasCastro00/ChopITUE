@@ -25,8 +25,16 @@ bool FChopItPhase8AssetsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("Basic enemy asset exists"), Basic);
 	TestNotNull(TEXT("Fast enemy asset exists"), Fast);
 	TestNotNull(TEXT("Director asset exists"), Director);
-	if (Basic) { TestTrue(TEXT("Basic enemy grants more XP than a tree"), Basic->ExperienceReward > 3); }
-	if (Fast) { TestTrue(TEXT("Fast enemy grants more XP than basic enemy"), Fast->ExperienceReward > (Basic ? Basic->ExperienceReward : 0)); }
+	if (Basic)
+	{
+		TestTrue(TEXT("Basic enemy grants more XP than a tree"), Basic->ExperienceReward > 3);
+		TestEqual(TEXT("Basic enemy name is English"), Basic->DisplayName.ToString(), FString(TEXT("Animated Tree")));
+	}
+	if (Fast)
+	{
+		TestTrue(TEXT("Fast enemy grants more XP than basic enemy"), Fast->ExperienceReward > (Basic ? Basic->ExperienceReward : 0));
+		TestEqual(TEXT("Fast enemy name is English"), Fast->DisplayName.ToString(), FString(TEXT("Swift Tree")));
+	}
 	if (Director)
 	{
 		TestEqual(TEXT("Two enemy families are enabled"), Director->NightEnemies.Num(), 2);

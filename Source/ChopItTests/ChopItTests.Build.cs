@@ -19,6 +19,9 @@ public class ChopItTests : ModuleRules
 			"GameplayCameras",
 			"StateTreeModule",
 			"InputCore",
+			"Slate",
+			"SlateCore",
+			"UMG",
 			"UnrealEd"
 		});
 	}
