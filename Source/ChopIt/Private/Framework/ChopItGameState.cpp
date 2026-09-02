@@ -11,6 +11,7 @@
 #include "Save/ChopItProfileSubsystem.h"
 #include "Spawning/ChopItEnemyDirectorComponent.h"
 #include "Spawning/ChopItEliteEncounterComponent.h"
+#include "Visual/ChopItVisualStyleComponent.h"
 
 AChopItGameState::AChopItGameState()
 {
@@ -21,6 +22,7 @@ AChopItGameState::AChopItGameState()
 	WorldPresentationComponent = CreateDefaultSubobject<UChopItWorldPresentationComponent>(TEXT("WorldPresentationComponent"));
 	EnemyDirectorComponent = CreateDefaultSubobject<UChopItEnemyDirectorComponent>(TEXT("EnemyDirectorComponent"));
 	EliteEncounterComponent = CreateDefaultSubobject<UChopItEliteEncounterComponent>(TEXT("EliteEncounterComponent"));
+	VisualStyleComponent = CreateDefaultSubobject<UChopItVisualStyleComponent>(TEXT("VisualStyleComponent"));
 }
 
 void AChopItGameState::BeginPlay()

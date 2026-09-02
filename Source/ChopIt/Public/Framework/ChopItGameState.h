@@ -10,6 +10,7 @@ class UChopItWorldPresentationComponent;
 class UChopItEnemyDirectorComponent;
 class UChopItEliteEncounterComponent;
 class UChopItDayDefinition;
+class UChopItVisualStyleComponent;
 
 /** Observable owner for run-wide state introduced in later phases. */
 UCLASS()
@@ -24,6 +25,7 @@ public:
 	UChopItCycleStateMachineComponent* GetCycleStateMachine() const { return CycleStateMachine; }
 	UChopItRunStateComponent* GetRunStateComponent() const { return RunStateComponent; }
 	UChopItEnemyDirectorComponent* GetEnemyDirectorComponent() const { return EnemyDirectorComponent; }
+	UChopItVisualStyleComponent* GetVisualStyleComponent() const { return VisualStyleComponent; }
 	static int32 ResolveQuotaTarget(int32 DayNumber, const UChopItDayDefinition* DayDefinition);
 
 private:
@@ -46,4 +48,7 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Enemies")
 	TObjectPtr<UChopItEliteEncounterComponent> EliteEncounterComponent;
+
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Presentation")
+	TObjectPtr<UChopItVisualStyleComponent> VisualStyleComponent;
 };

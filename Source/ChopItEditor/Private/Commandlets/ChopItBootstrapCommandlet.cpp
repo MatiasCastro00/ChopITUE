@@ -6,6 +6,8 @@
 #include "ChopItCollision.h"
 #include "ChopItLogChannels.h"
 #include "Components/DirectionalLightComponent.h"
+#include "Components/ExponentialHeightFogComponent.h"
+#include "Components/MeshComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/SkyAtmosphereComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -13,6 +15,7 @@
 #include "Curves/CurveFloat.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/ExponentialHeightFog.h"
+#include "Engine/PostProcessVolume.h"
 #include "Engine/Blueprint.h"
 #include "Engine/SkyLight.h"
 #include "Engine/StaticMeshActor.h"
@@ -102,6 +105,7 @@ namespace ChopItBootstrap
 	constexpr TCHAR EnemyMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Enemies");
 	constexpr TCHAR ChainLabMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_ChainLab");
 	constexpr TCHAR DialogueMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Dialogue");
+	constexpr TCHAR GlobalOutlineMaterialPath[] = TEXT("/Game/ChopIt/Presentation/VisualStyle/Materials/Outline/MI_Outline_Global.MI_Outline_Global");
 	constexpr TCHAR MoveActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Move");
 	constexpr TCHAR InteractActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Interact");
 	constexpr TCHAR CameraLookActionPackage[] = TEXT("/Game/ChopIt/Input/IA_CameraLook");
@@ -137,6 +141,62 @@ namespace ChopItBootstrap
 	constexpr TCHAR OvenSpeakerPackage[] = TEXT("/Game/ChopIt/Dialogue/Speakers/DA_Speaker_Oven");
 	constexpr TCHAR ProtagonistSpeakerPackage[] = TEXT("/Game/ChopIt/Dialogue/Speakers/DA_Speaker_Protagonist");
 	constexpr TCHAR MatchIntroDialoguePackage[] = TEXT("/Game/ChopIt/Dialogue/Sequences/DA_Dialogue_MatchIntro");
+
+	void AddDarkVisualStylePreview(UWorld* World, const FName ActorName)
+	{
+		if (!World) return;
+		APostProcessVolume* Volume = nullptr;
+		for (TActorIterator<APostProcessVolume> It(World); It; ++It)
+		{
+			if (It->ActorHasTag(TEXT("ChopItVisualStylePreview")))
+			{
+				Volume = *It;
+				break;
+			}
+		}
+		if (!Volume)
+		{
+			FActorSpawnParameters Params;
+			Params.Name = ActorName;
+			Volume = World->SpawnActor<APostProcessVolume>(FVector::ZeroVector, FRotator::ZeroRotator, Params);
+		}
+		if (!Volume) return;
+		Volume->SetActorLabel(TEXT("ChopIt Visual Style Preview (editor)"));
+		Volume->Tags.Add(TEXT("ChopItVisualStylePreview"));
+		Volume->bUnbound = true;
+		Volume->Priority = 40.0f;
+		Volume->BlendWeight = 1.0f;
+		Volume->Settings.WeightedBlendables.Array.Reset();
+		Volume->Settings.bOverride_AutoExposureMethod = false;
+		Volume->Settings.bOverride_AutoExposureBias = true;
+		Volume->Settings.AutoExposureBias = -0.65f;
+		Volume->Settings.bOverride_BloomIntensity = true;
+		Volume->Settings.BloomIntensity = 0.08f;
+		Volume->Settings.bOverride_AmbientOcclusionIntensity = true;
+		Volume->Settings.AmbientOcclusionIntensity = 0.48f;
+		Volume->Settings.bOverride_MotionBlurAmount = true;
+		Volume->Settings.MotionBlurAmount = 0.0f;
+	}
+
+	void ApplyGlobalOutlinePreview(UWorld* World)
+	{
+		if (!World) return;
+		UMaterialInterface* Outline = LoadObject<UMaterialInterface>(nullptr, GlobalOutlineMaterialPath);
+		if (!Outline)
+		{
+			UE_LOG(LogChopIt, Warning, TEXT("Global outline material is unavailable while rebuilding %s."), *World->GetName());
+			return;
+		}
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			TArray<UMeshComponent*> Meshes;
+			It->GetComponents<UMeshComponent>(Meshes);
+			for (UMeshComponent* Mesh : Meshes)
+			{
+				if (IsValid(Mesh) && Mesh->IsVisible()) Mesh->SetOverlayMaterial(Outline);
+			}
+		}
+	}
 
 	template <typename AssetType>
 	AssetType* LoadOrCreateAsset(const FString& PackageName, const FName AssetName)
@@ -355,6 +415,8 @@ int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 	if (FParse::Param(*Params, TEXT("Phase12")) && !CreatePhase12Assets()) return 1;
 if (FParse::Param(*Params, TEXT("HarvestBlueprints")) && !CreateHarvestBlueprints()) return 1;
 if (FParse::Param(*Params, TEXT("Presentation")) && !CreateDamageTextMaterial()) return 1;
+if (FParse::Param(*Params, TEXT("VisualStyle")) && !CreateVisualStyleAssets()) return 1;
+if (FParse::Param(*Params, TEXT("RefreshTreeTrunks")) && !RefreshStartupTreeTrunkMaterials()) return 1;
 if (FParse::Param(*Params, TEXT("Camera")) && !CreateCameraAssets()) return 1;
 if (FParse::Param(*Params, TEXT("CameraInput")) && !CreateInputAssets()) return 1;
 if (FParse::Param(*Params, TEXT("CameraDemoMap")) && !RebuildPhase1Map(ChopItBootstrap::SandboxMap, true)) return 1;
@@ -1053,6 +1115,65 @@ bool UChopItBootstrapCommandlet::CreateDialogueAssets() const
 		|| !ChopItBootstrap::SaveAsset(Theme) || !ChopItBootstrap::SaveAsset(Sequence) || !ChopItBootstrap::SaveAsset(MatchIntro)) return false;
 	return PlaceDeathInStartupMap() && PlaceDeliveryZonesInStartupMap() && PlaceChainObstaclesInStartupMap()
 		&& RebuildPhase1Map(ChopItBootstrap::DialogueMap, true);
+}
+
+bool UChopItBootstrapCommandlet::RefreshStartupTreeTrunkMaterials() const
+{
+	if (!FPackageName::DoesPackageExist(ChopItBootstrap::StartupMap))
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Cannot refresh tree trunks; startup map does not exist."));
+		return false;
+	}
+
+	UMaterialInterface* Trunk = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Trunk"));
+	UMaterialInterface* Leaves = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Leaves"));
+	if (!Trunk || !Leaves)
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Cannot refresh tree trunks; authored trunk or leaf material is missing."));
+		return false;
+	}
+
+	UWorld* World = UEditorLoadingAndSavingUtils::LoadMap(ChopItBootstrap::StartupMap);
+	if (!IsValid(World))
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Could not load L_Startup to refresh tree trunks."));
+		return false;
+	}
+
+	int32 UpdatedTrees = 0;
+	for (TActorIterator<AChopItTree> It(World); It; ++It)
+	{
+		It->SetBlockoutMaterials(Trunk, Leaves);
+		++UpdatedTrees;
+	}
+	for (TActorIterator<ADirectionalLight> It(World); It; ++It)
+	{
+		It->GetLightComponent()->SetIntensity(3.2f);
+		It->GetLightComponent()->SetLightColor(FLinearColor(0.82f, 0.88f, 0.74f));
+	}
+	for (TActorIterator<ASkyLight> It(World); It; ++It)
+	{
+		It->GetLightComponent()->SetIntensity(0.62f);
+	}
+	for (TActorIterator<AExponentialHeightFog> It(World); It; ++It)
+	{
+		It->GetComponent()->SetFogDensity(0.035f);
+		It->GetComponent()->SetFogInscatteringColor(FLinearColor(0.035f, 0.20f, 0.23f));
+		It->GetComponent()->SetFogHeightFalloff(0.18f);
+		It->GetComponent()->SetFogMaxOpacity(0.88f);
+		It->GetComponent()->SetStartDistance(250.0f);
+	}
+	ChopItBootstrap::AddDarkVisualStylePreview(World, TEXT("ChopItVisualStylePreview"));
+	ChopItBootstrap::ApplyGlobalOutlinePreview(World);
+	if (UpdatedTrees == 0)
+	{
+		UE_LOG(LogChopIt, Error, TEXT("No AChopItTree actors were found in L_Startup; no map changes were saved."));
+		return false;
+	}
+
+	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, ChopItBootstrap::StartupMap);
+	UE_LOG(LogChopIt, Display, TEXT("Updated bark material on %d L_Startup tree trunks: %s"), UpdatedTrees, bSaved ? TEXT("OK") : TEXT("FAILED"));
+	return bSaved;
 }
 
 bool UChopItBootstrapCommandlet::PlaceDeathInStartupMap() const
@@ -1910,7 +2031,13 @@ bool UChopItBootstrapCommandlet::CreateBlockoutMaterials() const
 {
 	UMaterialInterface* Parent = LoadObject<UMaterialInterface>(
 		nullptr,
-		TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+		TEXT("/Game/ChopIt/Presentation/VisualStyle/Materials/M_LowPoly_Master_Authored.M_LowPoly_Master_Authored"));
+	if (!Parent)
+	{
+		Parent = LoadObject<UMaterialInterface>(
+			nullptr,
+			TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	}
 	if (!Parent)
 	{
 		return false;
@@ -1920,16 +2047,26 @@ bool UChopItBootstrapCommandlet::CreateBlockoutMaterials() const
 	{
 		const TCHAR* Name;
 		FLinearColor Color;
+		FLinearColor Shadow;
+		float Tiling;
+		const TCHAR* TexturePath;
 	};
 	const FMaterialSpec Specs[] =
 	{
-		{ TEXT("MI_Ground"), FLinearColor(0.055f, 0.20f, 0.07f) },
-		{ TEXT("MI_Path"), FLinearColor(0.30f, 0.18f, 0.08f) },
-		{ TEXT("MI_Wood"), FLinearColor(0.22f, 0.09f, 0.025f) },
-		{ TEXT("MI_Leaves"), FLinearColor(0.015f, 0.12f, 0.025f) },
-		{ TEXT("MI_Roof"), FLinearColor(0.24f, 0.025f, 0.02f) },
-		{ TEXT("MI_Stone"), FLinearColor(0.18f, 0.21f, 0.22f) },
-		{ TEXT("MI_Player"), FLinearColor(0.95f, 0.32f, 0.03f) }
+		{ TEXT("MI_Ground"), FLinearColor(0.28f, 0.39f, 0.19f), FLinearColor(0.022f, 0.038f, 0.026f), 2.0f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Grass_Soft.T_Grass_Soft") },
+		{ TEXT("MI_Path"), FLinearColor(0.38f, 0.30f, 0.20f), FLinearColor(0.045f, 0.034f, 0.024f), 2.0f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Ground_Detailed.T_Ground_Detailed") },
+		{ TEXT("MI_Wood"), FLinearColor(0.46f, 0.29f, 0.15f), FLinearColor(0.072f, 0.040f, 0.022f), 1.0f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Wood_Planks.T_Wood_Planks") },
+		{ TEXT("MI_Trunk"), FLinearColor(0.62f, 0.34f, 0.18f), FLinearColor(0.040f, 0.030f, 0.021f), 1.0f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Log_Bark.T_Log_Bark") },
+		{ TEXT("MI_Leaves"), FLinearColor(0.24f, 0.37f, 0.18f), FLinearColor(0.014f, 0.052f, 0.028f), 1.25f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Leaves_Canopy.T_Leaves_Canopy") },
+		{ TEXT("MI_Roof"), FLinearColor(0.35f, 0.39f, 0.43f), FLinearColor(0.042f, 0.050f, 0.060f), 1.5f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Stone_Cobble.T_Stone_Cobble") },
+		{ TEXT("MI_Stone"), FLinearColor(0.34f, 0.38f, 0.42f), FLinearColor(0.036f, 0.045f, 0.055f), 1.5f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Stone_LowPoly.T_Stone_LowPoly") },
+		{ TEXT("MI_Player"), FLinearColor(1.0f, 0.29f, 0.015f), FLinearColor(0.22f, 0.045f, 0.015f), 1.5f, nullptr },
+		{ TEXT("MI_Enemy"), FLinearColor(0.72f, 0.018f, 0.10f), FLinearColor(0.16f, 0.008f, 0.035f), 1.5f, nullptr },
+		{ TEXT("MI_Interactable"), FLinearColor(0.38f, 0.43f, 0.48f), FLinearColor(0.030f, 0.043f, 0.052f), 1.25f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Stone_Cobble.T_Stone_Cobble") },
+		{ TEXT("MI_Ground_Soft"), FLinearColor(0.58f, 0.66f, 0.50f), FLinearColor(0.032f, 0.052f, 0.030f), 2.0f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Grass_Soft.T_Grass_Soft") },
+		{ TEXT("MI_Ground_Detailed"), FLinearColor(0.62f, 0.58f, 0.48f), FLinearColor(0.052f, 0.046f, 0.034f), 2.0f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Ground_Detailed.T_Ground_Detailed") },
+		{ TEXT("MI_Ground_Fern"), FLinearColor(0.55f, 0.64f, 0.48f), FLinearColor(0.026f, 0.042f, 0.028f), 2.5f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Grass_Fern.T_Grass_Fern") },
+		{ TEXT("MI_Ground_Mossy"), FLinearColor(0.60f, 0.61f, 0.48f), FLinearColor(0.044f, 0.036f, 0.026f), 2.0f, TEXT("/Game/ChopIt/Presentation/VisualStyle/Textures/Authored/T_Ground_Mossy.T_Ground_Mossy") }
 	};
 
 	for (const FMaterialSpec& Spec : Specs)
@@ -1940,6 +2077,29 @@ bool UChopItBootstrapCommandlet::CreateBlockoutMaterials() const
 			PackageName, FName(Spec.Name));
 		Material->SetParentEditorOnly(Parent);
 		Material->SetVectorParameterValueEditorOnly(TEXT("Color"), Spec.Color);
+		Material->SetVectorParameterValueEditorOnly(TEXT("BaseTint"), Spec.Color);
+		Material->SetVectorParameterValueEditorOnly(TEXT("ShadowTint"), Spec.Shadow);
+		const bool bUsesAuthoredTexture = Spec.TexturePath != nullptr;
+		const bool bIsTrunk = FCString::Strcmp(Spec.Name, TEXT("MI_Trunk")) == 0;
+		if (bUsesAuthoredTexture)
+		{
+			UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, Spec.TexturePath);
+			if (!Texture)
+			{
+				UE_LOG(LogChopIt, Error, TEXT("Missing authored material texture: %s"), Spec.TexturePath);
+				return false;
+			}
+			Material->SetTextureParameterValueEditorOnly(FMaterialParameterInfo(TEXT("BaseTexture")), Texture);
+		}
+		Material->SetScalarParameterValueEditorOnly(TEXT("TexturePixelResolution"), bUsesAuthoredTexture ? 128.0f : 8.0f);
+		Material->SetScalarParameterValueEditorOnly(TEXT("TextureTiling"), Spec.Tiling);
+		Material->SetScalarParameterValueEditorOnly(TEXT("ColorSteps"), bIsTrunk ? 24.0f : (bUsesAuthoredTexture ? 16.0f : 7.0f));
+		Material->SetScalarParameterValueEditorOnly(TEXT("Contrast"), bIsTrunk ? 0.96f : (bUsesAuthoredTexture ? 1.02f : 1.12f));
+		Material->SetScalarParameterValueEditorOnly(TEXT("Saturation"), bUsesAuthoredTexture ? 1.0f : 1.16f);
+		Material->SetScalarParameterValueEditorOnly(TEXT("LightingBands"), 3.0f);
+		Material->SetScalarParameterValueEditorOnly(TEXT("ShadowBrightness"), bIsTrunk ? 0.42f : (bUsesAuthoredTexture ? 0.34f : 0.30f));
+		Material->SetScalarParameterValueEditorOnly(TEXT("Roughness"), 0.92f);
+		Material->SetScalarParameterValueEditorOnly(TEXT("Specular"), 0.04f);
 		if (!ChopItBootstrap::SaveAsset(Material))
 		{
 			return false;
@@ -2007,9 +2167,14 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	UMaterialInterface* Ground = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Ground"));
 	UMaterialInterface* Path = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Path"));
 	UMaterialInterface* Wood = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Wood"));
+	UMaterialInterface* Trunk = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Trunk"));
 	UMaterialInterface* Leaves = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Leaves"));
 	UMaterialInterface* Roof = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Roof"));
 	UMaterialInterface* Stone = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Stone"));
+	if (!Ground || !Path || !Wood || !Trunk || !Leaves || !Roof || !Stone)
+	{
+		return false;
+	}
 
 	AStaticMeshActor* GroundActor = ChopItBootstrap::SpawnBlockoutMesh(World, Cube, TEXT("Ground"), FVector(0, 0, -50), FVector(42, 42, 1), Ground);
 	if (!GroundActor) return false;
@@ -2050,7 +2215,7 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 			return false;
 		}
 		Tree->SetActorLabel(TreeSpawnParameters.Name.ToString());
-		Tree->SetBlockoutMaterials(Wood, Leaves);
+		Tree->SetBlockoutMaterials(Trunk, Leaves);
 	}
 
 	const struct
@@ -2156,8 +2321,8 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	ADirectionalLight* DirectionalLight = World->SpawnActor<ADirectionalLight>(FVector::ZeroVector, FRotator(-55, -35, 0), SpawnParameters);
 	if (!DirectionalLight || !DirectionalLight->GetLightComponent()) return false;
 	DirectionalLight->SetActorLabel(TEXT("DirectionalLight"));
-	DirectionalLight->GetLightComponent()->SetIntensity(5.0f);
-	DirectionalLight->GetLightComponent()->SetLightColor(FLinearColor(1.0f, 0.88f, 0.70f));
+	DirectionalLight->GetLightComponent()->SetIntensity(3.2f);
+	DirectionalLight->GetLightComponent()->SetLightColor(FLinearColor(0.82f, 0.88f, 0.74f));
 	DirectionalLight->GetLightComponent()->SetMobility(EComponentMobility::Movable);
 
 	SpawnParameters.Name = TEXT("SkyLight");
@@ -2165,7 +2330,7 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	if (!SkyLight || !SkyLight->GetLightComponent()) return false;
 	SkyLight->SetActorLabel(TEXT("SkyLight"));
 	SkyLight->GetLightComponent()->SetMobility(EComponentMobility::Movable);
-	SkyLight->GetLightComponent()->SetIntensity(1.2f);
+	SkyLight->GetLightComponent()->SetIntensity(0.62f);
 	SkyLight->GetLightComponent()->SetRealTimeCapture(true);
 
 	SpawnParameters.Name = TEXT("SkyAtmosphere");
@@ -2177,6 +2342,13 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 	AExponentialHeightFog* Fog = World->SpawnActor<AExponentialHeightFog>(FVector(0, 0, -50), FRotator::ZeroRotator, SpawnParameters);
 	if (!Fog) return false;
 	Fog->SetActorLabel(TEXT("HeightFog"));
+	Fog->GetComponent()->SetFogDensity(0.035f);
+	Fog->GetComponent()->SetFogInscatteringColor(FLinearColor(0.035f, 0.20f, 0.23f));
+	Fog->GetComponent()->SetFogHeightFalloff(0.18f);
+	Fog->GetComponent()->SetFogMaxOpacity(0.88f);
+	Fog->GetComponent()->SetStartDistance(250.0f);
+	ChopItBootstrap::AddDarkVisualStylePreview(World, TEXT("ChopItVisualStylePreview"));
+	ChopItBootstrap::ApplyGlobalOutlinePreview(World);
 
 	SpawnParameters.Name = TEXT("NavMeshBounds");
 	ANavMeshBoundsVolume* NavBounds = World->SpawnActor<ANavMeshBoundsVolume>(FVector(0, 0, 200), FRotator::ZeroRotator, SpawnParameters);
@@ -2255,9 +2427,10 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 	UMaterialInterface* Ground = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Ground"));
 	UMaterialInterface* Path = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Path"));
 	UMaterialInterface* Wood = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Wood"));
+	UMaterialInterface* Trunk = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Trunk"));
 	UMaterialInterface* Leaves = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Leaves"));
 	UMaterialInterface* Stone = ChopItBootstrap::LoadBlockoutMaterial(TEXT("MI_Stone"));
-	if (!Ground || !Path || !Wood || !Leaves || !Stone)
+	if (!Ground || !Path || !Wood || !Trunk || !Leaves || !Stone)
 	{
 		return false;
 	}
@@ -2363,7 +2536,7 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(TreeLocations); ++Index)
 	{
 		const FVector TrunkLocation = TreeLocations[Index];
-		ChopItBootstrap::SpawnBlockoutMesh(World, Cylinder, FName(*FString::Printf(TEXT("ChainTreeTrunk_%02d"), Index)), TrunkLocation, FVector(1.25f, 1.25f, 4.6f), Wood);
+		ChopItBootstrap::SpawnBlockoutMesh(World, Cylinder, FName(*FString::Printf(TEXT("ChainTreeTrunk_%02d"), Index)), TrunkLocation, FVector(1.25f, 1.25f, 4.6f), Trunk);
 		ChopItBootstrap::SpawnBlockoutMesh(World, Sphere, FName(*FString::Printf(TEXT("ChainTreeCanopy_%02d"), Index)), TrunkLocation + FVector(0, 0, 290), FVector(3.4f, 3.4f, 2.4f), Leaves, TEXT("NoCollision"));
 	}
 	ChopItBootstrap::SpawnLabSign(World, TEXT("Sign_Trees"), TEXT("05  TREE TRUNKS"), FVector(-1360, 1420, 490));
@@ -2392,21 +2565,31 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 	SpawnParameters.Name = TEXT("SkyAtmosphere_ChainLab");
 	World->SpawnActor<ASkyAtmosphere>(FVector::ZeroVector, FRotator::ZeroRotator, SpawnParameters);
 	SpawnParameters.Name = TEXT("HeightFog_ChainLab");
-	World->SpawnActor<AExponentialHeightFog>(FVector(0, 0, -50), FRotator::ZeroRotator, SpawnParameters);
+	AExponentialHeightFog* ChainFog = World->SpawnActor<AExponentialHeightFog>(FVector(0, 0, -50), FRotator::ZeroRotator, SpawnParameters);
 	if (DirectionalLight)
 	{
 		DirectionalLight->SetActorLabel(TEXT("DirectionalLight"));
-		DirectionalLight->GetLightComponent()->SetIntensity(5.0f);
-		DirectionalLight->GetLightComponent()->SetLightColor(FLinearColor(1.0f, 0.88f, 0.70f));
+		DirectionalLight->GetLightComponent()->SetIntensity(3.2f);
+		DirectionalLight->GetLightComponent()->SetLightColor(FLinearColor(0.82f, 0.88f, 0.74f));
 		DirectionalLight->GetLightComponent()->SetMobility(EComponentMobility::Movable);
 	}
 	if (SkyLight)
 	{
 		SkyLight->SetActorLabel(TEXT("SkyLight"));
 		SkyLight->GetLightComponent()->SetMobility(EComponentMobility::Movable);
-		SkyLight->GetLightComponent()->SetIntensity(1.2f);
+		SkyLight->GetLightComponent()->SetIntensity(0.62f);
 		SkyLight->GetLightComponent()->SetRealTimeCapture(true);
 	}
+	if (ChainFog)
+	{
+		ChainFog->GetComponent()->SetFogDensity(0.035f);
+		ChainFog->GetComponent()->SetFogInscatteringColor(FLinearColor(0.035f, 0.20f, 0.23f));
+		ChainFog->GetComponent()->SetFogHeightFalloff(0.18f);
+		ChainFog->GetComponent()->SetFogMaxOpacity(0.88f);
+		ChainFog->GetComponent()->SetStartDistance(250.0f);
+	}
+	ChopItBootstrap::AddDarkVisualStylePreview(World, TEXT("ChopItVisualStylePreview_ChainLab"));
+	ChopItBootstrap::ApplyGlobalOutlinePreview(World);
 
 	SpawnParameters.Name = TEXT("NavMeshBounds_ChainLab");
 	ANavMeshBoundsVolume* NavBounds = World->SpawnActor<ANavMeshBoundsVolume>(FVector(0, 0, 200), FRotator::ZeroRotator, SpawnParameters);

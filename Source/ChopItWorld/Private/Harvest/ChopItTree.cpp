@@ -207,6 +207,19 @@ void AChopItTree::ApplyFoliageColor()
 	if (CrownMaterialInstance)
 	{
 		CrownMaterialInstance->SetVectorParameterValue(TEXT("Color"), GetFoliageColor());
+		// The authored leaves already carry a full palette. Use a gentle multiplier
+		// for seasonal identity instead of crushing the texture with the legacy
+		// flat-color values.
+		FLinearColor TextureTint = FLinearColor::White;
+		switch (FoliageVariant)
+		{
+		case EChopItTreeFoliageVariant::Pine: TextureTint = FLinearColor(0.55f, 0.82f, 0.62f); break;
+		case EChopItTreeFoliageVariant::Spring: TextureTint = FLinearColor(0.94f, 1.0f, 0.72f); break;
+		case EChopItTreeFoliageVariant::Summer: TextureTint = FLinearColor::White; break;
+		case EChopItTreeFoliageVariant::Autumn: TextureTint = FLinearColor(1.0f, 0.58f, 0.24f); break;
+		default: break;
+		}
+		CrownMaterialInstance->SetVectorParameterValue(TEXT("BaseTint"), TextureTint);
 		CrownMesh->SetMaterial(0, CrownMaterialInstance);
 	}
 }

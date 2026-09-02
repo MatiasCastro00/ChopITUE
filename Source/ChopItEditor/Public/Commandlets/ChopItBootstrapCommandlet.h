@@ -30,6 +30,7 @@ private:
 	bool PlaceDeathInStartupMap() const;
 	bool PlaceDeliveryZonesInStartupMap() const;
 	bool PlaceChainObstaclesInStartupMap() const;
+	bool RefreshStartupTreeTrunkMaterials() const;
 	bool CreateEnemyAssets() const;
 	bool CreateProgressionAssets() const;
 	bool CreateInputAssets() const;
@@ -44,6 +45,8 @@ private:
 	bool CreateDayDefinition() const;
 	bool CreateBlockoutMaterials() const;
 	bool CreateDamageTextMaterial() const;
+	bool CreateVisualStyleAssets() const;
+	bool RebuildVisualStyleDemoMap() const;
 	bool RebuildNavigationData(const FString& LongPackageName) const;
 	bool RebuildPhase1Map(
 		const FString& LongPackageName,

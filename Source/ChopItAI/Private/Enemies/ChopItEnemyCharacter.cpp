@@ -13,6 +13,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Harvest/ChopItLogPickup.h"
 #include "Feedback/ChopItHitFeedbackComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 
 AChopItEnemyCharacter::AChopItEnemyCharacter()
@@ -49,6 +50,11 @@ AChopItEnemyCharacter::AChopItEnemyCharacter()
 void AChopItEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	if (UMaterialInterface* EnemyMaterial = LoadObject<UMaterialInterface>(
+		nullptr, TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Enemy.MI_Enemy")))
+	{
+		BodyMesh->SetMaterial(0, EnemyMaterial);
+	}
 	HealthComponent->OnDeath.AddUObject(this, &AChopItEnemyCharacter::HandleDeath);
 	UpdateLabel();
 }
