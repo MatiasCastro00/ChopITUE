@@ -14,7 +14,7 @@ class UMaterialInterface;
 class UPrimitiveComponent;
 
 USTRUCT()
-struct FChopItOccludedPrimitiveState
+struct CHOPITPRESENTATION_API FChopItOccludedPrimitiveState
 {
 	GENERATED_BODY()
 
@@ -23,6 +23,13 @@ struct FChopItOccludedPrimitiveState
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMaterialInterface>> OriginalMaterials;
+
+	/** Overlay hidden while the camera dither material owns the component. */
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> OriginalOverlayMaterial;
+
+	void CaptureAndApplyOcclusion(UPrimitiveComponent& Primitive, UMaterialInterface& InOcclusionMaterial);
+	void Restore() const;
 };
 
 UCLASS(ClassGroup=(ChopIt), meta=(BlueprintSpawnableComponent))

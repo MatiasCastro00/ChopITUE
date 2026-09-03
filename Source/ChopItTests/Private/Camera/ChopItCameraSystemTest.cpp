@@ -1,5 +1,6 @@
 #include "Camera/ChopItCameraComponent.h"
 #include "Camera/ChopItCameraCue.h"
+#include "Components/StaticMeshComponent.h"
 #include "Core/CameraAsset.h"
 #include "Core/CameraRigAsset.h"
 #include "Core/CameraShakeAsset.h"
@@ -9,6 +10,7 @@
 #include "Materials/MaterialFunctionInterface.h"
 #include "Misc/AutomationTest.h"
 #include "StateTree.h"
+#include "Engine/StaticMesh.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -123,6 +125,39 @@ bool FChopItCameraAssetsTest::RunTest(const FString&)
 			});
 		TestTrue(TEXT("Occlusion mask is driven by DitherTemporalAA"), bUsesTemporalDither);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FChopItCameraOcclusionOverlayTest,
+	"ChopIt.Camera.OcclusionHidesAndRestoresOverlay",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FChopItCameraOcclusionOverlayTest::RunTest(const FString&)
+{
+	UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	UMaterialInterface* OriginalMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineMaterials/DefaultMaterial.DefaultMaterial"));
+	UMaterialInterface* DitherMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
+	UMaterialInterface* OutlineMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
+	TestNotNull(TEXT("Test cube mesh"), CubeMesh);
+	TestNotNull(TEXT("Original material"), OriginalMaterial);
+	TestNotNull(TEXT("Dither material"), DitherMaterial);
+	TestNotNull(TEXT("Outline material"), OutlineMaterial);
+	if (!CubeMesh || !OriginalMaterial || !DitherMaterial || !OutlineMaterial) return false;
+
+	UStaticMeshComponent* MeshComponent = NewObject<UStaticMeshComponent>();
+	MeshComponent->SetStaticMesh(CubeMesh);
+	MeshComponent->SetMaterial(0, OriginalMaterial);
+	MeshComponent->SetOverlayMaterial(OutlineMaterial);
+
+	FChopItOccludedPrimitiveState State;
+	State.CaptureAndApplyOcclusion(*MeshComponent, *DitherMaterial);
+	TestEqual(TEXT("Dither replaces the base material"), MeshComponent->GetMaterial(0), DitherMaterial);
+	TestNull(TEXT("Outline is disabled while dithering"), MeshComponent->GetOverlayMaterial());
+
+	State.Restore();
+	TestEqual(TEXT("Original base material is restored"), MeshComponent->GetMaterial(0), OriginalMaterial);
+	TestEqual(TEXT("Original outline is restored"), MeshComponent->GetOverlayMaterial(), OutlineMaterial);
 	return true;
 }
 

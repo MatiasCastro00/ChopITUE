@@ -6,6 +6,7 @@
 #include "ChopItCollision.h"
 #include "ChopItLogChannels.h"
 #include "CineCameraComponent.h"
+#include "Components/MeshComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Core/CameraShakeAsset.h"
 #include "Core/CameraAsset.h"
@@ -26,6 +27,42 @@ namespace
 	constexpr float DefaultDistance = 850.0f;
 	constexpr float PivotHeight = 120.0f;
 	constexpr float ZoomBlendSeconds = 0.12f;
+}
+
+void FChopItOccludedPrimitiveState::CaptureAndApplyOcclusion(
+	UPrimitiveComponent& Primitive,
+	UMaterialInterface& InOcclusionMaterial)
+{
+	Component = &Primitive;
+	OriginalMaterials.Reset();
+	const int32 MaterialCount = Primitive.GetNumMaterials();
+	OriginalMaterials.Reserve(MaterialCount);
+	for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
+	{
+		OriginalMaterials.Add(Primitive.GetMaterial(MaterialIndex));
+		Primitive.SetMaterial(MaterialIndex, &InOcclusionMaterial);
+	}
+
+	if (UMeshComponent* MeshComponent = Cast<UMeshComponent>(&Primitive))
+	{
+		OriginalOverlayMaterial = MeshComponent->GetOverlayMaterial();
+		MeshComponent->SetOverlayMaterial(nullptr);
+	}
+}
+
+void FChopItOccludedPrimitiveState::Restore() const
+{
+	UPrimitiveComponent* Primitive = Component.Get();
+	if (!IsValid(Primitive)) return;
+
+	for (int32 MaterialIndex = 0; MaterialIndex < OriginalMaterials.Num(); ++MaterialIndex)
+	{
+		Primitive->SetMaterial(MaterialIndex, OriginalMaterials[MaterialIndex]);
+	}
+	if (UMeshComponent* MeshComponent = Cast<UMeshComponent>(Primitive))
+	{
+		MeshComponent->SetOverlayMaterial(OriginalOverlayMaterial);
+	}
 }
 
 UChopItCameraComponent::UChopItCameraComponent(const FObjectInitializer& ObjectInitializer)
@@ -573,14 +610,7 @@ void UChopItCameraComponent::UpdateOcclusionTransparency()
 		if (bAlreadyOccluded) return;
 
 		FChopItOccludedPrimitiveState& State = OccludedPrimitives.AddDefaulted_GetRef();
-		State.Component = Primitive;
-		const int32 MaterialCount = Primitive->GetNumMaterials();
-		State.OriginalMaterials.Reserve(MaterialCount);
-		for (int32 MaterialIndex = 0; MaterialIndex < MaterialCount; ++MaterialIndex)
-		{
-			State.OriginalMaterials.Add(Primitive->GetMaterial(MaterialIndex));
-			Primitive->SetMaterial(MaterialIndex, OcclusionMaterial);
-		}
+		State.CaptureAndApplyOcclusion(*Primitive, *OcclusionMaterial);
 	};
 
 	for (AActor* HitActor : OccludingActors)
@@ -598,13 +628,7 @@ void UChopItCameraComponent::UpdateOcclusionTransparency()
 		FChopItOccludedPrimitiveState& State = OccludedPrimitives[StateIndex];
 		UPrimitiveComponent* Primitive = State.Component.Get();
 		if (IsValid(Primitive) && CurrentOccluders.Contains(Primitive)) continue;
-		if (IsValid(Primitive))
-		{
-			for (int32 MaterialIndex = 0; MaterialIndex < State.OriginalMaterials.Num(); ++MaterialIndex)
-			{
-				Primitive->SetMaterial(MaterialIndex, State.OriginalMaterials[MaterialIndex]);
-			}
-		}
+		State.Restore();
 		OccludedPrimitives.RemoveAtSwap(StateIndex, 1, EAllowShrinking::No);
 	}
 }
@@ -613,13 +637,7 @@ void UChopItCameraComponent::RestoreOcclusionMaterials()
 {
 	for (FChopItOccludedPrimitiveState& State : OccludedPrimitives)
 	{
-		if (UPrimitiveComponent* Primitive = State.Component.Get())
-		{
-			for (int32 MaterialIndex = 0; MaterialIndex < State.OriginalMaterials.Num(); ++MaterialIndex)
-			{
-				Primitive->SetMaterial(MaterialIndex, State.OriginalMaterials[MaterialIndex]);
-			}
-		}
+		State.Restore();
 	}
 	OccludedPrimitives.Reset();
 }
