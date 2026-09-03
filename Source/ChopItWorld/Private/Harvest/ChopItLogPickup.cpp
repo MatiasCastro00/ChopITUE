@@ -5,6 +5,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Engine/World.h"
 #include "Harvest/ChopItForestRegistrySubsystem.h"
 #include "Harvest/ChopItWoodCargoComponent.h"
@@ -60,6 +61,7 @@ AChopItLogPickup::AChopItLogPickup()
 	UnitLabel->SetWorldSize(36.0f);
 	UnitLabel->SetTextRenderColor(FColor::Yellow);
 	UnitLabel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	UChopItCameraFacingTextComponent::ConfigurePsxBypass(*UnitLabel);
 }
 
 void AChopItLogPickup::BeginPlay()

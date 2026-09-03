@@ -12,6 +12,14 @@ UChopItCameraFacingTextComponent::UChopItCameraFacingTextComponent()
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
 	bTickInEditor = false;
 	bAlwaysRenderAsText = true;
+	ConfigurePsxBypass(*this);
+}
+
+void UChopItCameraFacingTextComponent::ConfigurePsxBypass(UTextRenderComponent& TextComponent)
+{
+	TextComponent.SetRenderCustomDepth(true);
+	TextComponent.SetCustomDepthStencilValue(PsxBypassStencilValue);
+	TextComponent.SetCustomDepthStencilWriteMask(ERendererStencilMask::ERSM_Default);
 }
 
 FRotator UChopItCameraFacingTextComponent::CalculateFacingRotation(

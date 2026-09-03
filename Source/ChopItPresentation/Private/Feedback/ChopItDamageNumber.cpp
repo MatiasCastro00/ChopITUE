@@ -1,6 +1,7 @@
 #include "Feedback/ChopItDamageNumber.h"
 
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
@@ -16,11 +17,12 @@ AChopItDamageNumber::AChopItDamageNumber()
 	TextRender->SetWorldSize(38.0f);
 	TextRender->SetCastShadow(false);
 	TextRender->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	UChopItCameraFacingTextComponent::ConfigurePsxBypass(*TextRender);
 	// This material is a project copy of Unreal's translucent text material with
 	// depth testing disabled. The priority keeps simultaneous hit numbers ordered
 	// above every other translucent gameplay effect as well.
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> DamageTextMaterial(
-		TEXT("/Game/ChopIt/Presentation/Materials/M_DamageText_AlwaysOnTop.M_DamageText_AlwaysOnTop"));
+		TEXT("/Game/ChopIt/Presentation/Materials/M_DamageText_PSXBypass.M_DamageText_PSXBypass"));
 	if (DamageTextMaterial.Succeeded())
 	{
 		TextRender->SetMaterial(0, DamageTextMaterial.Object);

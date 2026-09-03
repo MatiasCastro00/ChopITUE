@@ -4,6 +4,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/ChopItCameraFacingTextComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
 #include "Camera/PlayerCameraManager.h"
@@ -49,6 +50,7 @@ AChopItDialogueStageCharacter::AChopItDialogueStageCharacter()
 	NameLabel->SetTextRenderColor(FColor(255, 169, 64));
 	NameLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 282.0f));
 	NameLabel->SetVisibility(false);
+	UChopItCameraFacingTextComponent::ConfigurePsxBypass(*NameLabel);
 }
 
 void AChopItDialogueStageCharacter::BeginPlay()

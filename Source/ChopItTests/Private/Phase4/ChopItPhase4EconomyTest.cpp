@@ -111,8 +111,16 @@ bool FChopItPhase4AssetsAndMapTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Cabin never pushes the camera"), CabinVisual->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
 	}
 	const AChopItQuotaMachine* MachineDefaults = GetDefault<AChopItQuotaMachine>();
-	TestNotNull(TEXT("Quota labels use camera-facing text"),
-		MachineDefaults->FindComponentByClass<UChopItCameraFacingTextComponent>());
+	const UChopItCameraFacingTextComponent* QuotaLabel =
+		MachineDefaults ? MachineDefaults->FindComponentByClass<UChopItCameraFacingTextComponent>() : nullptr;
+	TestNotNull(TEXT("Quota labels use camera-facing text"), QuotaLabel);
+	if (QuotaLabel)
+	{
+		TestTrue(TEXT("World text renders into Custom Depth"), QuotaLabel->bRenderCustomDepth);
+		TestEqual(TEXT("World text uses the reserved PSX bypass stencil"),
+			QuotaLabel->CustomDepthStencilValue,
+			UChopItCameraFacingTextComponent::PsxBypassStencilValue);
+	}
 	for (const FVector CameraLocation : {FVector(300.0f, 0.0f, 150.0f), FVector(-300.0f, 0.0f, 150.0f)})
 	{
 		const FRotator Facing = UChopItCameraFacingTextComponent::CalculateFacingRotation(
