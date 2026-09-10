@@ -4,11 +4,18 @@
 #include "Combat/ChopItDamageTypes.h"
 #include "Combat/ChopItHealthComponent.h"
 #include "DrawDebugHelpers.h"
+#include "HAL/IConsoleManager.h"
 #include "Targeting/ChopItTargetingSubsystem.h"
 #include "Weapons/ChopItWeaponDefinition.h"
 
 namespace
 {
+	TAutoConsoleVariable<int32> CVarChopItDrawAttackDebug(
+		TEXT("ChopIt.Combat.DrawAttackDebug"),
+		0,
+		TEXT("Draws the auto-attack damage shape. 0: hidden, 1: visible."),
+		ECVF_Cheat);
+
 	void DrawAttackArc(UWorld* World, const FVector& Origin, const FVector& Forward, const float Range, const float HalfAngle)
 	{
 		constexpr int32 SegmentCount = 14;
@@ -117,11 +124,12 @@ void UChopItAutoAttackComponent::PerformAttack()
 		? StatsComponent->EvaluateStat(EChopItCombatStat::Range, WeaponDefinition->Range)
 		: WeaponDefinition->Range;
 	const FVector AttackForward = Owner->GetActorForwardVector();
-	if (WeaponDefinition->AttackPattern == EChopItWeaponAttackPattern::ArcMelee)
+	if (CVarChopItDrawAttackDebug.GetValueOnGameThread() != 0
+		&& WeaponDefinition->AttackPattern == EChopItWeaponAttackPattern::ArcMelee)
 	{
 		DrawAttackArc(World, Owner->GetActorLocation(), AttackForward, Range, WeaponDefinition->ArcHalfAngleDegrees);
 	}
-	else
+	else if (CVarChopItDrawAttackDebug.GetValueOnGameThread() != 0)
 	{
 		DrawDebugCircle(World, Owner->GetActorLocation() + FVector(0.0f, 0.0f, 55.0f), Range, 20, FColor::Cyan, false, 0.25f, 0, 7.0f, FVector::ForwardVector, FVector::RightVector, false);
 	}

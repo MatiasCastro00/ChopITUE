@@ -19,6 +19,7 @@
 *.lo
 *.o
 *.obj
+!SourceAssets/VFX/SM_AxeSlash_*.obj
 *.gch
 *.pch
 *.so

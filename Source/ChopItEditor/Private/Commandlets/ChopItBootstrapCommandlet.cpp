@@ -46,11 +46,14 @@
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialExpressionAdd.h"
 #include "Materials/MaterialExpressionConstant.h"
 #include "Materials/MaterialExpressionConstant3Vector.h"
-#include "Materials/MaterialExpressionMaterialFunctionCall.h"
+#include "Materials/MaterialExpressionMultiply.h"
+#include "Materials/MaterialExpressionNoise.h"
 #include "Materials/MaterialExpressionScalarParameter.h"
-#include "Materials/MaterialFunctionInterface.h"
+#include "Materials/MaterialExpressionSubtract.h"
+#include "Materials/MaterialExpressionWorldPosition.h"
 #include "MaterialEditingLibrary.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
@@ -1728,7 +1731,7 @@ bool UChopItBootstrapCommandlet::CreateCameraAssets() const
 		OcclusionMaterial->BlendMode = BLEND_Masked;
 		OcclusionMaterial->SetShadingModel(MSM_Unlit);
 		OcclusionMaterial->TwoSided = true;
-		OcclusionMaterial->OpacityMaskClipValue = 0.3333f;
+		OcclusionMaterial->OpacityMaskClipValue = 0.5f;
 		UMaterialExpressionConstant3Vector* Color = CastChecked<UMaterialExpressionConstant3Vector>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionConstant3Vector::StaticClass(), -240, 0));
 		Color->Constant = FLinearColor(0.08f, 0.09f, 0.1f);
 		UMaterialEditingLibrary::ConnectMaterialProperty(Color, TEXT(""), MP_EmissiveColor);
@@ -1736,28 +1739,31 @@ bool UChopItBootstrapCommandlet::CreateCameraAssets() const
 		UMaterialExpressionScalarParameter* Visibility = CastChecked<UMaterialExpressionScalarParameter>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionScalarParameter::StaticClass(), -420, 180));
 		Visibility->ParameterName = TEXT("Visibility");
 		Visibility->DefaultValue = 0.28f;
-		UMaterialFunctionInterface* DitherFunction = LoadObject<UMaterialFunctionInterface>(nullptr, TEXT("/Engine/Functions/Engine_MaterialFunctions02/Utility/DitherTemporalAA.DitherTemporalAA"));
-		if (DitherFunction)
-		{
-			UMaterialExpressionMaterialFunctionCall* Dither = CastChecked<UMaterialExpressionMaterialFunctionCall>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionMaterialFunctionCall::StaticClass(), -160, 180));
-			Dither->SetMaterialFunction(DitherFunction);
-			int32 AlphaInputIndex = INDEX_NONE;
-			for (int32 InputIndex = 0; InputIndex < Dither->FunctionInputs.Num(); ++InputIndex)
-			{
-				if (Dither->GetInputName(InputIndex).ToString().Contains(TEXT("Alpha")))
-				{
-					AlphaInputIndex = InputIndex;
-					break;
-				}
-			}
-			if (AlphaInputIndex == INDEX_NONE && !Dither->FunctionInputs.IsEmpty()) AlphaInputIndex = 0;
-			if (AlphaInputIndex != INDEX_NONE) Dither->FunctionInputs[AlphaInputIndex].Input.Connect(0, Visibility);
-			UMaterialEditingLibrary::ConnectMaterialProperty(Dither, TEXT(""), MP_OpacityMask);
-		}
-		else
-		{
-			UE_LOG(LogChopIt, Error, TEXT("Could not load the engine DitherTemporalAA material function"));
-		}
+
+		// Temporal dithering becomes a solid replacement color when AA is intentionally
+		// disabled for the PSX presentation. A stable world-space noise threshold keeps
+		// real masked holes after the pixelation pass without enabling TAA/TSR.
+		UMaterialExpressionWorldPosition* WorldPosition = CastChecked<UMaterialExpressionWorldPosition>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionWorldPosition::StaticClass(), -620, 340));
+		UMaterialExpressionScalarParameter* DitherScale = CastChecked<UMaterialExpressionScalarParameter>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionScalarParameter::StaticClass(), -620, 460));
+		DitherScale->ParameterName = TEXT("Dither Scale");
+		DitherScale->DefaultValue = 0.35f;
+		UMaterialExpressionMultiply* ScaledPosition = CastChecked<UMaterialExpressionMultiply>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionMultiply::StaticClass(), -380, 340));
+		ScaledPosition->A.Connect(0, WorldPosition);
+		ScaledPosition->B.Connect(0, DitherScale);
+		UMaterialExpressionNoise* StableNoise = CastChecked<UMaterialExpressionNoise>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionNoise::StaticClass(), -140, 340));
+		StableNoise->Position.Connect(0, ScaledPosition);
+		StableNoise->Levels = 1;
+		StableNoise->Quality = 1;
+		StableNoise->bTurbulence = false;
+		UMaterialExpressionSubtract* Coverage = CastChecked<UMaterialExpressionSubtract>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionSubtract::StaticClass(), 80, 220));
+		Coverage->A.Connect(0, Visibility);
+		Coverage->B.Connect(0, StableNoise);
+		UMaterialExpressionConstant* Half = CastChecked<UMaterialExpressionConstant>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionConstant::StaticClass(), 80, 400));
+		Half->R = 0.5f;
+		UMaterialExpressionAdd* Mask = CastChecked<UMaterialExpressionAdd>(UMaterialEditingLibrary::CreateMaterialExpression(OcclusionMaterial, UMaterialExpressionAdd::StaticClass(), 300, 260));
+		Mask->A.Connect(0, Coverage);
+		Mask->B.Connect(0, Half);
+		UMaterialEditingLibrary::ConnectMaterialProperty(Mask, TEXT(""), MP_OpacityMask);
 		UMaterialEditingLibrary::RecompileMaterial(OcclusionMaterial);
 	}
 	if (UArrayCameraNode* GameplayRoot = Cast<UArrayCameraNode>(GameplayRig->RootNode))

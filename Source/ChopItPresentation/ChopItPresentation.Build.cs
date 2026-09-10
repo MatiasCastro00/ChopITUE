@@ -20,6 +20,7 @@ public class ChopItPresentation : ModuleRules
 		{
 			"ChopItCombat",
 			"EnhancedInput",
+			"Niagara",
 			"Slate",
 			"SlateCore"
 		});

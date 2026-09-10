@@ -1,0 +1,11 @@
+{
+  "asset": "T_AxeSlash_BrushMask",
+  "source": "/Engine/EngineMaterials/Good64x64TilingNoiseHighFreq_Low",
+  "channels": {
+    "R": "broad edge breakup",
+    "G": "fine interrupted silver strokes",
+    "B": "outer afterimage erosion",
+    "A": "directional bristle streaks"
+  },
+  "note": "BuildAxeSlashAssets.py duplicates the engine RGBA noise source and applies independent UV scale/offset per slash layer."
+}

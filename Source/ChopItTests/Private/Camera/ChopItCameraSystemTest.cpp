@@ -6,8 +6,7 @@
 #include "Core/CameraShakeAsset.h"
 #include "Directors/SingleCameraDirector.h"
 #include "Materials/Material.h"
-#include "Materials/MaterialExpressionMaterialFunctionCall.h"
-#include "Materials/MaterialFunctionInterface.h"
+#include "Materials/MaterialExpressionNoise.h"
 #include "Misc/AutomationTest.h"
 #include "StateTree.h"
 #include "Engine/StaticMesh.h"
@@ -117,13 +116,12 @@ bool FChopItCameraAssetsTest::RunTest(const FString&)
 	if (OcclusionMaterial)
 	{
 		TestEqual(TEXT("Occlusion uses stable masked rendering"), OcclusionMaterial->BlendMode, BLEND_Masked);
-		const bool bUsesTemporalDither = OcclusionMaterial->GetExpressionCollection().Expressions.ContainsByPredicate(
+		const bool bUsesStableNoiseDither = OcclusionMaterial->GetExpressionCollection().Expressions.ContainsByPredicate(
 			[](const TObjectPtr<UMaterialExpression>& Expression)
 			{
-				const UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(Expression);
-				return FunctionCall && FunctionCall->MaterialFunction && FunctionCall->MaterialFunction->GetName().Contains(TEXT("DitherTemporalAA"));
+				return Expression && Expression->IsA<UMaterialExpressionNoise>();
 			});
-		TestTrue(TEXT("Occlusion mask is driven by DitherTemporalAA"), bUsesTemporalDither);
+		TestTrue(TEXT("Occlusion mask uses AA-independent stable noise"), bUsesStableNoiseDither);
 	}
 	return true;
 }

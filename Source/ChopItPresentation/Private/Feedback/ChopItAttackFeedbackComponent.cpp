@@ -32,18 +32,30 @@ void UChopItAttackFeedbackComponent::HandleAttackPerformed(const FVector& Origin
 {
 	const UChopItDeveloperSettings* Settings = GetDefault<UChopItDeveloperSettings>();
 	UWorld* World = GetWorld();
-	if (!Settings || !World || Settings->EffectsDensity <= 0.0f || FMath::FRand() > Settings->EffectsDensity)
+	if (!Settings || !World)
 	{
 		return;
 	}
-	FActorSpawnParameters SpawnParameters;
-	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	if (AChopItAxeSwingTrail* Trail = World->SpawnActor<AChopItAxeSwingTrail>(AChopItAxeSwingTrail::StaticClass(), Origin, FRotator::ZeroRotator, SpawnParameters))
-	{
-		Trail->InitializeTrail(Forward, Range, bHit);
-	}
+
 	if (bHit && Settings->bEnableImpactSounds)
 	{
 		ChopItFeedbackAudio::PlayAxeSwing(this, Origin, Settings->EffectsVolume);
+	}
+
+	const float EffectsDensity = FMath::Clamp(Settings->EffectsDensity, 0.0f, 1.0f);
+	if (EffectsDensity <= UE_KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	FActorSpawnParameters SpawnParameters;
+	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (AChopItAxeSwingTrail* Trail = World->SpawnActor<AChopItAxeSwingTrail>(
+		AChopItAxeSwingTrail::StaticClass(),
+		Origin,
+		FRotator::ZeroRotator,
+		SpawnParameters))
+	{
+		Trail->InitializeTrail(Forward, Range, bHit, EffectsDensity);
 	}
 }
