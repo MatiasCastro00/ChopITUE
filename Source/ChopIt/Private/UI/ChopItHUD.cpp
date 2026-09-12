@@ -1,4 +1,5 @@
 #include "UI/ChopItHUD.h"
+#include "UI/ChopItJuiceWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/ProgressBar.h"
@@ -83,6 +84,7 @@ void AChopItHUD::RevealMissionTracker()
 	bMissionTrackerDismissed = false;
 	bMissionCompletionStarted = false;
 	MissionRevealTime = FPlatformTime::Seconds();
+	if (auto* Juice = Cast<UChopItJuiceWidget>(PSXHUDWidget)) Juice->RevealMission();
 }
 
 void AChopItHUD::DrawHUD()
@@ -134,17 +136,34 @@ void AChopItHUD::DrawHUD()
 
 void AChopItHUD::RefreshPSXWidget()
 {
+	if (Cast<UChopItJuiceWidget>(PSXHUDWidget)) return;
 	if (!PSXHUDWidget || !PSXHUDWidget->WidgetTree || !PlayerOwner) return;
 	auto Text = [this](const TCHAR* Name) { return Cast<UTextBlock>(PSXHUDWidget->WidgetTree->FindWidget(Name)); };
-	auto ImageFill = [this](const TCHAR* Name, const float Fraction, const float FullWidth)
+	auto ImageFill = [this](const TCHAR* Name, const float Fraction, const float FullWidth, const FVector4& AtlasCrop)
 	{
 		if (UImage* Image = Cast<UImage>(PSXHUDWidget->WidgetTree->FindWidget(Name)))
 		{
+			const float ClampedFraction = FMath::Clamp(Fraction, 0.f, 1.f);
 			if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Image->Slot))
 			{
 				const FVector2D CurrentSize = Slot->GetSize();
-				Slot->SetSize(FVector2D(FullWidth * FMath::Clamp(Fraction, 0.f, 1.f), CurrentSize.Y));
+				// Capture the designer's full width once, before applying any percentage.
+				float* DesignWidth = PSXFillDesignWidths.Find(FName(Name));
+				if (!DesignWidth)
+				{
+					DesignWidth = &PSXFillDesignWidths.Add(FName(Name), CurrentSize.X);
+				}
+				Slot->SetSize(FVector2D(*DesignWidth * ClampedFraction, CurrentSize.Y));
 			}
+			// Crop the source together with the slot. This reveals the texture instead of
+			// squeezing the complete sprite into a progressively smaller rectangle.
+			FSlateBrush Brush = Image->GetBrush();
+			const double MinX = AtlasCrop.X / 1774.0;
+			const double MinY = AtlasCrop.Y / 887.0;
+			const double MaxX = (AtlasCrop.X + AtlasCrop.Z * ClampedFraction) / 1774.0;
+			const double MaxY = (AtlasCrop.Y + AtlasCrop.W) / 887.0;
+			Brush.SetUVRegion(FBox2d(FVector2d(MinX, MinY), FVector2d(MaxX, MaxY)));
+			Image->SetBrush(Brush);
 		}
 	};
 	const AChopItGameState* GS = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr;
@@ -160,19 +179,19 @@ void AChopItHUD::RefreshPSXWidget()
 	const UChopItEconomyComponent* Economy = PS->FindComponentByClass<UChopItEconomyComponent>();
 	const float HP = Health ? Health->GetCurrentHealth() : 0.f, MaxHP = Health ? Health->GetMaxHealth() : 1.f;
 	if (UTextBlock* W = Text(TEXT("HealthText"))) W->SetText(FText::FromString(FString::Printf(TEXT("%.0f / %.0f"), HP, MaxHP)));
-	ImageFill(TEXT("HealthFill"), HP / FMath::Max(1.f, MaxHP), 250.f);
+	ImageFill(TEXT("HealthFill"), HP / FMath::Max(1.f, MaxHP), 180.f, FVector4(99, 255, 747, 35));
 	const int32 Q = Quota ? Quota->GetProgress() : 0, QMax = Quota ? Quota->GetTarget() : 1;
-	if (UTextBlock* W = Text(TEXT("QuotaText"))) W->SetText(FText::FromString(FString::Printf(TEXT("CUOTA   %d / %d"), Q, QMax)));
-	ImageFill(TEXT("QuotaFill"), static_cast<float>(Q) / FMath::Max(1, QMax), 245.f);
+	if (UTextBlock* W = Text(TEXT("QuotaText"))) W->SetText(FText::FromString(FString::Printf(TEXT("QUOTA   %d / %d"), Q, QMax)));
+	ImageFill(TEXT("QuotaFill"), static_cast<float>(Q) / FMath::Max(1, QMax), 245.f, FVector4(905, 325, 775, 110));
 	if (UTextBlock* W = Text(TEXT("WoodText"))) W->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), Cargo ? Cargo->GetCurrentWood() : 0, Cargo ? Cargo->GetCapacity() : 0)));
 	if (UTextBlock* W = Text(TEXT("MoneyText"))) W->SetText(FText::FromString(FString::Printf(TEXT("$ %lld"), Economy ? Economy->GetBalance() : 0)));
 	const int32 Level = XP ? XP->GetLevel() : 1, XPNow = XP ? XP->GetCurrentExperience() : 0, XPMax = XP ? XP->GetRequiredExperience() : 1;
-	if (UTextBlock* W = Text(TEXT("LevelText"))) W->SetText(FText::FromString(FString::Printf(TEXT("NIVEL %d"), Level)));
+	if (UTextBlock* W = Text(TEXT("LevelText"))) W->SetText(FText::FromString(FString::Printf(TEXT("LEVEL %d"), Level)));
 	if (UTextBlock* W = Text(TEXT("XPText"))) W->SetText(FText::FromString(FString::Printf(TEXT("XP %d / %d"), XPNow, XPMax)));
-	ImageFill(TEXT("XPFill"), static_cast<float>(XPNow) / FMath::Max(1, XPMax), 1300.f);
+	ImageFill(TEXT("XPFill"), static_cast<float>(XPNow) / FMath::Max(1, XPMax), 1300.f, FVector4(284, 113, 1365, 35));
 	const int32 Seconds = FMath::Max(0, FMath::RoundToInt(Cycle ? Cycle->GetPhaseRemaining() : 0.f));
 	if (UTextBlock* W = Text(TEXT("TimeText"))) W->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), Seconds / 60, Seconds % 60)));
-	if (UTextBlock* W = Text(TEXT("DayText"))) W->SetText(FText::FromString(FString::Printf(TEXT("DIA %d"), Run ? Run->GetDayNumber() : 1)));
+	if (UTextBlock* W = Text(TEXT("DayText"))) W->SetText(FText::FromString(FString::Printf(TEXT("DAY %d"), Run ? Run->GetDayNumber() : 1)));
 }
 
 void AChopItHUD::DrawMissionTracker(const float Scale)

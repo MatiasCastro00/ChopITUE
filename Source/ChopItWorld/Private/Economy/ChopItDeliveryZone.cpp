@@ -260,6 +260,7 @@ void AChopItDeliveryZone::CompleteFlight(const int32 PoolIndex)
 		const FChopItQuotaTransferResult Result = Quota->TryContributeWood(FGuid::NewGuid(), 1);
 		if (Result.Accepted > 0)
 		{
+			Quota->OnDeliveryConfirmed.Broadcast(Result.Accepted);
 			if (AChopItQuotaMachine* Machine = ResolveTargetMachine()) Machine->NotifyWoodConsumed(Result.Accepted);
 		}
 		else if (UChopItWoodCargoComponent* Cargo = ActiveCargo.Get())

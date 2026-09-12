@@ -1,4 +1,7 @@
 #include "Commandlets/ChopItBootstrapCommandlet.h"
+#include "ActorFactories/ActorFactory.h"
+#include "Builders/CubeBuilder.h"
+#include "NavMesh/RecastNavMesh.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetToolsModule.h"
@@ -101,8 +104,38 @@
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintFactory.h"
 
-namespace ChopItBootstrap
-{
+	namespace ChopItBootstrap
+	{
+	bool LocalizePSXHUDToEnglish()
+	{
+		constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/UI/WBP_PSX_HUD");
+		UPackage* Package = LoadPackage(nullptr, PackageName, LOAD_None);
+		UWidgetBlueprint* Blueprint = Package ? FindObject<UWidgetBlueprint>(Package, TEXT("WBP_PSX_HUD")) : nullptr;
+		if (!Blueprint || !Blueprint->WidgetTree) return false;
+
+		const TMap<FName, FString> EnglishText =
+		{
+			{TEXT("QuotaText"), TEXT("QUOTA   120 / 200")},
+			{TEXT("DayText"), TEXT("DAY 1")},
+			{TEXT("MissionHeader"), TEXT("MISSIONS")},
+			{TEXT("MissionTitle"), TEXT("Feed the Furnace")},
+			{TEXT("MissionDescription"), TEXT("Deliver the wood quota\nBefore the day ends")},
+			{TEXT("LevelText"), TEXT("LEVEL 3")}
+		};
+		for (const TPair<FName, FString>& Entry : EnglishText)
+		{
+			if (UTextBlock* Text = Cast<UTextBlock>(Blueprint->WidgetTree->FindWidget(Entry.Key)))
+			{
+				Text->SetText(FText::FromString(Entry.Value));
+			}
+		}
+		FKismetEditorUtilities::CompileBlueprint(Blueprint);
+		Package->MarkPackageDirty();
+		FSavePackageArgs Args; Args.TopLevelFlags = RF_Public | RF_Standalone; Args.SaveFlags = SAVE_NoError;
+		return UPackage::SavePackage(Package, Blueprint,
+			*FPackageName::LongPackageNameToFilename(PackageName, FPackageName::GetAssetPackageExtension()), Args);
+	}
+
 	bool CreatePSXHUDAsset()
 	{
 		constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/UI/WBP_PSX_HUD");
@@ -126,11 +159,14 @@ namespace ChopItBootstrap
 		{
 			Blueprint->WidgetTree->RemoveWidget(Blueprint->WidgetTree->RootWidget);
 		}
+		Blueprint->WidgetVariableNameToGuidMap.Reset();
 		UCanvasPanel* Root = NewObject<UCanvasPanel>(Blueprint->WidgetTree, TEXT("HUDRoot"), RF_Transactional);
 		Blueprint->WidgetVariableNameToGuidMap.FindOrAdd(Root->GetFName()) = FGuid::NewGuid();
 		Blueprint->WidgetTree->RootWidget = Root;
 		UTexture2D* Atlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/ChopIt/Art/UI/UI_PSX_Atlas_Transparente.UI_PSX_Atlas_Transparente"));
-		if (!Atlas) return false;
+		UTexture2D* QuotaTextTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/ChopIt/Art/UI/T_QuotaTextContainer.T_QuotaTextContainer"));
+		UTexture2D* HealthBackdropTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/ChopIt/Art/UI/T_HealthBackdrop.T_HealthBackdrop"));
+		if (!Atlas || !QuotaTextTexture || !HealthBackdropTexture) return false;
 
 		auto Place = [Root](UWidget* Widget, FVector2D Pos, FVector2D Size, FVector2D Anchor, FVector2D Align, int32 Z)
 		{
@@ -155,6 +191,14 @@ namespace ChopItBootstrap
 			FSlateFontInfo Font = W->GetFont(); Font.Size = FontSize; W->SetFont(Font); W->SetShadowOffset(FVector2D(2)); W->SetShadowColorAndOpacity(FLinearColor(0,0,0,.9f));
 			Place(W, Pos, Size, Anchor, Align, 5);
 		};
+		auto ExternalImage = [&](const TCHAR* Name, UTexture2D* Texture, FVector2D Pos, FVector2D Size, FCrop Crop, FVector2D SourceSize, int32 Z)
+		{
+			UImage* W = NewObject<UImage>(Blueprint->WidgetTree, Name, RF_Transactional);
+			Blueprint->WidgetVariableNameToGuidMap.FindOrAdd(Name) = FGuid::NewGuid();
+			FSlateBrush Brush; Brush.SetResourceObject(Texture); Brush.DrawAs = ESlateBrushDrawType::Image; Brush.ImageSize = FVector2f(Size);
+			Brush.SetUVRegion(FBox2f(FVector2f(Crop.X / SourceSize.X, Crop.Y / SourceSize.Y), FVector2f((Crop.X + Crop.Width) / SourceSize.X, (Crop.Y + Crop.Height) / SourceSize.Y)));
+			W->SetBrush(Brush); Place(W, Pos, Size, FVector2D::ZeroVector, FVector2D::ZeroVector, Z);
+		};
 		auto Bar = [&](const TCHAR* Name, FVector2D Pos, FVector2D Size, FLinearColor Fill, float Value, FVector2D Anchor = FVector2D::ZeroVector, FVector2D Align = FVector2D::ZeroVector)
 		{
 			UProgressBar* W = NewObject<UProgressBar>(Blueprint->WidgetTree, Name, RF_Transactional);
@@ -163,23 +207,24 @@ namespace ChopItBootstrap
 		};
 
 		// Frame and fill use separate atlas sprites so they remain independently editable in UMG.
+		ExternalImage(TEXT("HealthBackdrop"), HealthBackdropTexture, {14,23}, {382,54}, {364,312,1351,119}, {2078,757}, -1);
 		Image(TEXT("HealthFrame"), {20,18}, {370,72}, {80,175,790,72});
 		Image(TEXT("HeartIcon"), {34,29}, {54,50}, {947,180,92,102}, {}, {}, 2);
-		Image(TEXT("HealthFill"), {93,40}, {200,25}, {99,255,747,35}, {}, {}, 3); Text(TEXT("HealthText"), TEXT("80 / 100"), {282,34}, {96,38}, 21);
+		Image(TEXT("HealthFill"), {93,40}, {180,25}, {99,255,747,35}, {}, {}, 3); Text(TEXT("HealthText"), TEXT("80 / 100"), {282,34}, {96,38}, 21);
 		Image(TEXT("QuotaLog"), {20,103}, {310,70}, {82,320,790,115});
 		// Designer preview starts full-width; ChopItHUD resizes it to the live quota fraction at runtime.
 		Image(TEXT("QuotaFill"), {40,120}, {245,35}, {905,325,775,110}, {}, {}, 3);
-		Image(TEXT("QuotaLabelFrame"), {72,160}, {210,42}, {162,442,438,62}, {}, {}, 2); Text(TEXT("QuotaText"), TEXT("CUOTA   120 / 200"), {72,163}, {210,36}, 18);
+		ExternalImage(TEXT("QuotaTextContainer"), QuotaTextTexture, {72,160}, {210,42}, {134,206,1813,301}, {2079,756}, 2); Text(TEXT("QuotaText"), TEXT("QUOTA   120 / 200"), {72,163}, {210,36}, 18);
 		Image(TEXT("CargoFrame"), {20,212}, {190,64}, {839,541,375,100}); Image(TEXT("CargoIcon"), {28,217}, {58,54}, {160,691,175,180}, {}, {}, 2); Text(TEXT("WoodText"), TEXT("12 / 24"), {88,225}, {112,38}, 21);
 		Image(TEXT("MoneyFrame"), {20,286}, {190,64}, {1294,541,398,100}); Image(TEXT("MoneyIcon"), {31,295}, {70,44}, {438,719,205,117}, {}, {}, 2); Text(TEXT("MoneyText"), TEXT("$ 125"), {98,299}, {102,38}, 21);
 		Image(TEXT("ClockFrame"), {0,18}, {230,84}, {1074,188,230,88}, {.5f,0}, {.5f,0}); Image(TEXT("SunIcon"), {-96,30}, {58,58}, {777,691,178,177}, {.5f,0}, {.5f,0}, 2);
-		Text(TEXT("TimeText"), TEXT("02:35"), {-30,25}, {118,39}, 27, {.5f,0}, {.5f,0}); Text(TEXT("DayText"), TEXT("DIA 1"), {-30,61}, {118,28}, 16, {.5f,0}, {.5f,0});
-		Image(TEXT("MissionFrame"), {-22,22}, {340,178}, {80,512,685,160}, {1,0}, {1,0}); Text(TEXT("MissionHeader"), TEXT("MISIONES"), {-315,34}, {270,34}, 19, {1,0}, {}, ETextJustify::Left);
-		Text(TEXT("MissionTitle"), TEXT("Alimenta al Horno"), {-315,79}, {270,34}, 23, {1,0}, {}, ETextJustify::Left); Text(TEXT("MissionDescription"), TEXT("Entrega la cuota de madera\nAntes de que termine el dia"), {-315,115}, {275,64}, 16, {1,0}, {}, ETextJustify::Left);
+		Text(TEXT("TimeText"), TEXT("02:35"), {-30,25}, {118,39}, 27, {.5f,0}, {.5f,0}); Text(TEXT("DayText"), TEXT("DAY 1"), {-30,61}, {118,28}, 16, {.5f,0}, {.5f,0});
+		Image(TEXT("MissionFrame"), {-22,22}, {340,178}, {80,512,685,160}, {1,0}, {1,0}); Text(TEXT("MissionHeader"), TEXT("MISSIONS"), {-315,34}, {270,34}, 19, {1,0}, {}, ETextJustify::Left);
+		Text(TEXT("MissionTitle"), TEXT("Feed the Furnace"), {-315,79}, {270,34}, 23, {1,0}, {}, ETextJustify::Left); Text(TEXT("MissionDescription"), TEXT("Deliver the wood quota\nBefore the day ends"), {-315,115}, {275,64}, 16, {1,0}, {}, ETextJustify::Left);
 		Image(TEXT("XPFrame"), {0,-65}, {1540,54}, {80,28,1615,71}, {.5f,1}, {.5f,1});
 		// Uses the dedicated green atlas sprite; runtime only changes its width.
 		Image(TEXT("XPFill"), {-650,-78}, {1300,29}, {284,113,1365,35}, {.5f,1}, {0,1}, 3);
-		Image(TEXT("LevelFrame"), {0,-72}, {160,60}, {839,541,375,100}, {.5f,1}, {.5f,1}, 4); Text(TEXT("LevelText"), TEXT("NIVEL 3"), {0,-61}, {150,38}, 22, {.5f,1}, {.5f,1}); Text(TEXT("XPText"), TEXT("XP 40 / 100"), {-745,-53}, {160,34}, 16, {.5f,1}, {.5f,1});
+		Image(TEXT("LevelFrame"), {0,-72}, {160,60}, {839,541,375,100}, {.5f,1}, {.5f,1}, 4); Text(TEXT("LevelText"), TEXT("LEVEL 3"), {0,-61}, {150,38}, 22, {.5f,1}, {.5f,1}); Text(TEXT("XPText"), TEXT("XP 40 / 100"), {-745,-53}, {160,34}, 16, {.5f,1}, {.5f,1});
 
 		FKismetEditorUtilities::CompileBlueprint(Blueprint);
 		Package->MarkPackageDirty();
@@ -198,6 +243,7 @@ namespace ChopItBootstrap
 	constexpr TCHAR EnemyMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Enemies");
 	constexpr TCHAR ChainLabMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_ChainLab");
 	constexpr TCHAR DialogueMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Dialogue");
+	constexpr TCHAR PSXTestMap[] = TEXT("/Game/ChopIt/World/Maps/L_PSX_test");
 	constexpr TCHAR MoveActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Move");
 	constexpr TCHAR InteractActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Interact");
 	constexpr TCHAR CameraLookActionPackage[] = TEXT("/Game/ChopIt/Input/IA_CameraLook");
@@ -378,8 +424,15 @@ UChopItBootstrapCommandlet::UChopItBootstrapCommandlet()
 	ShowErrorCount = true;
 }
 
+extern bool InstallUIJuiceAnimations();
 int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 {
+	if (FParse::Param(*Params, TEXT("EnglishPSXHUD")))
+		return ChopItBootstrap::LocalizePSXHUDToEnglish() ? 0 : 1;
+	// Targeted repair must not run asset generation or touch the user's HUD.
+	if (FParse::Param(*Params, TEXT("RepairPSXNavigation")))
+		return RebuildNavigationData(TEXT("/Game/ChopIt/World/Maps/L_PSX_test")) ? 0 : 1;
+	if (FParse::Param(*Params, TEXT("UIJuiceAnimations"))) return InstallUIJuiceAnimations() ? 0 : 1;
 	const TArray<FString> RequiredMaps =
 	{
 		ChopItBootstrap::StartupMap,
@@ -473,6 +526,11 @@ if (FParse::Param(*Params, TEXT("Dialogue")) && !CreateDialogueAssets())
 if (FParse::Param(*Params, TEXT("DeliveryZones")) && !PlaceDeliveryZonesInStartupMap())
 {
 	UE_LOG(LogChopIt, Error, TEXT("Failed to place Startup delivery zones."));
+	return 1;
+}
+if (FParse::Param(*Params, TEXT("PSXWoodZone")) && !PlacePSXWoodGrantZone())
+{
+	UE_LOG(LogChopIt, Error, TEXT("Failed to place the PSX +50 wood zone."));
 	return 1;
 }
 if (FParse::Param(*Params, TEXT("StartupChainObstacles")) && !PlaceChainObstaclesInStartupMap())
@@ -1271,6 +1329,59 @@ bool UChopItBootstrapCommandlet::PlaceDeliveryZonesInStartupMap() const
 	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, ChopItBootstrap::StartupMap);
 	UE_LOG(LogChopIt, Display, TEXT("Startup delivery and 200-log test zones placed: %s"),
 		bSaved ? TEXT("OK") : TEXT("FAILED"));
+	return bSaved;
+}
+
+bool UChopItBootstrapCommandlet::PlacePSXWoodGrantZone() const
+{
+	if (!FPackageName::DoesPackageExist(ChopItBootstrap::PSXTestMap))
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Cannot place the wood zone; L_PSX_test does not exist."));
+		return false;
+	}
+
+	UWorld* World = UEditorLoadingAndSavingUtils::LoadMap(ChopItBootstrap::PSXTestMap);
+	if (!IsValid(World))
+	{
+		UE_LOG(LogChopIt, Error, TEXT("Could not load L_PSX_test to place the wood zone."));
+		return false;
+	}
+
+	APlayerStart* PlayerStart = nullptr;
+	for (TActorIterator<APlayerStart> It(World); It; ++It)
+	{
+		PlayerStart = *It;
+		break;
+	}
+	const FVector StartLocation = PlayerStart ? PlayerStart->GetActorLocation() : FVector::ZeroVector;
+	const FVector ZoneLocation = StartLocation + FVector(450.0f, 0.0f, 15.0f);
+
+	AChopItWoodGrantZone* GrantZone = nullptr;
+	for (TActorIterator<AChopItWoodGrantZone> It(World); It; ++It)
+	{
+		if (It->ActorHasTag(TEXT("PSXWoodGrant50")))
+		{
+			GrantZone = *It;
+			break;
+		}
+	}
+	if (!GrantZone)
+	{
+		FActorSpawnParameters Parameters;
+		Parameters.Name = TEXT("PSXWoodGrantZone_50");
+		Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		GrantZone = World->SpawnActor<AChopItWoodGrantZone>(ZoneLocation, FRotator::ZeroRotator, Parameters);
+	}
+	if (!GrantZone) return false;
+
+	GrantZone->Tags.AddUnique(TEXT("PSXWoodGrant50"));
+	GrantZone->ConfigureAutomaticGrant(50);
+	GrantZone->SetActorLocationAndRotation(ZoneLocation, FRotator::ZeroRotator);
+	GrantZone->SetActorLabel(TEXT("WOOD +50 — STEP HERE"));
+
+	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, ChopItBootstrap::PSXTestMap);
+	UE_LOG(LogChopIt, Display, TEXT("PSX +50 wood zone placed at %s: %s"),
+		*ZoneLocation.ToCompactString(), bSaved ? TEXT("OK") : TEXT("FAILED"));
 	return bSaved;
 }
 
@@ -2312,6 +2423,19 @@ bool UChopItBootstrapCommandlet::RebuildNavigationData(const FString& LongPackag
 		return false;
 	}
 
+	for (TActorIterator<ANavMeshBoundsVolume> It(World); It; ++It)
+	{
+		ANavMeshBoundsVolume* Bounds = *It;
+		if (Bounds->GetComponentsBoundingBox(true).GetExtent().GetMin() > 1.f) continue;
+		const FTransform OriginalTransform = Bounds->GetActorTransform();
+		UCubeBuilder* Builder = NewObject<UCubeBuilder>();
+		Builder->X = Builder->Y = Builder->Z = 200.f;
+		UActorFactory::CreateBrushForVolumeActor(Bounds, Builder);
+		Bounds->SetActorTransform(OriginalTransform);
+		Bounds->PostEditChange();
+		UE_LOG(LogChopIt, Display, TEXT("Repaired empty nav volume %s: %s"),
+			*Bounds->GetName(), *Bounds->GetComponentsBoundingBox(true).ToString());
+	}
 	FStaticMeshCompilingManager::Get().FinishAllCompilation();
 	FNavigationSystem::AddNavigationSystemToWorld(*World, FNavigationSystemRunMode::EditorMode);
 	UNavigationSystemV1* NavigationSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
@@ -2324,12 +2448,14 @@ bool UChopItBootstrapCommandlet::RebuildNavigationData(const FString& LongPackag
 		ENavigationBuildLock::AsyncLoadLock,
 		UNavigationSystemV1::ELockRemovalRebuildAction::NoRebuild);
 	FNavigationSystem::Build(*World);
-	if (!NavigationSystem->GetDefaultNavDataInstance(FNavigationSystem::DontCreate))
+	const ARecastNavMesh* NavMesh = Cast<ARecastNavMesh>(NavigationSystem->GetDefaultNavDataInstance(FNavigationSystem::DontCreate));
+	if (!NavMesh || NavMesh->GetNumActiveTiles() == 0)
 	{
 		UE_LOG(LogChopIt, Error, TEXT("Navigation build produced no navigation data for %s"), *LongPackageName);
 		return false;
 	}
 	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, LongPackageName);
+	UE_LOG(LogChopIt, Display, TEXT("Navigation validation: %d active tiles"), NavMesh->GetNumActiveTiles());
 	UE_LOG(LogChopIt, Display, TEXT("Rebuilt navigation for %s: %s"), *LongPackageName, bSaved ? TEXT("OK") : TEXT("FAILED"));
 	return bSaved;
 }

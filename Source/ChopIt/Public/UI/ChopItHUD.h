@@ -47,4 +47,5 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> PSXHUDWidget;
+	TMap<FName, float> PSXFillDesignWidths;
 };

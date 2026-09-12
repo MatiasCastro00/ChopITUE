@@ -25,6 +25,7 @@ struct CHOPITWORLD_API FChopItQuotaTransferResult
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FChopItQuotaChanged, int32, Progress, int32, Target, bool, bComplete);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FChopItDeliveryConfirmed, int32, Units);
 
 /** Authoritative, integer and idempotent daily quota state. */
 UCLASS(ClassGroup = (ChopIt), BlueprintType, meta = (BlueprintSpawnableComponent))
@@ -49,6 +50,8 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "ChopIt|Quota")
 	FChopItQuotaChanged OnQuotaChanged;
+	UPROPERTY(BlueprintAssignable, Category = "ChopIt|Quota")
+	FChopItDeliveryConfirmed OnDeliveryConfirmed;
 
 private:
 	UPROPERTY(VisibleInstanceOnly, Category = "ChopIt|Quota")

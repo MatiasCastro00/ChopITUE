@@ -52,6 +52,7 @@ void AChopItWoodGrantZone::BeginPlay()
 
 bool AChopItWoodGrantZone::CanInteract_Implementation(AActor* Interactor) const
 {
+	if (bGrantOnOverlap) return false;
 	const UChopItWoodCargoComponent* Cargo = Interactor
 		? Interactor->FindComponentByClass<UChopItWoodCargoComponent>() : nullptr;
 	return Cargo && Cargo == NearbyCargo.Get() && Cargo->GetCurrentWood() < TargetWood;
@@ -61,10 +62,24 @@ bool AChopItWoodGrantZone::Interact_Implementation(AActor* Interactor)
 {
 	if (!CanInteract_Implementation(Interactor)) return false;
 	UChopItWoodCargoComponent* Cargo = Interactor->FindComponentByClass<UChopItWoodCargoComponent>();
-	const int32 Needed = FMath::Max(0, TargetWood - Cargo->GetCurrentWood());
-	const bool bGranted = Cargo->GrantWoodForTesting(Needed).Transferred == Needed;
+	const bool bGranted = GrantWood(Cargo);
 	RefreshPrompt();
 	return bGranted;
+}
+
+void AChopItWoodGrantZone::ConfigureAutomaticGrant(const int32 InGrantAmount)
+{
+	bGrantOnOverlap = true;
+	GrantAmount = FMath::Max(1, InGrantAmount);
+}
+
+bool AChopItWoodGrantZone::GrantWood(UChopItWoodCargoComponent* Cargo)
+{
+	if (!Cargo) return false;
+	const int32 Requested = bGrantOnOverlap
+		? GrantAmount
+		: FMath::Max(0, TargetWood - Cargo->GetCurrentWood());
+	return Requested > 0 && Cargo->GrantWoodForTesting(Requested).Transferred == Requested;
 }
 
 void AChopItWoodGrantZone::HandleBeginOverlap(
@@ -76,6 +91,10 @@ void AChopItWoodGrantZone::HandleBeginOverlap(
 		NearbyCargo = Cargo;
 		ZoneLabel->SetVisibility(true, true);
 		ZoneLabel->SetHiddenInGame(false, true);
+		if (bGrantOnOverlap)
+		{
+			GrantWood(Cargo);
+		}
 		RefreshPrompt();
 	}
 }
@@ -93,6 +112,12 @@ void AChopItWoodGrantZone::HandleEndOverlap(UPrimitiveComponent*, AActor* OtherA
 void AChopItWoodGrantZone::RefreshPrompt()
 {
 	if (!NearbyCargo.IsValid()) return;
+	if (bGrantOnOverlap)
+	{
+		ZoneLabel->SetText(FText::FromString(FString::Printf(TEXT("+%d WOOD"), GrantAmount)));
+		ZoneLabel->SetTextRenderColor(FColor::Green);
+		return;
+	}
 	if (NearbyCargo->GetCurrentWood() >= TargetWood)
 	{
 		ZoneLabel->SetText(FText::FromString(TEXT("TEST READY: 200 LOGS")));

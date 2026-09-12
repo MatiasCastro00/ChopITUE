@@ -11,6 +11,7 @@ FChopItWoodTransferResult UChopItWoodCargoComponent::TryAddWood(const int32 Requ
 	Result.Requested = FMath::Max(0, RequestedUnits);
 	Result.Transferred = FMath::Min(Result.Requested, GetAvailableCapacity());
 	Result.Remainder = Result.Requested - Result.Transferred;
+	if (Result.Requested > 0 && Result.Transferred == 0) OnPickupRejected.Broadcast(Result.Requested);
 	if (Result.Transferred > 0)
 	{
 		CurrentWood += Result.Transferred;

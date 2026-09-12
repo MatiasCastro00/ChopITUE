@@ -22,6 +22,7 @@ public:
 	virtual bool Interact_Implementation(AActor* Interactor) override;
 	USphereComponent* GetGrantSphere() const { return GrantSphere; }
 	int32 GetTargetWood() const { return TargetWood; }
+	void ConfigureAutomaticGrant(int32 InGrantAmount);
 
 private:
 	UFUNCTION()
@@ -41,6 +42,7 @@ private:
 		int32 OtherBodyIndex);
 
 	void RefreshPrompt();
+	bool GrantWood(UChopItWoodCargoComponent* Cargo);
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Testing")
 	TObjectPtr<USphereComponent> GrantSphere;
@@ -53,6 +55,13 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "ChopIt|Testing", meta = (ClampMin = "1"))
 	int32 TargetWood = 200;
+
+	/** When enabled, entering the zone grants GrantAmount instead of requiring interaction. */
+	UPROPERTY(EditAnywhere, Category = "ChopIt|Testing")
+	bool bGrantOnOverlap = false;
+
+	UPROPERTY(EditAnywhere, Category = "ChopIt|Testing", meta = (ClampMin = "1", EditCondition = "bGrantOnOverlap"))
+	int32 GrantAmount = 50;
 
 	TWeakObjectPtr<UChopItWoodCargoComponent> NearbyCargo;
 };

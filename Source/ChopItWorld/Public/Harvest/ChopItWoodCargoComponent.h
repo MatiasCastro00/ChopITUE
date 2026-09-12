@@ -19,6 +19,7 @@ struct CHOPITWORLD_API FChopItWoodTransferResult
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FChopItWoodCargoChanged, int32, CurrentWood, int32, Capacity);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FChopItWoodRejected, int32, Units);
 
 UCLASS(ClassGroup = (ChopIt), BlueprintType, meta = (BlueprintSpawnableComponent))
 class CHOPITWORLD_API UChopItWoodCargoComponent final : public UActorComponent
@@ -47,6 +48,8 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "ChopIt|Wood")
 	FChopItWoodCargoChanged OnCargoChanged;
+	UPROPERTY(BlueprintAssignable, Category = "ChopIt|Wood")
+	FChopItWoodRejected OnPickupRejected;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "ChopIt|Wood", meta = (ClampMin = "0"))

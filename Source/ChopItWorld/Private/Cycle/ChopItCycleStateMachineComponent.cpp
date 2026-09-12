@@ -238,7 +238,7 @@ void UChopItCycleStateMachineComponent::EnterCurrentPhase()
 	{
 		FTimerDelegate Callback = FTimerDelegate::CreateWeakLambda(this, [this, IsCurrent]()
 		{
-			if (IsCurrent()) { TransitionTo(EChopItCyclePhase::Dusk); }
+			if (IsCurrent()) { OnClockChanged.Broadcast(CurrentPhase, 0.f); TransitionTo(EChopItCyclePhase::Dusk); }
 		});
 		World->GetTimerManager().SetTimer(PhaseTimerHandle, Callback, Timings.DayDuration, false);
 		break;
@@ -261,6 +261,7 @@ void UChopItCycleStateMachineComponent::EnterCurrentPhase()
 			if (!IsCurrent()) { return; }
 			const UChopItQuotaComponent* Quota = ResolveQuota();
 			const EChopItCyclePhase DeadlineResult = ResolveDuskDeadline(Quota && Quota->IsComplete());
+			OnClockChanged.Broadcast(CurrentPhase, 0.f);
 			TransitionTo(DeadlineResult);
 		});
 		World->GetTimerManager().SetTimer(DeadlineTimerHandle, DeadlineCallback, Timings.DuskHardDeadline, false);

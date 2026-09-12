@@ -29,6 +29,7 @@ public class ChopItEditor : ModuleRules
 			"NavigationSystem",
 			"UnrealEd",
 			"UMG",
+			"MovieScene", "MovieSceneTracks",
 			"UMGEditor",
 			"Slate",
 			"SlateCore",

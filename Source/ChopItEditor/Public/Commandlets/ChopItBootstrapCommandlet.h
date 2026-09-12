@@ -29,6 +29,7 @@ private:
 	bool CreateDialogueAssets() const;
 	bool PlaceDeathInStartupMap() const;
 	bool PlaceDeliveryZonesInStartupMap() const;
+	bool PlacePSXWoodGrantZone() const;
 	bool PlaceChainObstaclesInStartupMap() const;
 	bool CreateEnemyAssets() const;
 	bool CreateProgressionAssets() const;

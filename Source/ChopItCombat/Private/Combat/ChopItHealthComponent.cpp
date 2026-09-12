@@ -58,6 +58,7 @@ void UChopItHealthComponent::ResetHealth()
 {
 	CurrentHealth = FMath::Max(1.0f, MaxHealth);
 	bDeathBroadcast = false;
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, nullptr);
 }
 
 void UChopItHealthComponent::SetMaxHealth(const float NewMaxHealth)
