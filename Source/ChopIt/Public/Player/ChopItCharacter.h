@@ -19,6 +19,8 @@ class UTextRenderComponent;
 class UChopItHitFeedbackComponent;
 class UChopItAttackFeedbackComponent;
 class UChopItTetherReceiverComponent;
+class UAnimSequence;
+class UMaterialInstanceDynamic;
 
 /** Camera-relative top-down character used by the gameplay sandbox. */
 UCLASS(Blueprintable)
@@ -28,6 +30,7 @@ class CHOPIT_API AChopItCharacter : public ACharacter
 
 public:
 	AChopItCharacter();
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	static FVector2D NormalizeMovementInput(const FVector2D& Input);
 
@@ -76,6 +79,7 @@ private:
 
 	void RefreshEconomyDebugLabel();
 	void RefreshMovementStats();
+	void RefreshCharacterAnimation();
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Camera")
 	TObjectPtr<UChopItCameraComponent> CameraComponent;
@@ -135,4 +139,19 @@ private:
 	TObjectPtr<UInputAction> CameraResetAction;
 
 	float BaseWalkSpeed = 650.0f;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequence> IdleAnimation;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequence> WalkAnimation;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequence> JumpAnimation;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequence> ActiveAnimation;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> LumberjackOutlineInstance;
 };

@@ -1,4 +1,10 @@
 #include "UI/ChopItHUD.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/ProgressBar.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/Image.h"
+#include "Components/TextBlock.h"
 
 #include "Cycle/ChopItCycleStateMachineComponent.h"
 #include "Cycle/ChopItRunStateComponent.h"
@@ -56,6 +62,12 @@ namespace ChopItHUD
 void AChopItHUD::BeginPlay()
 {
 	Super::BeginPlay();
+	static const TCHAR* WidgetPath = TEXT("/Game/ChopIt/UI/WBP_PSX_HUD.WBP_PSX_HUD_C");
+	if (const TSubclassOf<UUserWidget> WidgetClass = LoadClass<UUserWidget>(nullptr, WidgetPath))
+	{
+		PSXHUDWidget = CreateWidget<UUserWidget>(PlayerOwner, WidgetClass);
+		if (PSXHUDWidget) PSXHUDWidget->AddToViewport(0);
+	}
 	// Development maps have no authored introduction, so their objective card
 	// is available immediately. L_Startup reveals it on the QuestStart cue.
 	if (!GetWorld() || !GetWorld()->GetMapName().Contains(TEXT("L_Startup")))
@@ -83,8 +95,12 @@ void AChopItHUD::DrawHUD()
 	// Keep the HUD comfortably readable at common 720p/768p window sizes. Layout
 	// still scales up with the viewport, but it never shrinks into debug-text size.
 	const float Scale = FMath::Clamp(FMath::Min(Canvas->SizeX / 1920.0f, Canvas->SizeY / 1080.0f), 0.80f, 1.5f);
-	DrawPersistentHUD(Scale);
-	DrawMissionTracker(Scale);
+	RefreshPSXWidget();
+	if (!PSXHUDWidget)
+	{
+		DrawPersistentHUD(Scale);
+		DrawMissionTracker(Scale);
+	}
 
 	const APlayerState* State = PlayerOwner->PlayerState;
 	const AChopItGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr;
@@ -114,6 +130,49 @@ void AChopItHUD::DrawHUD()
 	{
 		DrawShopOverlay(Scale, Shop->GetActiveOffers());
 	}
+}
+
+void AChopItHUD::RefreshPSXWidget()
+{
+	if (!PSXHUDWidget || !PSXHUDWidget->WidgetTree || !PlayerOwner) return;
+	auto Text = [this](const TCHAR* Name) { return Cast<UTextBlock>(PSXHUDWidget->WidgetTree->FindWidget(Name)); };
+	auto ImageFill = [this](const TCHAR* Name, const float Fraction, const float FullWidth)
+	{
+		if (UImage* Image = Cast<UImage>(PSXHUDWidget->WidgetTree->FindWidget(Name)))
+		{
+			if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Image->Slot))
+			{
+				const FVector2D CurrentSize = Slot->GetSize();
+				Slot->SetSize(FVector2D(FullWidth * FMath::Clamp(Fraction, 0.f, 1.f), CurrentSize.Y));
+			}
+		}
+	};
+	const AChopItGameState* GS = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr;
+	const APlayerState* PS = PlayerOwner->PlayerState;
+	const AChopItCharacter* Character = Cast<AChopItCharacter>(PlayerOwner->GetPawn());
+	if (!GS || !PS || !Character) return;
+	const UChopItHealthComponent* Health = Character->GetHealthComponent();
+	const UChopItWoodCargoComponent* Cargo = Character->GetWoodCargoComponent();
+	const UChopItRunStateComponent* Run = GS->GetRunStateComponent();
+	const UChopItCycleStateMachineComponent* Cycle = GS->GetCycleStateMachine();
+	const UChopItQuotaComponent* Quota = GS->GetQuotaComponent();
+	const UChopItExperienceComponent* XP = PS->FindComponentByClass<UChopItExperienceComponent>();
+	const UChopItEconomyComponent* Economy = PS->FindComponentByClass<UChopItEconomyComponent>();
+	const float HP = Health ? Health->GetCurrentHealth() : 0.f, MaxHP = Health ? Health->GetMaxHealth() : 1.f;
+	if (UTextBlock* W = Text(TEXT("HealthText"))) W->SetText(FText::FromString(FString::Printf(TEXT("%.0f / %.0f"), HP, MaxHP)));
+	ImageFill(TEXT("HealthFill"), HP / FMath::Max(1.f, MaxHP), 250.f);
+	const int32 Q = Quota ? Quota->GetProgress() : 0, QMax = Quota ? Quota->GetTarget() : 1;
+	if (UTextBlock* W = Text(TEXT("QuotaText"))) W->SetText(FText::FromString(FString::Printf(TEXT("CUOTA   %d / %d"), Q, QMax)));
+	ImageFill(TEXT("QuotaFill"), static_cast<float>(Q) / FMath::Max(1, QMax), 245.f);
+	if (UTextBlock* W = Text(TEXT("WoodText"))) W->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), Cargo ? Cargo->GetCurrentWood() : 0, Cargo ? Cargo->GetCapacity() : 0)));
+	if (UTextBlock* W = Text(TEXT("MoneyText"))) W->SetText(FText::FromString(FString::Printf(TEXT("$ %lld"), Economy ? Economy->GetBalance() : 0)));
+	const int32 Level = XP ? XP->GetLevel() : 1, XPNow = XP ? XP->GetCurrentExperience() : 0, XPMax = XP ? XP->GetRequiredExperience() : 1;
+	if (UTextBlock* W = Text(TEXT("LevelText"))) W->SetText(FText::FromString(FString::Printf(TEXT("NIVEL %d"), Level)));
+	if (UTextBlock* W = Text(TEXT("XPText"))) W->SetText(FText::FromString(FString::Printf(TEXT("XP %d / %d"), XPNow, XPMax)));
+	ImageFill(TEXT("XPFill"), static_cast<float>(XPNow) / FMath::Max(1, XPMax), 1300.f);
+	const int32 Seconds = FMath::Max(0, FMath::RoundToInt(Cycle ? Cycle->GetPhaseRemaining() : 0.f));
+	if (UTextBlock* W = Text(TEXT("TimeText"))) W->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), Seconds / 60, Seconds % 60)));
+	if (UTextBlock* W = Text(TEXT("DayText"))) W->SetText(FText::FromString(FString::Printf(TEXT("DIA %d"), Run ? Run->GetDayNumber() : 1)));
 }
 
 void AChopItHUD::DrawMissionTracker(const float Scale)

@@ -1,5 +1,7 @@
 #include "Camera/ChopItCameraComponent.h"
+#include "Animation/AnimSequence.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "GameFramework/WorldSettings.h"
@@ -44,7 +46,9 @@ bool FChopItPhase1GameplayFrameworkTest::RunTest(const FString& Parameters)
 	{
 		TestNotNull(TEXT("Gameplay Cameras host exists"), Character->GetChopItCamera());
 		TestNotNull(TEXT("Interaction seam exists"), Character->GetInteractionComponent());
-		TestFalse(TEXT("Character has no actor Tick"), Character->PrimaryActorTick.bCanEverTick);
+		TestTrue(TEXT("Character ticks to update locomotion animation"), Character->PrimaryActorTick.bCanEverTick);
+		TestNotNull(TEXT("Character uses the lumberjack skeletal mesh"), Character->GetMesh()->GetSkeletalMeshAsset());
+		TestNotNull(TEXT("Character uses the PSX outline overlay"), Character->GetMesh()->GetOverlayMaterial());
 		TestFalse(TEXT("Character is not snapped into the ground plane"), Character->GetCharacterMovement()->bConstrainToPlane);
 		TestEqual(TEXT("Character uses normal gravity"), Character->GetCharacterMovement()->GravityScale, 1.0f);
 		TestEqual(TEXT("Character lands in walking mode"), Character->GetCharacterMovement()->DefaultLandMovementMode, MOVE_Walking);
@@ -52,6 +56,16 @@ bool FChopItPhase1GameplayFrameworkTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Default pitch"), Character->GetChopItCamera()->GetGameplayView().Pitch, -32.0f);
 		TestEqual(TEXT("Default camera distance"), Character->GetChopItCamera()->GetGameplayView().Distance, 850.0f);
 	}
+
+	TestNotNull(
+		TEXT("Lumberjack idle animation exists"),
+		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Idle_Respiracion_96.LumberJackCTRL_COG_Idle_Respiracion_96")));
+	TestNotNull(
+		TEXT("Lumberjack run animation exists"),
+		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Run_Heavy_650_14.LumberJackCTRL_COG_Run_Heavy_650_14")));
+	TestNotNull(
+		TEXT("Lumberjack jump animation exists"),
+		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Jump_Quick_24.LumberJackCTRL_COG_Jump_Quick_24")));
 
 	TestEqual(TEXT("Unit input remains unit input"), AChopItCharacter::NormalizeMovementInput(FVector2D(0.0, 1.0)), FVector2D(0.0, 1.0));
 	const FVector2D Diagonal = AChopItCharacter::NormalizeMovementInput(FVector2D(1.0, 1.0));

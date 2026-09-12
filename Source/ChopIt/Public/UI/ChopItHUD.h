@@ -6,6 +6,7 @@
 class UChopItUpgradeDefinition;
 class UChopItWeaponDefinition;
 class UChopItPactDefinition;
+class UUserWidget;
 
 /** Screen-space presentation for run state and level-up choices. It owns no gameplay rules. */
 UCLASS()
@@ -28,6 +29,7 @@ private:
 	void DrawPactOverlay(float Scale, const TArray<TObjectPtr<UChopItPactDefinition>>& Offers, int32 Curse);
 	void DrawDefeatOverlay(float Scale);
 	void DrawVictoryOverlay(float Scale);
+	void RefreshPSXWidget();
 	void DrawPanel(float X, float Y, float Width, float Height, const FLinearColor& Fill, const FLinearColor& Border, float BorderSize = 3.0f);
 	void DrawBar(float X, float Y, float Width, float Height, float Fraction, const FLinearColor& Fill, const FLinearColor& Back);
 	void DrawLabel(const FString& Text, float X, float Y, const FLinearColor& Color, float TextScale = 1.0f, bool bLarge = false);
@@ -42,4 +44,7 @@ private:
 	double MissionRevealTime = 0.0;
 	double MissionUpdateTime = -1000.0;
 	double MissionCompletionTime = -1000.0;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UUserWidget> PSXHUDWidget;
 };

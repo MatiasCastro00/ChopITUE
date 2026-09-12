@@ -1,5 +1,6 @@
 #include "Player/ChopItCharacter.h"
 
+#include "Animation/AnimSequence.h"
 #include "Camera/ChopItCameraComponent.h"
 #include "ChopItCollision.h"
 #include "ChopItLogChannels.h"
@@ -7,6 +8,7 @@
 #include "Combat/ChopItHealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/ChopItCameraFacingTextComponent.h"
 #include "Cycle/ChopItCycleStateMachineComponent.h"
@@ -15,6 +17,7 @@
 #include "Economy/ChopItCabinHub.h"
 #include "Economy/ChopItQuotaComponent.h"
 #include "Economy/ChopItTetherReceiverComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
@@ -26,6 +29,7 @@
 #include "Feedback/ChopItHitFeedbackComponent.h"
 #include "Feedback/ChopItAttackFeedbackComponent.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Progression/ChopItExperienceComponent.h"
 #include "Progression/ChopItUpgradeDefinition.h"
 #include "Progression/ChopItUpgradeOfferComponent.h"
@@ -35,7 +39,7 @@
 
 AChopItCharacter::AChopItCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 
 	GetCapsuleComponent()->InitCapsuleSize(42.0f, 88.0f);
 	GetCapsuleComponent()->SetCollisionProfileName(ChopItCollisionProfiles::Player);
@@ -83,11 +87,50 @@ AChopItCharacter::AChopItCharacter()
 	{
 		FacingMarker->SetStaticMesh(ConeMesh.Object);
 	}
+
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> LumberjackMesh(
+		TEXT("/Game/ChopIt/Art/Character/Updated/c85471db_c635_45fc_bae4_6171d60be24f.c85471db_c635_45fc_bae4_6171d60be24f"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> LumberjackIdle(
+		TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Idle_Respiracion_96.LumberJackCTRL_COG_Idle_Respiracion_96"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> LumberjackWalk(
+		TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Run_Heavy_650_14.LumberJackCTRL_COG_Run_Heavy_650_14"));
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> LumberjackJump(
+		TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Jump_Quick_24.LumberJackCTRL_COG_Jump_Quick_24"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LumberjackMaterial(
+		TEXT("/Game/ChopIt/Art/Character/M_Lumberjack.M_Lumberjack"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LumberjackOutlineMaterial(
+		TEXT("/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
+	if (LumberjackMesh.Succeeded())
+	{
+		USkeletalMeshComponent* CharacterMesh = GetMesh();
+		CharacterMesh->SetSkeletalMeshAsset(LumberjackMesh.Object);
+		CharacterMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		CharacterMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -88.0f));
+		CharacterMesh->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+		CharacterMesh->SetRelativeScale3D(FVector(1.65f));
+		CharacterMesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+		if (LumberjackMaterial.Succeeded())
+		{
+			CharacterMesh->SetMaterial(0, LumberjackMaterial.Object);
+		}
+		if (LumberjackOutlineMaterial.Succeeded())
+		{
+			CharacterMesh->SetOverlayMaterial(LumberjackOutlineMaterial.Object);
+		}
+		BodyVisual->SetVisibility(false);
+		FacingMarker->SetVisibility(false);
+	}
+	IdleAnimation = LumberjackIdle.Object;
+	WalkAnimation = LumberjackWalk.Object;
+	JumpAnimation = LumberjackJump.Object;
 	InteractionComponent = CreateDefaultSubobject<UChopItInteractionComponent>(TEXT("InteractionComponent"));
 	CombatStatsComponent = CreateDefaultSubobject<UChopItCombatStatsComponent>(TEXT("CombatStatsComponent"));
 	HealthComponent = CreateDefaultSubobject<UChopItHealthComponent>(TEXT("HealthComponent"));
 	HitFeedbackComponent = CreateDefaultSubobject<UChopItHitFeedbackComponent>(TEXT("HitFeedbackComponent"));
-	HitFeedbackComponent->SetVisualComponent(BodyVisual);
+	HitFeedbackComponent->SetVisualComponent(
+		LumberjackMesh.Succeeded()
+			? static_cast<UPrimitiveComponent*>(GetMesh())
+			: static_cast<UPrimitiveComponent*>(BodyVisual.Get()));
 	AutoAttackComponent = CreateDefaultSubobject<UChopItAutoAttackComponent>(TEXT("AutoAttackComponent"));
 	AttackFeedbackComponent = CreateDefaultSubobject<UChopItAttackFeedbackComponent>(TEXT("AttackFeedbackComponent"));
 	WeaponLoadoutComponent = CreateDefaultSubobject<UChopItWeaponLoadoutComponent>(TEXT("WeaponLoadoutComponent"));
@@ -106,9 +149,35 @@ AChopItCharacter::AChopItCharacter()
 	WoodCargoLabel->SetHiddenInGame(true);
 }
 
+void AChopItCharacter::Tick(const float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	RefreshCharacterAnimation();
+}
+
 void AChopItCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	// Blueprint component templates can restore their serialized material overrides
+	// after the native constructor. Apply the authored character material once all
+	// Blueprint defaults have been loaded.
+	if (UMaterialInterface* LumberjackMaterial = LoadObject<UMaterialInterface>(
+		nullptr,
+		TEXT("/Game/ChopIt/Art/Character/M_Lumberjack.M_Lumberjack")))
+	{
+		GetMesh()->SetMaterial(0, LumberjackMaterial);
+	}
+	if (UMaterialInterface* LumberjackOutlineMaterial = LoadObject<UMaterialInterface>(
+		nullptr,
+		TEXT("/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering")))
+	{
+		LumberjackOutlineInstance = UMaterialInstanceDynamic::Create(LumberjackOutlineMaterial, this);
+		if (LumberjackOutlineInstance)
+		{
+			LumberjackOutlineInstance->SetScalarParameterValue(TEXT("OutlineThiknes"), 0.35f);
+			GetMesh()->SetOverlayMaterial(LumberjackOutlineInstance);
+		}
+	}
 
 	// Enforce normal CharacterMovement behavior even if an older Blueprint CDO
 	// was reinstanced by Live Coding. Spawn placement belongs to the GameMode.
@@ -122,6 +191,7 @@ void AChopItCharacter::BeginPlay()
 	CombatStatsComponent->OnStatsChanged.AddUObject(this, &AChopItCharacter::RefreshMovementStats);
 	HealthComponent->OnDeath.AddUObject(this, &AChopItCharacter::HandlePlayerDeath);
 	RefreshMovementStats();
+	RefreshCharacterAnimation();
 	WoodCargoComponent->OnCargoChanged.AddUniqueDynamic(this, &AChopItCharacter::HandleWoodCargoChanged);
 	for (TActorIterator<AChopItCabinHub> It(GetWorld()); It; ++It)
 	{
@@ -170,6 +240,31 @@ void AChopItCharacter::BeginPlay()
 	{
 		BodyVisual->SetMaterial(0, PlayerMaterial);
 		FacingMarker->SetMaterial(0, PlayerMaterial);
+	}
+}
+
+void AChopItCharacter::RefreshCharacterAnimation()
+{
+	if (!GetMesh() || !GetMesh()->GetSkeletalMeshAsset())
+	{
+		return;
+	}
+
+	UAnimSequence* DesiredAnimation = IdleAnimation;
+	if (GetCharacterMovement() && GetCharacterMovement()->IsFalling())
+	{
+		DesiredAnimation = JumpAnimation;
+	}
+	else if (GetVelocity().SizeSquared2D() > FMath::Square(10.0f))
+	{
+		DesiredAnimation = WalkAnimation;
+	}
+
+	if (DesiredAnimation && DesiredAnimation != ActiveAnimation)
+	{
+		const bool bLoop = DesiredAnimation != JumpAnimation;
+		GetMesh()->PlayAnimation(DesiredAnimation, bLoop);
+		ActiveAnimation = DesiredAnimation;
 	}
 }
 

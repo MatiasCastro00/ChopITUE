@@ -28,6 +28,10 @@ public class ChopItEditor : ModuleRules
 			"MaterialEditor",
 			"NavigationSystem",
 			"UnrealEd",
+			"UMG",
+			"UMGEditor",
+			"Slate",
+			"SlateCore",
 			"Projects"
 		});
 	}

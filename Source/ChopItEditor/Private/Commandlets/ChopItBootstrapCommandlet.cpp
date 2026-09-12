@@ -91,9 +91,102 @@
 #include "StateTreeCompilerLog.h"
 #include "StateTreeEditorData.h"
 #include "StateTreeState.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/Image.h"
+#include "Components/ProgressBar.h"
+#include "Components/TextBlock.h"
+#include "WidgetBlueprint.h"
+#include "WidgetBlueprintFactory.h"
 
 namespace ChopItBootstrap
 {
+	bool CreatePSXHUDAsset()
+	{
+		constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/UI/WBP_PSX_HUD");
+		UPackage* Package = FPackageName::DoesPackageExist(PackageName)
+			? LoadPackage(nullptr, PackageName, LOAD_None)
+			: CreatePackage(PackageName);
+		if (!Package) return false;
+		UWidgetBlueprint* Blueprint = FindObject<UWidgetBlueprint>(Package, TEXT("WBP_PSX_HUD"));
+		if (!Blueprint)
+		{
+			UWidgetBlueprintFactory* Factory = NewObject<UWidgetBlueprintFactory>();
+			Factory->ParentClass = UUserWidget::StaticClass();
+			Blueprint = Cast<UWidgetBlueprint>(Factory->FactoryCreateNew(
+				UWidgetBlueprint::StaticClass(), Package, TEXT("WBP_PSX_HUD"),
+				RF_Public | RF_Standalone, nullptr, GWarn));
+			if (Blueprint) FAssetRegistryModule::AssetCreated(Blueprint);
+		}
+		if (!Blueprint || !Blueprint->WidgetTree) return false;
+
+		if (Blueprint->WidgetTree->RootWidget)
+		{
+			Blueprint->WidgetTree->RemoveWidget(Blueprint->WidgetTree->RootWidget);
+		}
+		UCanvasPanel* Root = NewObject<UCanvasPanel>(Blueprint->WidgetTree, TEXT("HUDRoot"), RF_Transactional);
+		Blueprint->WidgetVariableNameToGuidMap.FindOrAdd(Root->GetFName()) = FGuid::NewGuid();
+		Blueprint->WidgetTree->RootWidget = Root;
+		UTexture2D* Atlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/ChopIt/Art/UI/UI_PSX_Atlas_Transparente.UI_PSX_Atlas_Transparente"));
+		if (!Atlas) return false;
+
+		auto Place = [Root](UWidget* Widget, FVector2D Pos, FVector2D Size, FVector2D Anchor, FVector2D Align, int32 Z)
+		{
+			UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Widget);
+			Slot->SetAnchors(FAnchors(Anchor.X, Anchor.Y)); Slot->SetAlignment(Align);
+			Slot->SetPosition(Pos); Slot->SetSize(Size); Slot->SetZOrder(Z);
+		};
+		struct FCrop { float X; float Y; float Width; float Height; };
+			auto Image = [&](const TCHAR* Name, FVector2D Pos, FVector2D Size, FCrop Crop, FVector2D Anchor = FVector2D::ZeroVector, FVector2D Align = FVector2D::ZeroVector, int32 Z = 0)
+		{
+			UImage* W = NewObject<UImage>(Blueprint->WidgetTree, Name, RF_Transactional);
+			Blueprint->WidgetVariableNameToGuidMap.FindOrAdd(Name) = FGuid::NewGuid();
+			FSlateBrush Brush; Brush.SetResourceObject(Atlas); Brush.DrawAs = ESlateBrushDrawType::Image; Brush.ImageSize = FVector2f(Size);
+			Brush.SetUVRegion(FBox2f(FVector2f(Crop.X / 1774.f, Crop.Y / 887.f), FVector2f((Crop.X + Crop.Width) / 1774.f, (Crop.Y + Crop.Height) / 887.f)));
+			W->SetBrush(Brush); Place(W, Pos, Size, Anchor, Align, Z);
+		};
+		auto Text = [&](const TCHAR* Name, const TCHAR* Value, FVector2D Pos, FVector2D Size, int32 FontSize, FVector2D Anchor = FVector2D::ZeroVector, FVector2D Align = FVector2D::ZeroVector, ETextJustify::Type Justify = ETextJustify::Center)
+		{
+			UTextBlock* W = NewObject<UTextBlock>(Blueprint->WidgetTree, Name, RF_Transactional);
+			Blueprint->WidgetVariableNameToGuidMap.FindOrAdd(Name) = FGuid::NewGuid();
+			W->SetText(FText::FromString(Value)); W->SetJustification(Justify); W->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+			FSlateFontInfo Font = W->GetFont(); Font.Size = FontSize; W->SetFont(Font); W->SetShadowOffset(FVector2D(2)); W->SetShadowColorAndOpacity(FLinearColor(0,0,0,.9f));
+			Place(W, Pos, Size, Anchor, Align, 5);
+		};
+		auto Bar = [&](const TCHAR* Name, FVector2D Pos, FVector2D Size, FLinearColor Fill, float Value, FVector2D Anchor = FVector2D::ZeroVector, FVector2D Align = FVector2D::ZeroVector)
+		{
+			UProgressBar* W = NewObject<UProgressBar>(Blueprint->WidgetTree, Name, RF_Transactional);
+			Blueprint->WidgetVariableNameToGuidMap.FindOrAdd(Name) = FGuid::NewGuid();
+			W->SetPercent(Value); W->SetFillColorAndOpacity(Fill); W->SetBorderPadding(FVector2D(2)); Place(W, Pos, Size, Anchor, Align, 3);
+		};
+
+		// Frame and fill use separate atlas sprites so they remain independently editable in UMG.
+		Image(TEXT("HealthFrame"), {20,18}, {370,72}, {80,175,790,72});
+		Image(TEXT("HeartIcon"), {34,29}, {54,50}, {947,180,92,102}, {}, {}, 2);
+		Image(TEXT("HealthFill"), {93,40}, {200,25}, {99,255,747,35}, {}, {}, 3); Text(TEXT("HealthText"), TEXT("80 / 100"), {282,34}, {96,38}, 21);
+		Image(TEXT("QuotaLog"), {20,103}, {310,70}, {82,320,790,115});
+		// Designer preview starts full-width; ChopItHUD resizes it to the live quota fraction at runtime.
+		Image(TEXT("QuotaFill"), {40,120}, {245,35}, {905,325,775,110}, {}, {}, 3);
+		Image(TEXT("QuotaLabelFrame"), {72,160}, {210,42}, {162,442,438,62}, {}, {}, 2); Text(TEXT("QuotaText"), TEXT("CUOTA   120 / 200"), {72,163}, {210,36}, 18);
+		Image(TEXT("CargoFrame"), {20,212}, {190,64}, {839,541,375,100}); Image(TEXT("CargoIcon"), {28,217}, {58,54}, {160,691,175,180}, {}, {}, 2); Text(TEXT("WoodText"), TEXT("12 / 24"), {88,225}, {112,38}, 21);
+		Image(TEXT("MoneyFrame"), {20,286}, {190,64}, {1294,541,398,100}); Image(TEXT("MoneyIcon"), {31,295}, {70,44}, {438,719,205,117}, {}, {}, 2); Text(TEXT("MoneyText"), TEXT("$ 125"), {98,299}, {102,38}, 21);
+		Image(TEXT("ClockFrame"), {0,18}, {230,84}, {1074,188,230,88}, {.5f,0}, {.5f,0}); Image(TEXT("SunIcon"), {-96,30}, {58,58}, {777,691,178,177}, {.5f,0}, {.5f,0}, 2);
+		Text(TEXT("TimeText"), TEXT("02:35"), {-30,25}, {118,39}, 27, {.5f,0}, {.5f,0}); Text(TEXT("DayText"), TEXT("DIA 1"), {-30,61}, {118,28}, 16, {.5f,0}, {.5f,0});
+		Image(TEXT("MissionFrame"), {-22,22}, {340,178}, {80,512,685,160}, {1,0}, {1,0}); Text(TEXT("MissionHeader"), TEXT("MISIONES"), {-315,34}, {270,34}, 19, {1,0}, {}, ETextJustify::Left);
+		Text(TEXT("MissionTitle"), TEXT("Alimenta al Horno"), {-315,79}, {270,34}, 23, {1,0}, {}, ETextJustify::Left); Text(TEXT("MissionDescription"), TEXT("Entrega la cuota de madera\nAntes de que termine el dia"), {-315,115}, {275,64}, 16, {1,0}, {}, ETextJustify::Left);
+		Image(TEXT("XPFrame"), {0,-65}, {1540,54}, {80,28,1615,71}, {.5f,1}, {.5f,1});
+		// Uses the dedicated green atlas sprite; runtime only changes its width.
+		Image(TEXT("XPFill"), {-650,-78}, {1300,29}, {284,113,1365,35}, {.5f,1}, {0,1}, 3);
+		Image(TEXT("LevelFrame"), {0,-72}, {160,60}, {839,541,375,100}, {.5f,1}, {.5f,1}, 4); Text(TEXT("LevelText"), TEXT("NIVEL 3"), {0,-61}, {150,38}, 22, {.5f,1}, {.5f,1}); Text(TEXT("XPText"), TEXT("XP 40 / 100"), {-745,-53}, {160,34}, 16, {.5f,1}, {.5f,1});
+
+		FKismetEditorUtilities::CompileBlueprint(Blueprint);
+		Package->MarkPackageDirty();
+		FSavePackageArgs Args; Args.TopLevelFlags = RF_Public | RF_Standalone; Args.SaveFlags = SAVE_NoError;
+		return UPackage::SavePackage(Package, Blueprint, *FPackageName::LongPackageNameToFilename(PackageName, FPackageName::GetAssetPackageExtension()), Args);
+	}
+
 	constexpr TCHAR StartupMap[] = TEXT("/Game/ChopIt/World/Maps/L_Startup");
 	constexpr TCHAR SandboxMap[] = TEXT("/Game/ChopIt/World/Maps/L_Dev_Sandbox");
 	constexpr TCHAR CombatMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Combat");
@@ -356,6 +449,7 @@ int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 	}
 	if (FParse::Param(*Params, TEXT("Phase10")) && !CreatePhase10Assets()) return 1;
 	if (FParse::Param(*Params, TEXT("Phase12")) && !CreatePhase12Assets()) return 1;
+	if (FParse::Param(*Params, TEXT("PSXUI")) && !ChopItBootstrap::CreatePSXHUDAsset()) return 1;
 if (FParse::Param(*Params, TEXT("HarvestBlueprints")) && !CreateHarvestBlueprints()) return 1;
 if (FParse::Param(*Params, TEXT("Presentation")) && !CreateDamageTextMaterial()) return 1;
 if (FParse::Param(*Params, TEXT("Camera")) && !CreateCameraAssets()) return 1;

@@ -25,6 +25,9 @@ public class ChopIt : ModuleRules
 			"EnhancedInput",
 			"GameplayTags",
 			"GameplayCameras",
+			"UMG",
+			"Slate",
+			"SlateCore",
 			"InputCore",
 			"ChopItCore",
 			"ChopItMeta"
