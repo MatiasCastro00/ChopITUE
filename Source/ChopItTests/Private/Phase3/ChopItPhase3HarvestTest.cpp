@@ -1,5 +1,5 @@
 #include "ChopItCollision.h"
-#include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -68,6 +68,7 @@ bool FChopItPhase3HarvestDefaultsTest::RunTest(const FString& Parameters)
 		TestNotNull(TEXT("Tree has a dedicated crown collision volume"), Tree->GetCrownCollision());
 		if (Tree->GetPhysicsRoot())
 		{
+			TestTrue(TEXT("Tree fall body uses a rounded capsule"), Tree->GetPhysicsRoot()->IsA<UCapsuleComponent>());
 			TestFalse(TEXT("Standing tree physics starts disabled"), Tree->GetPhysicsRoot()->IsSimulatingPhysics());
 			TestEqual(TEXT("Standing tree supports physics collision"), Tree->GetPhysicsRoot()->GetCollisionEnabled(), ECollisionEnabled::QueryAndPhysics);
 			TestEqual(TEXT("Tree physics never pushes the camera"), Tree->GetPhysicsRoot()->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
@@ -77,6 +78,7 @@ bool FChopItPhase3HarvestDefaultsTest::RunTest(const FString& Parameters)
 			TestNotNull(TEXT("Tree visual mesh exists"), VisualMesh);
 			if (VisualMesh)
 			{
+				TestNotNull(TEXT("Tree visual has the PSX outline overlay"), VisualMesh->GetOverlayMaterial());
 				TestEqual(TEXT("Tree visual is query-only"), VisualMesh->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
 				TestEqual(TEXT("Tree visual ignores camera push"), VisualMesh->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid), ECR_Ignore);
 				TestEqual(TEXT("Tree visual participates in transparency"), VisualMesh->GetCollisionResponseToChannel(ChopItCollisionChannels::CameraOcclusion), ECR_Block);

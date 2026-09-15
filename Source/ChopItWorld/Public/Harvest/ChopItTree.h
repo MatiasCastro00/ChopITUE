@@ -5,7 +5,7 @@
 
 class AChopItLogPickup;
 class AChopItTree;
-class UBoxComponent;
+class UCapsuleComponent;
 class UChopItHealthComponent;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
@@ -49,7 +49,7 @@ public:
 	void SetBlockoutMaterials(UMaterialInterface* TrunkMaterial, UMaterialInterface* CrownMaterial);
 	void SetFoliageVariant(EChopItTreeFoliageVariant NewVariant);
 	UChopItHealthComponent* GetHealthComponent() const { return HealthComponent; }
-	UBoxComponent* GetPhysicsRoot() const { return PhysicsRoot; }
+	UCapsuleComponent* GetPhysicsRoot() const { return PhysicsRoot; }
 	UStaticMeshComponent* GetTrunkMesh() const { return TrunkMesh; }
 	UStaticMeshComponent* GetCrownMesh() const { return CrownMesh; }
 	USphereComponent* GetCrownCollision() const { return CrownCollision; }
@@ -81,7 +81,7 @@ private:
 	void UpdateHealthLabel(float CurrentHealth, float MaxHealth);
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Tree")
-	TObjectPtr<UBoxComponent> PhysicsRoot;
+	TObjectPtr<UCapsuleComponent> PhysicsRoot;
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Tree")
 	TObjectPtr<UStaticMeshComponent> TrunkMesh;

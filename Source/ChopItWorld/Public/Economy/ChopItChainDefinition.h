@@ -20,27 +20,27 @@ public:
 
 	/** Maximum number of visible links stored by the machine. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|02 Links", meta = (ClampMin = "3", ClampMax = "64"))
-	int32 ChainLinkCount = 48;
+	int32 ChainLinkCount = 64;
 
 	/** Total physical length stored in the machine. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|02 Links", meta = (ClampMin = "100.0", Units = "cm"))
-	float MaxChainLength = 1600.0f;
+	float MaxChainLength = 3600.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|02 Links", meta = (ClampMin = "3", ClampMax = "16"))
-	int32 MinimumDeployedLinks = 11;
+	int32 MinimumDeployedLinks = 16;
 
 	/** Scales cable gravity relative to the 1.25 kg reference weight. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|02 Links", meta = (ClampMin = "0.01", Units = "kg"))
 	float ChainLinkWeight = 1.25f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "20.0", ClampMax = "2000.0", Units = "cm/s"))
-	float ChainFeedSpeed = 800.0f;
+	float ChainFeedSpeed = 1000.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "20.0", ClampMax = "8000.0", Units = "cm/s^2"))
 	float ChainFeedAcceleration = 3200.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "0.0", Units = "cm"))
-	float ChainSlack = 100.0f;
+	float ChainSlack = 200.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "0.0", Units = "cm"))
 	float ChainReelHysteresis = 20.0f;

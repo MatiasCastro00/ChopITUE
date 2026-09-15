@@ -4,7 +4,7 @@
 #include "ChopItDeveloperSettings.h"
 #include "ChopItLogChannels.h"
 #include "Combat/ChopItHealthComponent.h"
-#include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -24,9 +24,11 @@ AChopItTree::AChopItTree()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	PhysicsRoot = CreateDefaultSubobject<UBoxComponent>(TEXT("PhysicsRoot"));
+	PhysicsRoot = CreateDefaultSubobject<UCapsuleComponent>(TEXT("PhysicsRoot"));
 	SetRootComponent(PhysicsRoot);
-	PhysicsRoot->InitBoxExtent(FVector(55.0f, 55.0f, 380.0f));
+	// The rounded lower end cannot balance on a flat face after physics starts,
+	// so a depleted tree reliably tips instead of settling upright.
+	PhysicsRoot->InitCapsuleSize(55.0f, 380.0f);
 	PhysicsRoot->SetCollisionProfileName(ChopItCollisionProfiles::Harvestable);
 	PhysicsRoot->SetMobility(EComponentMobility::Movable);
 	PhysicsRoot->SetSimulatePhysics(false);
@@ -70,6 +72,13 @@ AChopItTree::AChopItTree()
 	{
 		CrownMesh->SetStaticMesh(SphereMesh.Object);
 	}
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> TreeOutlineMaterial(
+		TEXT("/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
+	if (TreeOutlineMaterial.Succeeded())
+	{
+		TrunkMesh->SetOverlayMaterial(TreeOutlineMaterial.Object);
+		CrownMesh->SetOverlayMaterial(TreeOutlineMaterial.Object);
+	}
 
 	HealthLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("HealthLabel"));
 	HealthLabel->SetupAttachment(PhysicsRoot);
@@ -112,7 +121,7 @@ void AChopItTree::BeginPlay()
 void AChopItTree::ConfigureCameraOcclusion()
 {
 	// The physical root still blocks pawns, weapons and the world, but it must not
-	// participate in either camera query: its box includes most of the crown.
+	// participate in either camera query: its tall capsule includes most of the crown.
 	PhysicsRoot->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 	PhysicsRoot->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraOcclusion, ECR_Ignore);
 
