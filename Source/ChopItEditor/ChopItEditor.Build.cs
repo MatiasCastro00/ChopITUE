@@ -10,6 +10,7 @@ public class ChopItEditor : ModuleRules
 		{
 			"AssetRegistry",
 			"AssetTools",
+			"MeshDescription", "StaticMeshDescription",
 			"ChopIt",
 			"ChopItCore",
 			"ChopItCombat",

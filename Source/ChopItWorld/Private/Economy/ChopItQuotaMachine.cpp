@@ -55,6 +55,14 @@ AChopItQuotaMachine::AChopItQuotaMachine()
 	LeverLabel->SetWorldSize(30.0f);
 	LeverLabel->SetTextRenderColor(FColor::Silver);
 
+	ReleasedChainLabel = CreateDefaultSubobject<UChopItCameraFacingTextComponent>(TEXT("ReleasedChainLabel"));
+	ReleasedChainLabel->SetupAttachment(SceneRoot);
+	ReleasedChainLabel->SetRelativeLocation(FVector(0.0f, 0.0f, 340.0f));
+	ReleasedChainLabel->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
+	ReleasedChainLabel->SetHorizontalAlignment(EHTA_Center);
+	ReleasedChainLabel->SetWorldSize(28.0f);
+	ReleasedChainLabel->SetTextRenderColor(FColor::Cyan);
+
 	DeliveryGlow = CreateDefaultSubobject<UPointLightComponent>(TEXT("DeliveryGlow"));
 	DeliveryGlow->SetupAttachment(SceneRoot);
 	DeliveryGlow->SetRelativeLocation(FVector(0.0f, 0.0f, 270.0f));
@@ -169,8 +177,11 @@ void AChopItQuotaMachine::Tick(const float DeltaSeconds)
 	}
 	if (const UChopItChainDefinition* Chain = GetChainDefinition(); Chain && Chain->bChainPlayerToMachine)
 	{
-		UpdateRetractableChain(DeltaSeconds);
+		if (!TetherReceiver) UpdateRetractableChain(DeltaSeconds);
+		TetherPath->Synchronize();
+		UpdateChainVisuals();
 	}
+	UpdateReleasedChainLabel();
 }
 
 FVector AChopItQuotaMachine::GetDeliveryIntakeWorldLocation() const
@@ -389,306 +400,121 @@ void AChopItQuotaMachine::TryCreatePlayerChain()
 void AChopItQuotaMachine::CreatePlayerChain(AActor* PlayerActor)
 {
 	const UChopItChainDefinition* Chain = GetChainDefinition();
-	if (!Chain || !IsValid(PlayerActor) || !RopeSimulation || !TetherPath || !ChainLinkVisuals)
-	{
-		return;
-	}
+	if (!Chain || !IsValid(PlayerActor) || !RopeSimulation || !TetherPath || !ChainLinkVisuals) return;
 	DestroyPlayerChain();
 	ChainedPlayer = PlayerActor;
 	TetherReceiver = PlayerActor->FindComponentByClass<UChopItTetherReceiverComponent>();
-	const FVector MachineAnchor = GetActorTransform().TransformPosition(Chain->MachineChainAnchor);
-	const FVector PlayerAnchor = PlayerActor->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
-	TetherPath->InitializePath(MachineAnchor, PlayerAnchor, PlayerActor);
-	const float MinimumLength = FMath::Clamp(Chain->MinimumDeployedLinks, 3, Chain->ChainLinkCount) * GetFixedLinkLength();
-	CurrentCableLength = FMath::Clamp(
-		FMath::Max(MinimumLength, TetherPath->GetRouteLength() + FMath::Max(0.0f, Chain->ChainSlack)),
-		MinimumLength,
-		Chain->MaxChainLength);
-	TargetCableLength = CurrentCableLength;
-	CableReelVelocity = 0.0f;
-	DeployedChainLinkCount = FMath::CeilToInt(CurrentCableLength / GetFixedLinkLength());
-	TargetChainLinkCount = DeployedChainLinkCount;
-	LastValidPlayerLocation = PlayerActor->GetActorLocation();
-	bHasLastValidPlayerLocation = true;
-	RopeSimulation->InitializeRope(MachineAnchor, PlayerAnchor, CurrentCableLength, PlayerActor);
-	RopeSimulation->SetRoutePath(TetherPath->GetRoutePoints(), TetherPath->GetRoutePointIds(), CurrentCableLength);
+	const FVector Start = GetActorTransform().TransformPosition(Chain->MachineChainAnchor);
+	const FVector End = PlayerActor->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
+	CurrentCableLength = FMath::Clamp(static_cast<float>(FVector::Distance(Start, End)) + Chain->ChainSlack,
+		Chain->MinimumDeployedLength, Chain->MaxChainLength);
+	RopeSimulation->InitializeRope(Start, End, CurrentCableLength, PlayerActor);
+	RopeSimulation->SetAutomaticReel(true);
+	TetherPath->SetSource(RopeSimulation);
+	if (TetherReceiver) TetherReceiver->BindMachine(this);
+	if (!RopeSimulation->IsInitialized())
+		UE_LOG(LogChopIt, Warning, TEXT("Chain V2 outlet-to-player initialization is obstructed; waiting for a clear deployment."));
 	UpdateChainVisuals();
-	UE_LOG(LogChopIt, Display, TEXT("Hybrid tether created for %s with %.0f cm deployed."),
-		*PlayerActor->GetName(), CurrentCableLength);
 }
 
-void AChopItQuotaMachine::UpdateRetractableChain(const float DeltaSeconds)
+void AChopItQuotaMachine::AdvancePlayerChain(float DeltaSeconds)
+{
+	UpdateRetractableChain(DeltaSeconds);
+}
+
+void AChopItQuotaMachine::UpdateRetractableChain(float DeltaSeconds)
 {
 	const UChopItChainDefinition* Chain = GetChainDefinition();
-	if (!Chain)
+	if (!Chain || !Chain->bChainPlayerToMachine) { DestroyPlayerChain(); return; }
+	if (!IsValid(ChainedPlayer)) { TryCreatePlayerChain(); return; }
+	const FVector Start = GetActorTransform().TransformPosition(Chain->MachineChainAnchor);
+	const FVector End = ChainedPlayer->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
+	if (!RopeSimulation->IsInitialized())
 	{
-		return;
+		RopeSimulation->InitializeRope(Start, End,
+			FMath::Clamp(static_cast<float>(FVector::Distance(Start, End)) + Chain->ChainSlack,
+				Chain->MinimumDeployedLength, Chain->MaxChainLength), ChainedPlayer);
+		if (!RopeSimulation->IsInitialized()) return;
 	}
-	if (!IsValid(ChainedPlayer))
-	{
-		TryCreatePlayerChain();
-		return;
-	}
-
-	const FVector MachineAnchor = GetActorTransform().TransformPosition(Chain->MachineChainAnchor);
-	FVector PlayerAnchor = ChainedPlayer->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
-	TetherPath->UpdatePath(MachineAnchor, PlayerAnchor);
-
-	if (TetherPath->IsAtAnchorCapacity() && bHasLastValidPlayerLocation)
-	{
-		FVector Restore = LastValidPlayerLocation;
-		Restore.Z = ChainedPlayer->GetActorLocation().Z;
-		FHitResult Hit;
-		ChainedPlayer->SetActorLocation(Restore, true, &Hit, ETeleportType::None);
-		PlayerAnchor = ChainedPlayer->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
-		TetherPath->UpdatePath(MachineAnchor, PlayerAnchor);
-	}
-
-	float RouteLength = TetherPath->GetRouteLength();
-	if (RouteLength >= Chain->MaxChainLength - FMath::Max(0.5f, Chain->ChainStretchTolerance))
-	{
-		CorrectHardLimit(RouteLength);
-		PlayerAnchor = ChainedPlayer->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
-		TetherPath->UpdatePath(MachineAnchor, PlayerAnchor);
-		RouteLength = TetherPath->GetRouteLength();
-	}
-	else if (!TetherPath->IsAtAnchorCapacity())
-	{
-		LastValidPlayerLocation = ChainedPlayer->GetActorLocation();
-		bHasLastValidPlayerLocation = true;
-	}
-
-	UpdateReel(RouteLength, DeltaSeconds);
-	UpdatePlayerTension(RouteLength);
-	const float VisualRopeLength = FMath::Clamp(FMath::Max(CurrentCableLength, RouteLength), 1.0f, Chain->MaxChainLength);
-	RopeSimulation->SetRoutePath(TetherPath->GetRoutePoints(), TetherPath->GetRoutePointIds(), VisualRopeLength);
+	RopeSimulation->SetEndpoints(Start, End);
 	RopeSimulation->Simulate(DeltaSeconds);
-	UpdateChainVisuals();
-}
-
-void AChopItQuotaMachine::UpdateReel(const float RouteLength, const float DeltaSeconds)
-{
-	const UChopItChainDefinition* Chain = GetChainDefinition();
-	if (!Chain)
+	const FVector Accepted = RopeSimulation->GetAcceptedEndpoint();
+	const FVector Correction = Accepted - End;
+	if (!Correction.IsNearlyZero(0.01f))
 	{
-		return;
-	}
-	const float MinimumLength = FMath::Clamp(Chain->MinimumDeployedLinks, 3, Chain->ChainLinkCount) * GetFixedLinkLength();
-	float DesiredLength = FMath::Clamp(RouteLength + FMath::Max(0.0f, Chain->ChainSlack), MinimumLength, Chain->MaxChainLength);
-	if (DesiredLength < TargetCableLength
-		&& TargetCableLength - DesiredLength < FMath::Max(0.0f, Chain->ChainReelHysteresis))
-	{
-		DesiredLength = TargetCableLength;
-	}
-	TargetCableLength = DesiredLength;
-	TargetChainLinkCount = FMath::Clamp(
-		FMath::CeilToInt(TargetCableLength / GetFixedLinkLength()),
-		FMath::Clamp(Chain->MinimumDeployedLinks, 3, Chain->ChainLinkCount),
-		FMath::Clamp(Chain->ChainLinkCount, 3, 64));
-
-	// The gameplay route may grow abruptly when it wraps. Feeding to the exact
-	// route is immediate, so reel acceleration can never make the player heavy.
-	CurrentCableLength = FMath::Max(CurrentCableLength, FMath::Min(RouteLength, Chain->MaxChainLength));
-	const float Remaining = TargetCableLength - CurrentCableLength;
-	const float Acceleration = FMath::Max(20.0f, Chain->ChainFeedAcceleration);
-	float MaximumSpeed = FMath::Max(20.0f, Chain->ChainFeedSpeed);
-	if (const ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
-	{
-		if (const UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+		FHitResult Hit;
+		// Swept in 3D, including a jump/fall. Never teleport through level geometry.
+		ChainedPlayer->SetActorLocation(ChainedPlayer->GetActorLocation() + Correction, true, &Hit, ETeleportType::None);
+		if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
 		{
-			MaximumSpeed = FMath::Max(MaximumSpeed, Movement->MaxWalkSpeed * 1.25f);
+			UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
+			const bool bAtMaterialLimit = RopeSimulation->GetStoredLength() < 0.1f;
+			const FVector BlockedDirection = bAtMaterialLimit ? RopeSimulation->GetOutwardDirection() : -Correction.GetSafeNormal();
+			const float Speed = FVector::DotProduct(Movement->Velocity, BlockedDirection);
+			// A partial accepted step only removes the rejected part of velocity.
+			// The last link can face backwards inside a loose fold and is not the
+			// normal of the displacement that was actually blocked.
+			if (Speed > 0) Movement->Velocity -= BlockedDirection
+				* (bAtMaterialLimit ? Speed : FMath::Min(Speed, static_cast<float>(Correction.Size()) / FMath::Max(DeltaSeconds, UE_SMALL_NUMBER)));
 		}
 	}
-	if (FMath::Abs(Remaining) <= 0.25f)
-	{
-		CurrentCableLength = TargetCableLength;
-		CableReelVelocity = 0.0f;
-	}
-	else
-	{
-		const float BrakingSpeed = FMath::Sqrt(2.0f * Acceleration * FMath::Abs(Remaining));
-		const float DesiredVelocity = FMath::Sign(Remaining) * FMath::Min(MaximumSpeed, BrakingSpeed);
-		CableReelVelocity = FMath::FInterpConstantTo(CableReelVelocity, DesiredVelocity, DeltaSeconds, Acceleration);
-		const float Previous = CurrentCableLength;
-		CurrentCableLength = FMath::Clamp(CurrentCableLength + CableReelVelocity * DeltaSeconds, MinimumLength, Chain->MaxChainLength);
-		if ((TargetCableLength - Previous) * (TargetCableLength - CurrentCableLength) <= 0.0f)
-		{
-			CurrentCableLength = TargetCableLength;
-			CableReelVelocity = 0.0f;
-		}
-	}
-	DeployedChainLinkCount = FMath::Clamp(
-		FMath::CeilToInt(CurrentCableLength / GetFixedLinkLength()),
-		FMath::Clamp(Chain->MinimumDeployedLinks, 3, Chain->ChainLinkCount),
-		FMath::Clamp(Chain->ChainLinkCount, 3, 64));
-}
-
-void AChopItQuotaMachine::UpdatePlayerTension(const float RouteLength)
-{
-	const UChopItChainDefinition* Chain = GetChainDefinition();
-	if (!Chain)
-	{
-		return;
-	}
-	const float Band = FMath::Max(1.0f, Chain->TensionSoftBand);
-	const float TensionAlpha = FMath::Clamp((RouteLength - (Chain->MaxChainLength - Band)) / Band, 0.0f, 1.0f);
-	bHardLimited = TetherPath->IsAtAnchorCapacity()
-		|| RouteLength >= Chain->MaxChainLength - FMath::Max(0.5f, Chain->ChainStretchTolerance);
+	CurrentCableLength = RopeSimulation->GetRopeLength();
+	// A frame-time cutoff preserves the last valid rope shape; it is not a
+	// physical obstruction and must never remove the player's outward input.
+	bHardLimited = RopeSimulation->IsMovementBlocked()
+		&& !RopeSimulation->IsFrameBudgetLimited()
+		&& RopeSimulation->GetStoredLength() < 0.1f;
 	if (TetherReceiver)
 	{
-		TetherReceiver->SetTetherState(
-			TetherPath->GetFinalGuidePoint(),
-			TensionAlpha,
-			bHardLimited,
-			Chain->PlayerPullAcceleration,
-			Chain->PlayerPullDamping);
+		// Translate the physical anchor direction into actor-origin coordinates.
+		const FVector Guide = ChainedPlayer->GetActorLocation() - RopeSimulation->GetOutwardDirection() * 100.0f;
+		TetherReceiver->SetTetherState(Guide,
+			FMath::Clamp(RopeSimulation->GetEndpointTension() / FMath::Max(1.0f, Chain->MaximumPropTensionForce), 0.0f, 1.0f),
+			bHardLimited, 0.0f, 0.0f);
 	}
-	TetherPath->ApplyTensionToPhysicsProps(
-		TensionAlpha,
-		Chain->MaximumPropTensionForce,
-		Chain->PhysicsPropForceScale);
-}
-
-void AChopItQuotaMachine::CorrectHardLimit(const float RouteLength)
-{
-	const UChopItChainDefinition* Chain = GetChainDefinition();
-	if (!Chain || !IsValid(ChainedPlayer) || RouteLength <= Chain->MaxChainLength)
-	{
-		return;
-	}
-	const FVector Guide = TetherPath->GetFinalGuidePoint();
-	const float AvailableFinalSpan = FMath::Max(0.0f,
-		Chain->MaxChainLength - TetherPath->GetPrefixLengthBeforeFinalSpan());
-	const FVector CurrentActorLocation = ChainedPlayer->GetActorLocation();
-	const FVector CurrentAnchor = ChainedPlayer->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
-	const FVector AnchorOffset = CurrentAnchor - CurrentActorLocation;
-	const float VerticalDelta = CurrentAnchor.Z - Guide.Z;
-	const float MaximumHorizontal = FMath::Sqrt(FMath::Max(0.0f,
-		FMath::Square(AvailableFinalSpan) - FMath::Square(VerticalDelta)));
-	FVector Horizontal = CurrentAnchor - Guide;
-	Horizontal.Z = 0.0f;
-	const float HorizontalDistance = Horizontal.Size();
-	if (HorizontalDistance <= MaximumHorizontal || HorizontalDistance <= UE_SMALL_NUMBER)
-	{
-		return;
-	}
-	const FVector Outward = Horizontal / HorizontalDistance;
-	FVector CorrectedAnchor = Guide + Outward * MaximumHorizontal;
-	CorrectedAnchor.Z = CurrentAnchor.Z;
-	FVector CorrectedActor = CorrectedAnchor - AnchorOffset;
-	CorrectedActor.Z = CurrentActorLocation.Z;
-	FHitResult Hit;
-	ChainedPlayer->SetActorLocation(CorrectedActor, true, &Hit, ETeleportType::None);
-	if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
-	{
-		if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
-		{
-			const float OutwardSpeed = FVector::DotProduct(Movement->Velocity, Outward);
-			if (OutwardSpeed > 0.0f)
-			{
-				Movement->Velocity -= Outward * OutwardSpeed;
-			}
-		}
-	}
+	RopeSimulation->ApplyForcesToPhysicsProps(DeltaSeconds);
+	TetherPath->Synchronize();
 }
 
 void AChopItQuotaMachine::UpdateChainVisuals()
 {
 	const UChopItChainDefinition* Chain = GetChainDefinition();
-	if (!Chain || !RopeSimulation || !RopeSimulation->IsInitialized()
-		|| !ChainLinkVisuals || !ChainLinkVisuals->GetStaticMesh() || CurrentCableLength <= UE_SMALL_NUMBER)
-	{
-		return;
-	}
+	if (!Chain || !RopeSimulation || !RopeSimulation->IsInitialized() || !ChainLinkVisuals->GetStaticMesh()) return;
 	const TArray<FVector>& Points = RopeSimulation->GetParticleLocations();
-	if (Points.Num() < 2)
+	const int32 Count = Points.Num() - 1;
+	while (ChainLinkVisuals->GetInstanceCount() < Count) ChainLinkVisuals->AddInstance(FTransform::Identity);
+	while (ChainLinkVisuals->GetInstanceCount() > Count) ChainLinkVisuals->RemoveInstance(ChainLinkVisuals->GetInstanceCount() - 1);
+	const FBox MeshBounds = ChainLinkVisuals->GetStaticMesh()->GetBoundingBox();
+	const FVector MeshSize = MeshBounds.GetSize();
+	// Every visual link is contained in the capsule actually checked by the
+	// solver. No chord spanning several physical edges can cut a corner.
+	for (int32 I = 0; I < Count; ++I)
 	{
-		return;
-	}
-	const float PathLength = RopeSimulation->GetSimulatedPathLength();
-	if (PathLength <= UE_SMALL_NUMBER)
-	{
-		return;
-	}
-	const float LinkLength = GetFixedLinkLength();
-	int32 CompleteLinks = FMath::Clamp(FMath::FloorToInt(CurrentCableLength / LinkLength), 0, Chain->ChainLinkCount);
-	float PartialLength = CurrentCableLength - CompleteLinks * LinkLength;
-	if (PartialLength < 0.5f || CompleteLinks >= Chain->ChainLinkCount)
-	{
-		PartialLength = 0.0f;
-	}
-	TArray<float> VisualLengths;
-	if (PartialLength > 0.0f)
-	{
-		VisualLengths.Add(PartialLength);
-	}
-	for (int32 Index = 0; Index < CompleteLinks; ++Index)
-	{
-		VisualLengths.Add(LinkLength);
-	}
-
-	ChainLinkVisuals->ClearInstances();
-	float RestCursor = 0.0f;
-	for (int32 VisualIndex = 0; VisualIndex < VisualLengths.Num(); ++VisualIndex)
-	{
-		const float VisualLength = VisualLengths[VisualIndex];
-		const float SampleDistance = ((RestCursor + VisualLength * 0.5f) / CurrentCableLength) * PathLength;
-		FVector Location;
-		FVector Direction;
-		if (SampleCableAtDistance(Points, SampleDistance, Location, Direction))
-		{
-			const FQuat Alignment = FRotationMatrix::MakeFromZ(Direction).ToQuat();
-			const FQuat AlternatingTwist(FVector::UpVector, (VisualIndex % 2) * UE_HALF_PI);
-			ChainLinkVisuals->AddInstance(FTransform(
-				Alignment * AlternatingTwist,
-				Location,
-				FVector(
-					Chain->ChainLinkThickness / 100.0f,
-					Chain->ChainLinkThickness / 100.0f,
-					(VisualLength + Chain->ChainLinkVisualOverlap) / 100.0f)), true);
-		}
-		RestCursor += VisualLength;
+		const FVector Edge = Points[I + 1] - Points[I];
+		const float Diameter = FMath::Min(Chain->ChainLinkThickness, RopeSimulation->GetCollisionRadius() * 1.8f);
+		const float Length = Edge.Size();
+		const FQuat Alignment = FRotationMatrix::MakeFromZ(Edge.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector)).ToQuat();
+		const FQuat Twist(FVector::UpVector, (I & 1) * UE_HALF_PI);
+		const float RadialScale = Diameter / FMath::Max(1.0, FVector2D(MeshSize.X, MeshSize.Y).Size());
+		const float SafeOverlap = 2.0f * FMath::Sqrt(FMath::Max(0.0f,
+			FMath::Square(RopeSimulation->GetCollisionRadius()) - FMath::Square(Diameter * 0.5f)));
+		const FVector Scale(RadialScale, RadialScale,
+			(Length + FMath::Min3(Chain->ChainLinkVisualOverlap, RopeSimulation->GetCollisionRadius(), SafeOverlap)) / FMath::Max(1.0, MeshSize.Z));
+		const FVector Centre = (Points[I] + Points[I + 1]) * 0.5
+			- (Alignment * Twist).RotateVector(MeshBounds.GetCenter() * Scale);
+		ChainLinkVisuals->UpdateInstanceTransform(I,
+			FTransform(Alignment * Twist, Centre, Scale), true, I == Count - 1, true);
 	}
 }
 
-bool AChopItQuotaMachine::SampleCableAtDistance(
-	const TArray<FVector>& Points,
-	const float Distance,
-	FVector& OutLocation,
-	FVector& OutDirection) const
+void AChopItQuotaMachine::UpdateReleasedChainLabel()
 {
-	float Traversed = 0.0f;
-	for (int32 Index = 1; Index < Points.Num(); ++Index)
-	{
-		const FVector Segment = Points[Index] - Points[Index - 1];
-		const float SegmentLength = Segment.Size();
-		if (SegmentLength <= UE_SMALL_NUMBER)
-		{
-			continue;
-		}
-		if (Traversed + SegmentLength >= Distance)
-		{
-			OutLocation = FMath::Lerp(Points[Index - 1], Points[Index],
-				FMath::Clamp((Distance - Traversed) / SegmentLength, 0.0f, 1.0f));
-			OutDirection = Segment / SegmentLength;
-			return true;
-		}
-		Traversed += SegmentLength;
-	}
-	OutLocation = Points.Last();
-	OutDirection = (Points.Last() - Points[Points.Num() - 2]).GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
-	return true;
-}
-
-float AChopItQuotaMachine::GetFixedLinkLength() const
-{
-	const UChopItChainDefinition* Chain = GetChainDefinition();
-	if (!Chain)
-	{
-		return 1.0f;
-	}
-	const int32 MaximumLinks = FMath::Clamp(Chain->ChainLinkCount, 3, 64);
-	return FMath::Max(Chain->ChainLinkLength, Chain->MaxChainLength / static_cast<float>(MaximumLinks));
+	if (!ReleasedChainLabel) return;
+	const int32 ReleasedDecimeters = FMath::RoundToInt(CurrentCableLength / 10.0f);
+	if (ReleasedDecimeters == LastDisplayedReleasedDecimeters) return;
+	LastDisplayedReleasedDecimeters = ReleasedDecimeters;
+	ReleasedChainLabel->SetText(FText::FromString(FString::Printf(
+		TEXT("CADENA LIBERADA: %.1f m"), static_cast<float>(ReleasedDecimeters) / 10.0f)));
 }
 
 const UChopItChainDefinition* AChopItQuotaMachine::GetChainDefinition() const
@@ -705,6 +531,7 @@ void AChopItQuotaMachine::DestroyPlayerChain()
 {
 	if (TetherReceiver)
 	{
+		TetherReceiver->BindMachine(nullptr);
 		TetherReceiver->ClearTetherState();
 	}
 	if (TetherPath)
@@ -721,11 +548,7 @@ void AChopItQuotaMachine::DestroyPlayerChain()
 	}
 	ChainedPlayer = nullptr;
 	TetherReceiver = nullptr;
-	DeployedChainLinkCount = 0;
-	TargetChainLinkCount = 0;
 	CurrentCableLength = 0.0f;
-	TargetCableLength = 0.0f;
-	CableReelVelocity = 0.0f;
+	LastDisplayedReleasedDecimeters = INDEX_NONE;
 	bHardLimited = false;
-	bHasLastValidPlayerLocation = false;
 }

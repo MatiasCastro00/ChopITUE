@@ -425,8 +425,10 @@ UChopItBootstrapCommandlet::UChopItBootstrapCommandlet()
 }
 
 extern bool InstallUIJuiceAnimations();
+extern bool MigrateChainV2Assets();
 int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 {
+	if (FParse::Param(*Params, TEXT("ChainV2"))) return MigrateChainV2Assets() ? 0 : 1;
 	if (FParse::Param(*Params, TEXT("EnglishPSXHUD")))
 		return ChopItBootstrap::LocalizePSXHUDToEnglish() ? 0 : 1;
 	// Targeted repair must not run asset generation or touch the user's HUD.

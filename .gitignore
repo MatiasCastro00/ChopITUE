@@ -62,3 +62,5 @@ Desktop.ini
 
 # Local developer content must never ship or be committed
 Content/ChopIt/Developer/
+
+!Build/CI/VerifyChainV2.ps1

@@ -35,6 +35,8 @@ public:
 	UInstancedStaticMeshComponent* GetWoodChipPool() const { return WoodChipPool; }
 	int32 GetWoodChipPoolSize() const { return WoodChipPoolSize; }
 	int32 GetActiveWoodChipCount() const;
+	/** Called by the receiver after CharacterMovement, before Chaos. */
+	void AdvancePlayerChain(float DeltaSeconds);
 
 private:
 	UFUNCTION()
@@ -49,16 +51,12 @@ private:
 	void CreatePlayerChain(AActor* PlayerActor);
 	void DestroyPlayerChain();
 	void UpdateRetractableChain(float DeltaSeconds);
-	void UpdateReel(float RouteLength, float DeltaSeconds);
-	void UpdatePlayerTension(float RouteLength);
-	void CorrectHardLimit(float RouteLength);
 	void UpdateChainVisuals();
+	void UpdateReleasedChainLabel();
 	void UpdateDeliveryReaction(float DeltaSeconds);
 	void SpawnWoodChips(int32 Count);
 	void UpdateWoodChips(float DeltaSeconds);
 	void HideWoodChip(int32 PoolIndex);
-	bool SampleCableAtDistance(const TArray<FVector>& Points, float Distance, FVector& OutLocation, FVector& OutDirection) const;
-	float GetFixedLinkLength() const;
 	const UChopItChainDefinition* GetChainDefinition() const;
 
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")
@@ -69,6 +67,8 @@ private:
 	TObjectPtr<UTextRenderComponent> QuotaLabel;
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Cycle")
 	TObjectPtr<UTextRenderComponent> LeverLabel;
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|07 Components")
+	TObjectPtr<UTextRenderComponent> ReleasedChainLabel;
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")
 	TObjectPtr<UPointLightComponent> DeliveryGlow;
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")
@@ -79,10 +79,10 @@ private:
 	UPROPERTY(EditAnywhere, Category = "ChopIt|Quota|Juice", meta = (ClampMin = "1", ClampMax = "12"))
 	int32 WoodChipsPerItem = 5;
 
-	/** Authoritative collision route. */
+	/** Read-only physical path adapter. */
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|07 Components")
 	TObjectPtr<UChopItTetherPathComponent> TetherPath;
-	/** Per-span simulation used only to place the visual chain skin. */
+	/** Authoritative chain and reel simulation. */
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|07 Components")
 	TObjectPtr<UChopItRopeComponent> RopeSimulation;
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|07 Components")
@@ -114,15 +114,9 @@ private:
 	FRotator MachineBaseRotation = FRotator::ZeroRotator;
 	float DeliveryReactionStrength = 0.0f;
 	float DeliveryAnimationTime = 0.0f;
-
-	int32 DeployedChainLinkCount = 0;
-	int32 TargetChainLinkCount = 0;
 	float CurrentCableLength = 0.0f;
-	float TargetCableLength = 0.0f;
-	float CableReelVelocity = 0.0f;
+	int32 LastDisplayedReleasedDecimeters = INDEX_NONE;
 	bool bHardLimited = false;
-	FVector LastValidPlayerLocation = FVector::ZeroVector;
-	bool bHasLastValidPlayerLocation = false;
 	float DeliveryGlowRemaining = 0.0f;
 	FTimerHandle ChainCreationTimer;
 };

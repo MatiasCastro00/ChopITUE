@@ -1,4 +1,5 @@
 #include "Economy/ChopItTetherReceiverComponent.h"
+#include "Economy/ChopItQuotaMachine.h"
 
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -7,7 +8,7 @@ UChopItTetherReceiverComponent::UChopItTetherReceiverComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = true;
-	PrimaryComponentTick.TickGroup = TG_PrePhysics;
+	PrimaryComponentTick.TickGroup = TG_PostPhysics;
 }
 
 void UChopItTetherReceiverComponent::SetTetherState(
@@ -25,6 +26,22 @@ void UChopItTetherReceiverComponent::SetTetherState(
 	bHasTetherState = true;
 }
 
+void UChopItTetherReceiverComponent::BindMachine(AChopItQuotaMachine* InMachine)
+{
+	if (Machine.IsValid()) Machine->RemoveTickPrerequisiteComponent(this);
+	Machine = InMachine;
+	// Use the current Chaos body poses. Solving before physics left a falling
+	// tree inside the rendered chain until the next frame. Forces produced here
+	// are accumulated for the next rigid-body step, and presentation follows us.
+	SetTickGroup(TG_PostPhysics);
+	if (InMachine) InMachine->AddTickPrerequisiteComponent(this);
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		if (InMachine) AddTickPrerequisiteComponent(Character->GetCharacterMovement());
+		else RemoveTickPrerequisiteComponent(Character->GetCharacterMovement());
+	}
+}
+
 void UChopItTetherReceiverComponent::ClearTetherState()
 {
 	TensionAlpha = 0.0f;
@@ -40,7 +57,6 @@ FVector UChopItTetherReceiverComponent::GetOutwardDirection() const
 		return FVector::ZeroVector;
 	}
 	FVector Outward = Owner->GetActorLocation() - GuidePoint;
-	Outward.Z = 0.0f;
 	return Outward.GetSafeNormal();
 }
 
@@ -61,6 +77,11 @@ void UChopItTetherReceiverComponent::TickComponent(
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (Machine.IsValid())
+	{
+		Machine->AdvancePlayerChain(DeltaTime);
+		return;
+	}
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
 	UCharacterMovementComponent* Movement = Character ? Character->GetCharacterMovement() : nullptr;
 	if (!bHasTetherState || !Movement)

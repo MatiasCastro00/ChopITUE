@@ -13,6 +13,8 @@ public class ChopItTests : ModuleRules
 			"ChopItCombat",
 			"ChopItAI",
 			"ChopItWorld",
+			"PhysicsCore",
+			"Chaos",
 			"ChopItPresentation",
 			"EnhancedInput",
 			"GameplayTags",

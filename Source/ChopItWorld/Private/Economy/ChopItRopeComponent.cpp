@@ -1,494 +1,978 @@
 #include "Economy/ChopItRopeComponent.h"
 
 #include "ChopItCollision.h"
-#include "CollisionQueryParams.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "PhysicsEngine/BodySetup.h"
+#include "Chaos/Convex.h"
 #include "Economy/ChopItChainDefinition.h"
 #include "Engine/World.h"
+#include "Engine/OverlapResult.h"
+#include "HAL/PlatformTime.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/ScopeExit.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
+
+static TAutoConsoleVariable<float> CVarChainFrameBudgetMs(
+	TEXT("ChopIt.Chain.FrameBudgetMs"), 32.0f,
+	TEXT("CPU budget per chain per frame in milliseconds. 0 disables the budget for offline validation."));
+
+bool UChopItRopeComponent::IsFrameBudgetExhausted() const
+{
+	return SimulationDeadline > 0.0 && FPlatformTime::Seconds() >= SimulationDeadline;
+}
 
 UChopItRopeComponent::UChopItRopeComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-void UChopItRopeComponent::Configure(const UChopItChainDefinition* Definition)
+void UChopItRopeComponent::Configure(const UChopItChainDefinition* D)
 {
-	if (!Definition)
+	if (!D) return;
+	MaxLength = FMath::Max(20.0f, D->MaxChainLength);
+	MinimumLength = FMath::Clamp(D->MinimumDeployedLength, 20.0f, MaxLength);
+	Radius = FMath::Max(1.0f, D->CableParticleDiameter * 0.5f);
+	Skin = FMath::Clamp(D->CableCollisionSkin, 0.1f, 2.0f);
+	Spacing = FMath::Clamp(D->PhysicalSegmentLength, 4.0f, FMath::Max(4.0f, Radius * 2.0f));
+	MassPerCm = FMath::Max(0.0001f, D->LinearMassDensity / 100.0f);
+	Compliance = FMath::Clamp(D->StretchCompliance, 0.0f, 0.00001f);
+	GravityScale = FMath::Max(0.0f, D->CableGravityScale);
+	Damping = FMath::Clamp(D->CableVelocityDamping, 0.0f, 0.25f);
+	ConstraintDamping = FMath::Clamp(D->CableConstraintVelocityDamping, 0.0f, 1.0f);
+	GroundFriction = FMath::Clamp(D->CableGroundFriction, 0.0f, 1.0f);
+	ObstacleFriction = FMath::Clamp(D->CableCollisionFriction, 0.0f, 1.0f);
+	Iterations = FMath::Clamp(D->CableSolverIterations, 8, 64);
+	MaximumSteps = FMath::Clamp(D->CableMaximumSubsteps, 1, 16);
+	// One clock for contacts, mass, reel and XPBD. Rendering never changes dt.
+	StepTime = 1.0f / 120.0f;
+	StretchTolerance = FMath::Clamp(D->ChainStretchTolerance, 0.1f, 50.0f);
+	FeedSpeed = FMath::Max(20.0f, D->ChainFeedSpeed);
+	FeedAcceleration = FMath::Max(20.0f, D->ChainFeedAcceleration);
+	Slack = FMath::Max(0.0f, D->ChainSlack);
+	Hysteresis = FMath::Max(0.0f, D->ChainReelHysteresis);
+	MaximumForce = FMath::Max(0.0f, D->MaximumPropTensionForce);
+	ForceScale = FMath::Max(0.0f, D->PhysicsPropForceScale);
+	bCollision = D->bCableWorldCollision;
+}
+
+void UChopItRopeComponent::InitializeRope(const FVector& Start, const FVector& End, float Length, AActor* IgnoredActor)
+{
+	ResetRope();
+	StartTarget = Start;
+	EndTarget = End;
+	QueryParams = FCollisionQueryParams(SCENE_QUERY_STAT(ChopItChainV2), false, GetOwner());
+	QueryParams.bFindInitialOverlaps = true;
+	if (IgnoredActor) QueryParams.AddIgnoredActor(IgnoredActor);
+	ResponseParams = FCollisionResponseParams::DefaultResponseParam;
+	for (ECollisionChannel Channel : {ECC_Pawn, ChopItCollisionChannels::Enemy,
+		ChopItCollisionChannels::Projectile, ChopItCollisionChannels::Pickup,
+		ChopItCollisionChannels::DeliveryZone, ChopItCollisionChannels::Chain})
 	{
-		return;
+		ResponseParams.CollisionResponse.SetResponse(Channel, ECR_Ignore);
 	}
-	const int32 MaximumLinks = FMath::Clamp(Definition->ChainLinkCount, 3, 64);
-	const int32 SegmentsPerLink = FMath::Clamp(Definition->CableSegmentsPerLink, 2, 8);
-	TargetParticleSpacing = Definition->MaxChainLength / FMath::Max(1, MaximumLinks * SegmentsPerLink);
-	CollisionRadius = FMath::Max(FMath::Max(1.0f, Definition->CableParticleDiameter * 0.5f), TargetParticleSpacing * 0.55f);
-	CollisionSkin = FMath::Max(0.1f, Definition->CableCollisionSkin);
-	SolverIterations = FMath::Clamp(Definition->CableSolverIterations, 1, 64);
-	CollisionIterations = FMath::Clamp(Definition->CableCollisionIterations, 1, 8);
-	SubstepTime = FMath::Clamp(Definition->CableSubstepTime, 0.0025f, 0.033f);
-	MaximumSubsteps = FMath::Clamp(Definition->CableMaximumSubsteps, 1, 16);
-	GravityScale = FMath::Max(0.0f, Definition->CableGravityScale)
-		* (FMath::Max(0.01f, Definition->ChainLinkWeight) / 1.25f);
-	VelocityDamping = FMath::Clamp(Definition->CableVelocityDamping, 0.0f, 0.25f);
-	ConstraintVelocityDamping = FMath::Clamp(Definition->CableConstraintVelocityDamping, 0.0f, 1.0f);
-	ConstraintStiffness = FMath::Clamp(Definition->CableXPBDStiffness, 0.5f, 1.0f);
-	GroundFriction = FMath::Clamp(Definition->CableGroundFriction, 0.0f, 1.0f);
-	ObstacleFriction = FMath::Clamp(Definition->CableCollisionFriction, 0.0f, 1.0f);
-	MinimumParticlesPerSpan = FMath::Clamp(Definition->MinimumVisualParticlesPerSpan, 3, 64);
-	bWorldCollision = Definition->bCableWorldCollision;
-}
-
-void UChopItRopeComponent::InitializeRope(
-	const FVector& StartWorld,
-	const FVector& EndWorld,
-	const float InRopeLength,
-	AActor* InIgnoredEndActor)
-{
-	IgnoredEndActor = InIgnoredEndActor;
-	bInitialized = true;
-	SetRoutePath(TArray<FVector>{StartWorld, EndWorld}, TArray<int32>{0, -1}, InRopeLength);
-	AccumulatedTime = 0.0f;
-}
-
-void UChopItRopeComponent::SetRoutePath(
-	const TArray<FVector>& InRoutePoints,
-	const TArray<int32>& InRoutePointIds,
-	const float InRopeLength)
-{
-	if (InRoutePoints.Num() < 2 || InRoutePointIds.Num() != InRoutePoints.Num())
+	DeployedLength = FMath::Clamp(Length, MinimumLength, MaxLength);
+	RequestedLength = DeployedLength;
+	const int32 Count = FMath::Max(2, FMath::CeilToInt(DeployedLength / Spacing));
+	for (int32 I = 0; I <= Count; ++I)
 	{
-		return;
+		Positions.Add(FMath::Lerp(Start, End, static_cast<double>(I) / Count));
+		if (I < Count) RestLengths.Add(DeployedLength / Count);
 	}
-	const bool bTopologyChanged = RoutePointIds != InRoutePointIds;
-	RoutePoints = InRoutePoints;
-	RoutePointIds = InRoutePointIds;
-	RopeLength = FMath::Max(1.0f, InRopeLength);
-	bInitialized = true;
-	UpdateSpanLayout(bTopologyChanged || Spans.Num() != RoutePoints.Num() - 1);
-	RefreshFlattenedPositions();
-}
-
-void UChopItRopeComponent::SetEndpoints(const FVector& StartWorld, const FVector& EndWorld)
-{
-	if (RoutePoints.Num() != 2)
+	PreviousPositions = Positions;
+	RefreshMasses();
+	// Never create an already threaded-through-wall rope. The owner can retry
+	// after the player returns to a valid deployment position.
+	bInitialized = FVector::Distance(Start, End) <= DeployedLength + StretchTolerance && IsCollisionFree();
+	if (!bInitialized)
 	{
-		SetRoutePath(TArray<FVector>{StartWorld, EndWorld}, TArray<int32>{0, -1}, RopeLength);
-		return;
-	}
-	RoutePoints[0] = StartWorld;
-	RoutePoints[1] = EndWorld;
-	UpdateSpanLayout(false);
-	RefreshFlattenedPositions();
-}
-
-void UChopItRopeComponent::SetRopeLength(const float InRopeLength)
-{
-	RopeLength = FMath::Max(1.0f, InRopeLength);
-	if (bInitialized)
-	{
-		UpdateSpanLayout(false);
-		RefreshFlattenedPositions();
+		Positions.Reset();
+		PreviousPositions.Reset();
+		RestLengths.Reset();
 	}
 }
 
-void UChopItRopeComponent::UpdateSpanLayout(const bool bTopologyChanged)
+void UChopItRopeComponent::SetEndpoints(const FVector& Start, const FVector& End)
 {
-	if (bTopologyChanged)
+	if (!Start.ContainsNaN() && !End.ContainsNaN())
 	{
-		RebuildSpansPreservingState();
+		StartTarget = Start;
+		EndTarget = End;
 	}
-	if (Spans.Num() != RoutePoints.Num() - 1)
-	{
-		return;
-	}
+}
 
-	TArray<float> DirectLengths;
-	DirectLengths.SetNumUninitialized(Spans.Num());
-	float DirectTotal = 0.0f;
-	for (int32 Index = 0; Index < Spans.Num(); ++Index)
+void UChopItRopeComponent::SetRopeLength(float Length)
+{
+	if (FMath::IsFinite(Length)) RequestedLength = FMath::Clamp(Length, MinimumLength, MaxLength);
+}
+
+bool UChopItRopeComponent::Sweep(const FVector& A, const FVector& B, float QueryRadius, FHitResult& Hit) const
+{
+	if (!bCollision || !GetWorld() || !MayHitWorld(A, B, QueryRadius)) return false;
+	++SweepQueriesThisFrame;
+	return GetWorld()->SweepSingleByChannel(Hit, A, B, FQuat::Identity,
+		ChopItCollisionChannels::Chain, FCollisionShape::MakeSphere(QueryRadius), QueryParams, ResponseParams);
+}
+
+bool UChopItRopeComponent::MayHitWorld(const FVector& A, const FVector& B, float QueryRadius) const
+{
+	if (!bCollisionBoundsReady) return true;
+	FBox QueryBounds(ForceInit);
+	QueryBounds += A; QueryBounds += B;
+	QueryBounds = QueryBounds.ExpandBy(QueryRadius);
+	// A difficult solve may leave the cached broad-phase region. In that case
+	// use the full world query instead of assuming uncollected bodies are absent.
+	if (!CollisionQueryRegion.IsInside(QueryBounds)) return true;
+	for (int32 I = 0; I < CollisionBounds.Num(); ++I)
 	{
-		DirectLengths[Index] = FVector::Distance(RoutePoints[Index], RoutePoints[Index + 1]);
-		DirectTotal += DirectLengths[Index];
+		if (!QueryBounds.Intersect(CollisionBounds[I])) continue;
+		bool bSeparated = false;
+		for (const FPlane& Plane : CollisionPlanes[I])
+			if (Plane.PlaneDot(A) > QueryRadius && Plane.PlaneDot(B) > QueryRadius) { bSeparated = true; break; }
+		if (!bSeparated) return true;
 	}
-	const float Slack = FMath::Max(0.0f, RopeLength - DirectTotal);
-	for (int32 Index = 0; Index < Spans.Num(); ++Index)
+	return false;
+}
+
+void UChopItRopeComponent::RefreshCollisionBounds()
+{
+	CollisionBounds.Reset();
+	CollisionPlanes.Reset();
+	bCollisionBoundsReady = false;
+	if (!bCollision || !GetWorld() || Positions.IsEmpty()) return;
+	FBox QueryBounds(ForceInit);
+	for (const FVector& P : Positions) QueryBounds += P;
+	QueryBounds += StartTarget; QueryBounds += EndTarget;
+	// Enclose every possible correction in this bounded solve, not just the
+	// current rope. This broad phase cannot hide a newly approached obstacle.
+	QueryBounds = QueryBounds.ExpandBy(Radius * (Iterations + 4) + Skin + FeedSpeed * StepTime);
+	CollisionQueryRegion = QueryBounds;
+	TArray<FOverlapResult> Overlaps;
+	GetWorld()->OverlapMultiByChannel(Overlaps, QueryBounds.GetCenter(), FQuat::Identity,
+		ChopItCollisionChannels::Chain, FCollisionShape::MakeBox(QueryBounds.GetExtent()), QueryParams, ResponseParams);
+	for (const FOverlapResult& O : Overlaps)
 	{
-		FChopItVisualRopeSpan& Span = Spans[Index];
-		Span.StartId = RoutePointIds[Index];
-		Span.EndId = RoutePointIds[Index + 1];
-		const float Weight = DirectTotal > UE_SMALL_NUMBER
-			? DirectLengths[Index] / DirectTotal
-			: 1.0f / FMath::Max(1, Spans.Num());
-		Span.RestLength = FMath::Max(1.0f, DirectLengths[Index] + Slack * Weight);
-		const int32 DesiredCount = FMath::Clamp(
-			FMath::CeilToInt(Span.RestLength / FMath::Max(1.0f, TargetParticleSpacing)) + 1,
-			MinimumParticlesPerSpan,
-			129);
-		ResizeSpan(Span, DesiredCount);
-		PinSpan(Span, Index);
-		if (bTopologyChanged)
+		UPrimitiveComponent* Body = O.GetComponent();
+		if (!O.bBlockingHit || !Body) continue;
+		CollisionBounds.Add(Body->Bounds.GetBox());
+		TArray<FPlane>& Planes = CollisionPlanes.AddDefaulted_GetRef();
+		UBodySetup* Setup = Body->GetBodySetup();
+		// Instanced, compound, complex and transformed elements keep the AABB
+		// fallback; a component transform alone cannot describe their bodies.
+		if (Body->GetClass() != UStaticMeshComponent::StaticClass() || Body->Mobility != EComponentMobility::Static || !Setup
+			|| Setup->GetCollisionTraceFlag() == CTF_UseComplexAsSimple
+			|| Setup->AggGeom.GetElementCount() != 1 || Setup->AggGeom.ConvexElems.Num() != 1
+			|| Body->GetComponentScale().GetMin() < 0.01f) continue;
+		const FKConvexElem& Element = Setup->AggGeom.ConvexElems[0];
+		if (!Element.GetTransform().Equals(FTransform::Identity)) continue;
+		const auto& Hull = Element.GetChaosConvexMesh();
+		if (!Hull || Hull->NumVertices() == 0) continue;
+		const FMatrix Transform = Element.GetTransform().ToMatrixWithScale() * Body->GetComponentTransform().ToMatrixWithScale();
+		TArray<FVector, TInlineAllocator<128>> Vertices;
+		for (int32 V = 0; V < Hull->NumVertices(); ++V) Vertices.Add(Transform.TransformPosition(FVector(Hull->GetVertex(V))));
+		for (int32 P = 0; P < Hull->NumPlanes(); ++P)
 		{
-			// Splitting or merging keeps the old curve and velocity, then projects
-			// that preserved shape into the new span budgets immediately. Without
-			// this topology-only settle pass, tiny per-span errors could add up
-			// visually when several obstacles were introduced in one frame.
-			for (int32 Iteration = 0; Iteration < 256; ++Iteration)
+			Chaos::FVec3 Normal, Point;
+			Hull->GetPlaneNX(P, Normal, Point);
+			FPlane Plane = FPlane(FVector(Point), FVector(Normal)).TransformBy(Transform);
+			Plane.Normalize();
+			double Support = -TNumericLimits<double>::Max();
+			for (const FVector& Vertex : Vertices) Support = FMath::Max(Support, FVector::DotProduct(Vertex, FVector(Plane)));
+			Plane.W = Support + 0.01; // enclose the cooked hull, including roundoff
+			Planes.Add(Plane);
+		}
+	}
+	bCollisionBoundsReady = true;
+}
+
+bool UChopItRopeComponent::SegmentClear(const FVector& A, const FVector& B, float QueryRadius) const
+{
+	FHitResult Hit;
+	return !Sweep(A, B, QueryRadius, Hit);
+}
+
+bool UChopItRopeComponent::IsCollisionFree(float AllowedPenetration) const
+{
+	if (!bCollision || !GetWorld()) return true;
+	for (int32 I = 1; I < Positions.Num(); ++I)
+	{
+		FHitResult Hit;
+		// Independent final validation deliberately bypasses our cached broad phase.
+		if (GetWorld()->SweepSingleByChannel(Hit, Positions[I - 1], Positions[I], FQuat::Identity,
+			ChopItCollisionChannels::Chain, FCollisionShape::MakeSphere(FMath::Max(0.1f, Radius - AllowedPenetration)),
+			QueryParams, ResponseParams)) return false;
+	}
+	return true;
+}
+
+void UChopItRopeComponent::RecordContact(int32 Segment, const FHitResult& Hit)
+{
+	if (!Hit.GetComponent()) return;
+	if (ContactHeads.Num() != RestLengths.Num() || ContactNext.Num() != Contacts.Num())
+	{
+		ContactHeads.Init(INDEX_NONE, RestLengths.Num());
+		ContactNext.Init(INDEX_NONE, Contacts.Num());
+		for (int32 I = 0; I < Contacts.Num(); ++I)
+			if (ContactHeads.IsValidIndex(Contacts[I].Segment))
 			{
-				SolveSpanConstraints(Span, (Iteration & 1) != 0);
-				PinSpan(Span, Index);
+				ContactNext[I] = ContactHeads[Contacts[I].Segment];
+				ContactHeads[Contacts[I].Segment] = I;
 			}
-			ProjectSpanToRestLength(Span);
-		}
 	}
-}
-
-void UChopItRopeComponent::RebuildSpansPreservingState()
-{
-	TArray<FVector> OldPositions;
-	TArray<FVector> OldPrevious;
-	BuildFlattenedPolyline(false, OldPositions);
-	BuildFlattenedPolyline(true, OldPrevious);
-
-	TArray<FChopItVisualRopeSpan> NewSpans;
-	NewSpans.SetNum(RoutePoints.Num() - 1);
-	for (int32 SpanIndex = 0; SpanIndex < NewSpans.Num(); ++SpanIndex)
+	if (!ContactHeads.IsValidIndex(Segment)) return;
+	// Deduplicate only this edge's contacts, not every contact on the chain.
+	for (int32 I = ContactHeads[Segment]; I != INDEX_NONE; I = ContactNext[I])
 	{
-		FChopItVisualRopeSpan& Span = NewSpans[SpanIndex];
-		Span.StartId = RoutePointIds[SpanIndex];
-		Span.EndId = RoutePointIds[SpanIndex + 1];
-		const float DirectLength = FVector::Distance(RoutePoints[SpanIndex], RoutePoints[SpanIndex + 1]);
-		const int32 Count = FMath::Clamp(
-			FMath::CeilToInt(FMath::Max(DirectLength, 1.0f) / FMath::Max(1.0f, TargetParticleSpacing)) + 1,
-			MinimumParticlesPerSpan,
-			129);
-		Span.Positions.SetNumUninitialized(Count);
-		Span.PreviousPositions.SetNumUninitialized(Count);
-
-		const bool bCanPreserve = OldPositions.Num() >= 2 && OldPrevious.Num() == OldPositions.Num();
-		const float StartDistance = bCanPreserve ? FindNearestPathDistance(OldPositions, RoutePoints[SpanIndex]) : 0.0f;
-		const float EndDistance = bCanPreserve ? FindNearestPathDistance(OldPositions, RoutePoints[SpanIndex + 1]) : 0.0f;
-		for (int32 ParticleIndex = 0; ParticleIndex < Count; ++ParticleIndex)
+		FChopItRopeContact& C = Contacts[I];
+		++ContactChecksThisFrame;
+		if (C.Segment == Segment && C.Component == Hit.GetComponent()
+			&& FVector::DotProduct(C.Normal, Hit.Normal) > 0.95)
 		{
-			const float Alpha = static_cast<float>(ParticleIndex) / FMath::Max(1, Count - 1);
-			if (bCanPreserve && EndDistance > StartDistance + UE_SMALL_NUMBER)
-			{
-				const float SampleDistance = FMath::Lerp(StartDistance, EndDistance, Alpha);
-				Span.Positions[ParticleIndex] = SamplePath(OldPositions, SampleDistance);
-				Span.PreviousPositions[ParticleIndex] = SamplePath(OldPrevious, SampleDistance);
-			}
-			else
-			{
-				const FVector Position = FMath::Lerp(RoutePoints[SpanIndex], RoutePoints[SpanIndex + 1], Alpha);
-				Span.Positions[ParticleIndex] = Position;
-				Span.PreviousPositions[ParticleIndex] = Position;
-			}
-		}
-	}
-	Spans = MoveTemp(NewSpans);
-}
-
-void UChopItRopeComponent::ResizeSpan(FChopItVisualRopeSpan& Span, const int32 DesiredCount)
-{
-	if (Span.Positions.Num() < 2 || Span.PreviousPositions.Num() != Span.Positions.Num())
-	{
-		Span.Positions.SetNumUninitialized(DesiredCount);
-		Span.PreviousPositions.SetNumUninitialized(DesiredCount);
-		const int32 SpanIndex = static_cast<int32>(&Span - Spans.GetData());
-		for (int32 Index = 0; Index < DesiredCount; ++Index)
-		{
-			const float Alpha = static_cast<float>(Index) / FMath::Max(1, DesiredCount - 1);
-			const FVector Position = FMath::Lerp(RoutePoints[SpanIndex], RoutePoints[SpanIndex + 1], Alpha);
-			Span.Positions[Index] = Position;
-			Span.PreviousPositions[Index] = Position;
-		}
-		return;
-	}
-	while (Span.Positions.Num() < DesiredCount)
-	{
-		const FVector Position = FMath::Lerp(Span.Positions[0], Span.Positions[1], 0.35f);
-		Span.Positions.Insert(Position, 1);
-		Span.PreviousPositions.Insert(Position, 1);
-	}
-	while (Span.Positions.Num() > DesiredCount && Span.Positions.Num() > MinimumParticlesPerSpan)
-	{
-		Span.Positions.RemoveAt(1, 1, EAllowShrinking::No);
-		Span.PreviousPositions.RemoveAt(1, 1, EAllowShrinking::No);
-	}
-}
-
-void UChopItRopeComponent::Simulate(const float DeltaSeconds)
-{
-	if (!bInitialized || Spans.IsEmpty() || DeltaSeconds <= 0.0f)
-	{
-		return;
-	}
-	AccumulatedTime += FMath::Min(DeltaSeconds, SubstepTime * MaximumSubsteps);
-	for (int32 Completed = 0; AccumulatedTime >= SubstepTime && Completed < MaximumSubsteps; ++Completed)
-	{
-		SimulateSubstep(SubstepTime);
-		AccumulatedTime -= SubstepTime;
-	}
-	RefreshFlattenedPositions();
-}
-
-void UChopItRopeComponent::SimulateSubstep(const float StepSeconds)
-{
-	const FVector Gravity(0.0f, 0.0f, GetWorld() ? GetWorld()->GetGravityZ() * GravityScale : -980.0f * GravityScale);
-	for (int32 SpanIndex = 0; SpanIndex < Spans.Num(); ++SpanIndex)
-	{
-		FChopItVisualRopeSpan& Span = Spans[SpanIndex];
-		TArray<FVector> SweepStarts = Span.Positions;
-		for (int32 Index = 1; Index < Span.Positions.Num() - 1; ++Index)
-		{
-			const FVector Current = Span.Positions[Index];
-			const FVector Velocity = (Current - Span.PreviousPositions[Index]) * (1.0f - VelocityDamping);
-			Span.PreviousPositions[Index] = Current;
-			Span.Positions[Index] = Current + Velocity + Gravity * FMath::Square(StepSeconds);
-		}
-		const int32 EffectiveIterations = FMath::Clamp(
-			FMath::Max(SolverIterations, (Span.Positions.Num() - 1) * 4), 1, 128);
-		for (int32 Iteration = 0; Iteration < EffectiveIterations; ++Iteration)
-		{
-			SolveSpanConstraints(Span, (Iteration & 1) != 0);
-			if (bWorldCollision && Iteration < CollisionIterations)
-			{
-				ResolveSpanCollisions(Span, SweepStarts);
-				SweepStarts = Span.Positions;
-			}
-			PinSpan(Span, SpanIndex);
-		}
-		ProjectSpanToRestLength(Span);
-	}
-}
-
-void UChopItRopeComponent::SolveSpanConstraints(FChopItVisualRopeSpan& Span, const bool bReverseOrder)
-{
-	const float SegmentLength = Span.RestLength / FMath::Max(1, Span.Positions.Num() - 1);
-	const auto Solve = [this, &Span, SegmentLength](const int32 Index)
-	{
-		FVector& First = Span.Positions[Index];
-		FVector& Second = Span.Positions[Index + 1];
-		FVector& PreviousFirst = Span.PreviousPositions[Index];
-		FVector& PreviousSecond = Span.PreviousPositions[Index + 1];
-		const FVector Delta = Second - First;
-		const float Distance = Delta.Size();
-		if (Distance <= SegmentLength || Distance <= UE_SMALL_NUMBER)
-		{
+			C.Position = Hit.ImpactPoint;
 			return;
 		}
-		const FVector Correction = Delta * ((Distance - SegmentLength) / Distance) * ConstraintStiffness;
-		if (Index == 0)
-		{
-			Second -= Correction;
-			PreviousSecond -= Correction * ConstraintVelocityDamping;
-		}
-		else if (Index + 1 == Span.Positions.Num() - 1)
-		{
-			First += Correction;
-			PreviousFirst += Correction * ConstraintVelocityDamping;
-		}
-		else
-		{
-			First += Correction * 0.5f;
-			Second -= Correction * 0.5f;
-			PreviousFirst += Correction * (0.5f * ConstraintVelocityDamping);
-			PreviousSecond -= Correction * (0.5f * ConstraintVelocityDamping);
-		}
-	};
-	if (bReverseOrder)
+	}
+	ContactNext.Add(ContactHeads[Segment]);
+	ContactHeads[Segment] = Contacts.Num();
+	FChopItRopeContact& Contact = Contacts.AddDefaulted_GetRef();
+	Contact.Component = Hit.GetComponent();
+	Contact.Segment = Segment;
+	Contact.Position = Hit.ImpactPoint;
+	Contact.Normal = Hit.Normal.GetSafeNormal(UE_SMALL_NUMBER, Hit.ImpactNormal);
+}
+
+bool UChopItRopeComponent::TransitionClear(int32 Index, const FVector& Candidate) const
+{
+	if (!bCollision || !GetWorld()) return true;
+	for (int32 Neighbour : {Index - 1, Index + 1})
 	{
-		for (int32 Index = Span.Positions.Num() - 2; Index >= 0; --Index)
+		if (!Positions.IsValidIndex(Neighbour)) continue;
+		const FVector Fixed = Positions[Neighbour];
+		// A moving edge sweeps the triangle (fixed, old, candidate). Its tight
+		// bounds are sufficient; inflating the old edge by total motion falsely
+		// includes the floor for every horizontal correction of a resting chain.
+		FBox SweptBounds(ForceInit);
+		SweptBounds += Fixed; SweptBounds += Positions[Index]; SweptBounds += Candidate;
+		SweptBounds = SweptBounds.ExpandBy(Radius + Skin * 0.25f);
+		bool bMayHit = !bCollisionBoundsReady || !CollisionQueryRegion.IsInside(SweptBounds);
+		for (int32 Obstacle = 0; Obstacle < CollisionBounds.Num(); ++Obstacle)
 		{
-			Solve(Index);
+			if (!SweptBounds.Intersect(CollisionBounds[Obstacle])) continue;
+			bool bSeparated = false;
+			for (const FPlane& Plane : CollisionPlanes[Obstacle])
+				if (Plane.PlaneDot(Fixed) > Radius + Skin * .25f
+					&& Plane.PlaneDot(Positions[Index]) > Radius + Skin * .25f
+					&& Plane.PlaneDot(Candidate) > Radius + Skin * .25f) { bSeparated = true; break; }
+			if (!bSeparated) { bMayHit = true; break; }
+		}
+		if (!bMayHit) continue;
+		if (!SegmentClear(Fixed, Candidate, Radius + Skin * 0.25f)) return false;
+		// The verified final capsule also contains the entire moving edge when
+		// endpoint travel fits inside its skin. No extra temporal samples are
+		// necessary for these small solver corrections, even at a contact.
+		if (FVector::DistSquared(Positions[Index], Candidate) <= FMath::Square(Skin * 0.25f)) continue;
+		// Cheap conservative sweep of the complete rotating edge. Only contacts
+		// need the more expensive material-sample narrow phase below.
+		const FVector OldEdge = Positions[Index] - Fixed;
+		const float Motion = FVector::Distance(Positions[Index], Candidate);
+		const float Cover = Radius + Motion * 0.5f;
+		FHitResult CapsuleHit;
+		if (!GetWorld()->SweepSingleByChannel(CapsuleHit, (Fixed + Positions[Index]) * 0.5,
+			(Fixed + Candidate) * 0.5, FQuat::FindBetweenNormals(FVector::UpVector, OldEdge.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector)),
+			ChopItCollisionChannels::Chain, FCollisionShape::MakeCapsule(Cover, OldEdge.Size() * 0.5f + Cover), QueryParams, ResponseParams)) continue;
+
+		// Cover the entire swept edge, including its interior, by overlapping
+		// swept spheres. The inflation covers the gaps between material samples.
+		const float Length = FMath::Max(FVector::Distance(Fixed, Positions[Index]), FVector::Distance(Fixed, Candidate));
+		// Keep the conservative cover inside the static contact skin. A larger
+		// inflation introduces an invisible barrier at corners: the end capsule
+		// is clear but every sliding transition is incorrectly rejected.
+		const float MaxSampleSpacing = 2.0f * FMath::Sqrt(FMath::Square(Radius + Skin * 0.125f) - Radius * Radius);
+		const int32 Samples = FMath::Max(1, FMath::CeilToInt(Length / MaxSampleSpacing));
+		const float SampleSpacing = Length / Samples;
+		const float CoverRadius = FMath::Sqrt(Radius * Radius + SampleSpacing * SampleSpacing * 0.25f);
+		for (int32 S = 1; S <= Samples; ++S)
+		{
+			const double T = static_cast<double>(S) / Samples;
+			const FVector A = FMath::Lerp(Fixed, Positions[Index], T);
+			const FVector B = FMath::Lerp(Fixed, Candidate, T);
+			FHitResult Hit;
+			if (Sweep(A, B, CoverRadius, Hit))
+			{
+				// A shallow overlap of the conservative cover is not actual
+				// penetration. Short moves + exact final capsule check permit sliding.
+				if (Hit.bStartPenetrating && Hit.PenetrationDepth <= CoverRadius - Radius + Skin) continue;
+				if (!Hit.bStartPenetrating && FVector::DotProduct(B - A, Hit.Normal) >= -0.0001) continue;
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+FVector UChopItRopeComponent::MoveParticle(int32 Index, const FVector& Target)
+{
+	const FVector Old = Positions[Index];
+	if (IsFrameBudgetExhausted()) return Old;
+	if (Old.Equals(Target, 0.00001f)) return Old;
+	const bool bFreeEndpoint = (Index == 0 || Index == Positions.Num() - 1) && DeployedLength < MaxLength - 0.1f;
+	const float MaxMove = bFreeEndpoint ? Radius : Radius * 0.75f;
+	FVector Candidate = Old + (Target - Old).GetClampedToMaxSize(MaxMove);
+	if (!bCollision || !GetWorld()) return Candidate;
+	FHitResult Hit;
+	if (Sweep(Old, Candidate, Radius + Skin, Hit))
+	{
+		RecordContact(FMath::Clamp(Index - 1, 0, RestLengths.Num() - 1), Hit);
+		const FVector Normal = Hit.Normal.GetSafeNormal(UE_SMALL_NUMBER, Hit.ImpactNormal);
+		if (Hit.bStartPenetrating)
+			Candidate += Normal * (Hit.PenetrationDepth + Skin * 0.1f);
+		else
+			Candidate = Hit.Location + Normal * Skin * 0.1f
+				+ FVector::VectorPlaneProject(Candidate - Hit.Location, Normal);
+	}
+	// A particle may be clear while the edge to its neighbour cuts a corner.
+	// Project the proposed endpoint onto that contact plane before line search.
+	for (int32 Neighbour : {Index - 1, Index + 1})
+	{
+		if (!Positions.IsValidIndex(Neighbour)) continue;
+		if (Sweep(Positions[Neighbour], Candidate, Radius + Skin * 0.5f, Hit))
+		{
+			RecordContact(FMath::Min(Index, Neighbour), Hit);
+			const FVector N = Hit.Normal.GetSafeNormal(UE_SMALL_NUMBER, Hit.ImpactNormal);
+			const float Separation = FVector::DotProduct(Hit.Location - Candidate, N);
+			Candidate += N * FMath::Max(0.0f, Separation + Skin * 0.1f);
+		}
+	}
+	Candidate = Old + (Candidate - Old).GetClampedToMaxSize(MaxMove);
+	if (TransitionClear(Index, Candidate)) return Candidate;
+	// Never replace a blocked edge by a newly computed shortest path.
+	for (int32 Attempt = 0; Attempt < 7; ++Attempt)
+	{
+		if (IsFrameBudgetExhausted()) return Old;
+		Candidate = (Candidate + Old) * 0.5;
+		if (TransitionClear(Index, Candidate)) return Candidate;
+	}
+	return Old;
+}
+
+void UChopItRopeComponent::RefreshMasses()
+{
+	// Topology changes can make an old interior index the attached endpoint.
+	// SetNumZeroed only clears new entries; reset existing endpoint masses too.
+	InverseMasses.Init(0.0f, Positions.Num());
+	for (int32 I = 1; I < Positions.Num() - 1; ++I)
+		InverseMasses[I] = 1.0f / FMath::Max(0.0001f, MassPerCm * (RestLengths[I - 1] + RestLengths[I]) * 0.5f);
+	Multipliers.SetNumZeroed(RestLengths.Num());
+}
+
+bool UChopItRopeComponent::ResizeAtOutlet(float Length)
+{
+	Length = FMath::Clamp(Length, MinimumLength, MaxLength);
+	float Change = Length - DeployedLength;
+	if (FMath::Abs(Change) < 0.0001f) return true;
+	if (Change > 0)
+	{
+		RestLengths[0] += Change;
+		while (RestLengths[0] > Spacing * 1.5f)
+		{
+			const float OldRest = RestLengths[0];
+			const float Fraction = FMath::Min(0.5f, Spacing / OldRest);
+			const FVector NewPosition = FMath::Lerp(Positions[0], Positions[1], Fraction);
+			const FVector NewPrevious = FMath::Lerp(PreviousPositions[0], PreviousPositions[1], Fraction);
+			Positions.Insert(NewPosition, 1);
+			PreviousPositions.Insert(NewPrevious, 1);
+			RestLengths[0] = Spacing;
+			RestLengths.Insert(OldRest - Spacing, 1);
 		}
 	}
 	else
 	{
-		for (int32 Index = 0; Index < Span.Positions.Num() - 1; ++Index)
+		float Remove = -Change;
+		while (Remove >= RestLengths[0] && RestLengths.Num() > 2)
 		{
-			Solve(Index);
+			// Absorb a joint only when its entire replacement edge is clear and
+			// the joint has physically reached the outlet.
+			if (FVector::Distance(Positions[0], Positions[1]) > Spacing * 1.1f
+				|| !SegmentClear(Positions[0], Positions[2], Radius + Skin * 0.25f)) return false;
+			Remove -= RestLengths[0];
+			RestLengths.RemoveAt(0);
+			Positions.RemoveAt(1);
+			PreviousPositions.RemoveAt(1);
 		}
+		RestLengths[0] -= Remove;
+		if (RestLengths[0] < 0.1f && RestLengths.Num() > 2)
+		{
+			// Merge a vanishing outlet remainder without discarding its material
+			// length. Rejecting the same sub-mm remainder each frame jams a reel.
+			if (!SegmentClear(Positions[0], Positions[2], Radius + Skin * 0.25f)) return false;
+			RestLengths[0] += RestLengths[1];
+			RestLengths.RemoveAt(1);
+			Positions.RemoveAt(1);
+			PreviousPositions.RemoveAt(1);
+		}
+	}
+	DeployedLength = Length;
+	RefreshMasses();
+	return true;
+}
+
+void UChopItRopeComponent::SolveLengths(float Dt)
+{
+	const int32 N = RestLengths.Num();
+	Directions.SetNumUninitialized(N);
+	Diagonal.SetNumUninitialized(N);
+	Upper.SetNumUninitialized(N);
+	Rhs.SetNumUninitialized(N);
+	DeltaLambda.SetNumUninitialized(N);
+	const float Alpha = Compliance / (Dt * Dt);
+	TArray<bool, TInlineAllocator<512>> Active;
+	Active.SetNumZeroed(N);
+	TArray<FVector, TInlineAllocator<512>> ContactNormals;
+	ContactNormals.Init(FVector::ZeroVector, Positions.Num());
+	for (int32 I = 0; I < N; ++I)
+	{
+		const FVector Edge = Positions[I + 1] - Positions[I];
+		Directions[I] = Edge.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+		Active[I] = Edge.Size() > RestLengths[I] || Multipliers[I] < 0;
+	}
+	const auto Project = [&](int32 Joint, const FVector& V)
+	{
+		return V - ContactNormals[Joint] * FVector::DotProduct(V, ContactNormals[Joint]);
+	};
+	// First solve freely to identify loaded surfaces, then solve J W J^T with
+	// their normal degrees of freedom removed. Projecting only the resulting
+	// positions wastes iterations pushing into a floor and can jam long chains.
+	for (int32 Pass = 0; Pass < 2; ++Pass)
+	{
+		for (int32 I = 0; I < N; ++I)
+		{
+			Diagonal[I] = Active[I] ? InverseMasses[I] * FVector::DotProduct(Directions[I], Project(I, Directions[I]))
+				+ InverseMasses[I + 1] * FVector::DotProduct(Directions[I], Project(I + 1, Directions[I])) + Alpha + 0.00001f : 1.0f;
+			Rhs[I] = Active[I] ? -(FVector::Distance(Positions[I], Positions[I + 1]) - RestLengths[I]) - Alpha * Multipliers[I] : 0;
+			if (I > 0)
+			{
+				const float Lower = Active[I] && Active[I - 1] ? -InverseMasses[I] * FVector::DotProduct(Directions[I - 1], Project(I, Directions[I])) : 0;
+				Upper[I - 1] = Lower;
+				const float Factor = Lower / FMath::Max(0.00001f, Diagonal[I - 1]);
+				Diagonal[I] -= Factor * Upper[I - 1];
+				Rhs[I] -= Factor * Rhs[I - 1];
+			}
+		}
+		for (int32 I = N - 1; I >= 0; --I)
+		{
+			DeltaLambda[I] = (Rhs[I] - (I + 1 < N ? Upper[I] * DeltaLambda[I + 1] : 0.0f)) / FMath::Max(0.00001f, Diagonal[I]);
+			DeltaLambda[I] = FMath::Min(DeltaLambda[I], -Multipliers[I]);
+		}
+		if (Pass == 0)
+		{
+			for (const FChopItRopeContact& C : Contacts)
+				for (int32 I : {C.Segment, C.Segment + 1})
+				{
+					if (I <= 0 || I >= N || FVector::DotProduct(Positions[I] - C.Position, C.Normal) > Radius + Skin * 2) continue;
+					const FVector Force = Directions[I - 1] * DeltaLambda[I - 1] - Directions[I] * DeltaLambda[I];
+					if (FVector::DotProduct(Force, C.Normal) < -0.000001) ContactNormals[I] = C.Normal;
+				}
+		}
+	}
+	float TrustScale = 1.0f;
+	for (int32 I = 1; I < N; ++I)
+	{
+		const FVector Correction = InverseMasses[I] * Project(I, Directions[I - 1] * DeltaLambda[I - 1] - Directions[I] * DeltaLambda[I]);
+		TrustScale = FMath::Min(TrustScale, static_cast<float>(Radius * 0.5f / FMath::Max(0.001, Correction.Size())));
+	}
+
+	for (float& DL : DeltaLambda) DL *= TrustScale;
+	for (int32 I = 1; I < N; ++I)
+	{
+		const FVector Correction = InverseMasses[I] * Project(I, Directions[I - 1] * DeltaLambda[I - 1] - Directions[I] * DeltaLambda[I]);
+		const FVector Old = Positions[I];
+		Positions[I] = MoveParticle(I, Old + Correction);
+		PreviousPositions[I] += (Positions[I] - Old) * ConstraintDamping;
+	}
+	for (int32 I = 0; I < N; ++I) Multipliers[I] += DeltaLambda[I];
+	// Locally relax only unconverged contact blocks. Running a scalar sweep on
+	// already converged blocks adds directional bias when the reel reverses.
+	if (GetMaximumLengthError() <= 0.5f) return;
+	for (int32 K = 0; K < N; ++K)
+	{
+		const int32 I = ReelVelocity < 0 ? K : N - 1 - K;
+		const FVector Edge = Positions[I + 1] - Positions[I];
+		const float Length = Edge.Size();
+		if (Length < UE_SMALL_NUMBER) continue;
+		const FVector Direction = Edge / Length;
+		const FVector LeftGradient = Project(I, -Direction), RightGradient = Project(I + 1, Direction);
+		const float Weight = InverseMasses[I] * LeftGradient.SizeSquared() + InverseMasses[I + 1] * RightGradient.SizeSquared();
+		if (Weight < UE_SMALL_NUMBER) continue;
+		float DL = FMath::Min(-(Length - RestLengths[I] + Alpha * Multipliers[I]) / (Weight + Alpha), -Multipliers[I]);
+		const float MaxMove = FMath::Max(InverseMasses[I] * LeftGradient.Size(), InverseMasses[I + 1] * RightGradient.Size()) * FMath::Abs(DL);
+		DL *= FMath::Min(1.0f, Radius * 0.5f / FMath::Max(0.001f, MaxMove));
+		for (int32 Joint : {I, I + 1})
+		{
+			if (InverseMasses[Joint] <= 0) continue;
+			const FVector Old = Positions[Joint];
+			Positions[Joint] = MoveParticle(Joint, Old + InverseMasses[Joint] * (Joint == I ? LeftGradient : RightGradient) * DL);
+			PreviousPositions[Joint] += (Positions[Joint] - Old) * ConstraintDamping;
+		}
+		Multipliers[I] += DL;
 	}
 }
 
-void UChopItRopeComponent::ProjectSpanToRestLength(FChopItVisualRopeSpan& Span)
+void UChopItRopeComponent::SolveTotalLength()
 {
-	if (Span.Positions.Num() < 3)
+	// Local compliant constraints can each converge with a tiny extension,
+	// whose sum exceeds the global material limit on a long folded chain.
+	// Solve that hard limit as a constraint too, rather than rejecting a fully
+	// converged local solve forever. Every correction uses swept collisions.
+	const float TotalError = GetSimulatedPathLength() - DeployedLength;
+	if (TotalError <= FMath::Min(StretchTolerance, 2.0f)) return;
+	const float Excess = TotalError - FMath::Min(0.25f, StretchTolerance * 0.25f);
+	// Resolve local bends before correcting the accumulated compliant residual.
+	if (GetMaximumLengthError() > FMath::Min(0.2f, StretchTolerance * 0.25f)) return;
+	TArray<FVector, TInlineAllocator<512>> Gradients;
+	Gradients.Init(FVector::ZeroVector, Positions.Num());
+	for (int32 I = 1; I < Positions.Num() - 1; ++I)
+		Gradients[I] = (Positions[I] - Positions[I-1]).GetSafeNormal()
+			- (Positions[I+1] - Positions[I]).GetSafeNormal();
+	for (const FChopItRopeContact& Contact : Contacts)
+		for (int32 I : {Contact.Segment, Contact.Segment + 1})
+			if (I > 0 && I < Positions.Num() - 1 && FVector::DotProduct(-Gradients[I], Contact.Normal) < 0)
+				Gradients[I] = FVector::VectorPlaneProject(Gradients[I], Contact.Normal);
+	float Weight = 0, MaxWeightedGradient = 0;
+	for (int32 I = 1; I < Positions.Num() - 1; ++I)
 	{
-		return;
+		Weight += InverseMasses[I] * Gradients[I].SizeSquared();
+		MaxWeightedGradient = FMath::Max(MaxWeightedGradient, InverseMasses[I] * static_cast<float>(Gradients[I].Size()));
 	}
-	float CurrentLength = 0.0f;
-	for (int32 Index = 1; Index < Span.Positions.Num(); ++Index)
+	if (Weight <= UE_SMALL_NUMBER) return;
+	const float Lambda = FMath::Min(Excess / Weight, Radius * 0.5f / FMath::Max(MaxWeightedGradient, UE_SMALL_NUMBER));
+	for (int32 I = 1; I < Positions.Num() - 1; ++I)
 	{
-		CurrentLength += FVector::Distance(Span.Positions[Index - 1], Span.Positions[Index]);
-	}
-	if (CurrentLength <= Span.RestLength + 0.05f)
-	{
-		return;
-	}
-
-	const TArray<FVector> BeforeProjection = Span.Positions;
-	const FVector StartTarget = Span.Positions[0];
-	const FVector EndTarget = Span.Positions.Last();
-	const float SegmentLength = Span.RestLength / FMath::Max(1, Span.Positions.Num() - 1);
-	for (int32 Iteration = 0; Iteration < 96; ++Iteration)
-	{
-		Span.Positions.Last() = EndTarget;
-		for (int32 Index = Span.Positions.Num() - 2; Index >= 0; --Index)
-		{
-			const FVector Direction = (Span.Positions[Index] - Span.Positions[Index + 1])
-				.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
-			Span.Positions[Index] = Span.Positions[Index + 1] + Direction * SegmentLength;
-		}
-		Span.Positions[0] = StartTarget;
-		for (int32 Index = 1; Index < Span.Positions.Num(); ++Index)
-		{
-			const FVector Direction = (Span.Positions[Index] - Span.Positions[Index - 1])
-				.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
-			Span.Positions[Index] = Span.Positions[Index - 1] + Direction * SegmentLength;
-		}
-		if (FVector::DistSquared(Span.Positions.Last(), EndTarget) < 0.0001f)
-		{
-			break;
-		}
-	}
-	Span.Positions.Last() = EndTarget;
-	for (int32 Index = 1; Index < Span.Positions.Num() - 1; ++Index)
-	{
-		Span.PreviousPositions[Index] += (Span.Positions[Index] - BeforeProjection[Index])
-			* ConstraintVelocityDamping;
+		const FVector Old = Positions[I];
+		Positions[I] = MoveParticle(I, Old - Gradients[I] * (InverseMasses[I] * Lambda));
+		PreviousPositions[I] += (Positions[I] - Old) * ConstraintDamping;
 	}
 }
 
-void UChopItRopeComponent::ResolveSpanCollisions(FChopItVisualRopeSpan& Span, const TArray<FVector>& SweepStarts)
+bool UChopItRopeComponent::AdvanceStep(float Dt, const FVector& Start, const FVector& End, float Length)
 {
-	UWorld* World = GetWorld();
-	if (!World || SweepStarts.Num() != Span.Positions.Num())
+	if (IsFrameBudgetExhausted()) return false;
+	RefreshCollisionBounds();
+	const TArray<FVector> SavedPositions = Positions;
+	const TArray<FVector> SavedPrevious = PreviousPositions;
+	const TArray<float> SavedRest = RestLengths;
+	const TArray<float> SavedLambda = Multipliers;
+	const TArray<FChopItRopeContact> SavedContacts = Contacts;
+	const float SavedLength = DeployedLength;
+	const auto Reject = [&]()
 	{
-		return;
-	}
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ChopItVisualRopeSweep), false, GetOwner());
-	if (IgnoredEndActor.IsValid())
+		Positions = SavedPositions;
+		PreviousPositions = SavedPrevious;
+		RestLengths = SavedRest;
+		DeployedLength = SavedLength;
+		RefreshMasses();
+		Multipliers = SavedLambda;
+		Contacts = SavedContacts;
+		ContactHeads.Reset(); // rollback can restore different contacts of equal count
+		++RejectedSteps;
+		return false;
+	};
+	if (!ResizeAtOutlet(Length)) { ++ResizeRejects; return Reject(); }
+	Contacts.Reset();
+	Multipliers.Init(0.0f, RestLengths.Num());
+	Positions[0] = MoveParticle(0, Start);
+	Positions.Last() = MoveParticle(Positions.Num() - 1, End);
+	if (!Positions[0].Equals(Start, 0.01f) || !Positions.Last().Equals(End, 0.01f)) { ++EndpointRejects; return Reject(); }
+	PreviousPositions[0] = Positions[0];
+	PreviousPositions.Last() = Positions.Last();
+	const FVector Gravity(0, 0, (GetWorld() ? GetWorld()->GetGravityZ() : -980.0f) * GravityScale);
+	for (int32 I = 1; I < Positions.Num() - 1; ++I)
 	{
-		QueryParams.AddIgnoredActor(IgnoredEndActor.Get());
+		const FVector Old = Positions[I];
+		const FVector Velocity = (Old - PreviousPositions[I]) * (Dt / LastConstraintStep) * FMath::Pow(1.0f - Damping, Dt / StepTime);
+		Positions[I] = MoveParticle(I, Old + Velocity + Gravity * Dt * Dt);
+		PreviousPositions[I] = Old;
 	}
-	FCollisionResponseParams ResponseParams;
-	ResponseParams.CollisionResponse.SetResponse(ECC_Pawn, ECR_Ignore);
-	ResponseParams.CollisionResponse.SetResponse(ChopItCollisionChannels::Enemy, ECR_Ignore);
-	ResponseParams.CollisionResponse.SetResponse(ChopItCollisionChannels::Projectile, ECR_Ignore);
-	ResponseParams.CollisionResponse.SetResponse(ChopItCollisionChannels::Pickup, ECR_Ignore);
-	ResponseParams.CollisionResponse.SetResponse(ChopItCollisionChannels::DeliveryZone, ECR_Ignore);
-	ResponseParams.CollisionResponse.SetResponse(ChopItCollisionChannels::Chain, ECR_Ignore);
-	for (int32 Index = 1; Index < Span.Positions.Num() - 1; ++Index)
+	float PreviousLocalError = TNumericLimits<float>::Max();
+	float PreviousTotalError = TNumericLimits<float>::Max();
+	int32 StableIterations = 0;
+	for (int32 Iteration = 0; Iteration < Iterations * 2; ++Iteration)
+	{
+		if (IsFrameBudgetExhausted()) break;
+		++IterationsThisFrame;
+		SolveLengths(Dt);
+		SolveTotalLength();
+		const float LocalError = GetMaximumLengthError();
+		const float TotalError = GetSimulatedPathLength() - DeployedLength;
+		if (LocalError < FMath::Min(0.2f, StretchTolerance * 0.25f)
+			&& TotalError <= FMath::Min(0.5f, StretchTolerance * 0.5f)) break;
+		// Compliant local constraints can converge to a small accumulated
+		// residual. Stop only when it is already within the unchanged final
+		// limits and repeated iterations no longer improve either error.
+		const bool bStable = LocalError < FMath::Min(0.2f, StretchTolerance * 0.25f)
+			&& TotalError <= FMath::Min(StretchTolerance, 2.0f)
+			&& FMath::Abs(LocalError - PreviousLocalError) < 0.0001f
+			&& FMath::Abs(TotalError - PreviousTotalError) < 0.001f;
+		StableIterations = bStable ? StableIterations + 1 : 0;
+		if (StableIterations >= 3) break;
+		PreviousLocalError = LocalError;
+		PreviousTotalError = TotalError;
+	}
+	// A valid step satisfies both constraints together, not just a final length
+	// projection. A failed payout/retraction restores all topology and velocity.
+	if (GetSimulatedPathLength() > DeployedLength + FMath::Min(StretchTolerance, 2.0f)
+		|| GetMaximumLengthError() > FMath::Min(StretchTolerance, 1.0f)
+		|| !IsCollisionFree()) {
+		++ConstraintRejects;
+		return Reject();
+	}
+	++AcceptedStepsThisFrame;
+	LastConstraintStep = Dt;
+	EndpointTension = Multipliers.IsEmpty() ? 0.0f : FMath::Max(0.0f, -Multipliers.Last() / (Dt * Dt));
+	RefreshContacts();
+	for (const FChopItRopeContact& C : Contacts)
+	{
+		for (int32 I : {C.Segment, C.Segment + 1})
+		{
+			if (I <= 0 || I >= Positions.Num() - 1) continue;
+			FVector Velocity = Positions[I] - PreviousPositions[I];
+			UPrimitiveComponent* Body = C.Component.Get();
+			const FVector SurfaceVelocity = Body ? Body->GetPhysicsLinearVelocityAtPoint(C.Position) * Dt : FVector::ZeroVector;
+			Velocity -= SurfaceVelocity;
+			Velocity -= C.Normal * FMath::Min(0.0, FVector::DotProduct(Velocity, C.Normal));
+			const float Friction = 1.0f - FMath::Pow(1.0f - (C.Normal.Z > 0.65 ? GroundFriction : ObstacleFriction), Dt / StepTime);
+			Velocity -= FVector::VectorPlaneProject(Velocity, C.Normal) * Friction;
+			PreviousPositions[I] = Positions[I] - Velocity - SurfaceVelocity;
+		}
+	}
+	return true;
+}
+
+void UChopItRopeComponent::RefreshContacts()
+{
+	Contacts.Reset();
+	for (int32 I = 0; I < RestLengths.Num(); ++I)
 	{
 		FHitResult Hit;
-		if (!World->SweepSingleByChannel(Hit, SweepStarts[Index], Span.Positions[Index], FQuat::Identity,
-			ChopItCollisionChannels::Chain, FCollisionShape::MakeSphere(CollisionRadius), QueryParams, ResponseParams))
-		{
-			continue;
-		}
-		const FVector Normal = Hit.ImpactNormal.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
-		Span.Positions[Index] = Hit.bStartPenetrating
-			? SweepStarts[Index] + Normal * (Hit.PenetrationDepth + CollisionSkin)
-			: Hit.Location + Normal * CollisionSkin;
-		FVector Velocity = Span.Positions[Index] - Span.PreviousPositions[Index];
-		const float NormalSpeed = FVector::DotProduct(Velocity, Normal);
-		if (NormalSpeed < 0.0f)
-		{
-			Velocity -= Normal * NormalSpeed;
-		}
-		const float Friction = Normal.Z > 0.65f ? GroundFriction : ObstacleFriction;
-		const FVector NormalVelocity = Normal * FVector::DotProduct(Velocity, Normal);
-		const FVector TangentVelocity = (Velocity - NormalVelocity) * (1.0f - Friction);
-		Span.PreviousPositions[Index] = Span.Positions[Index] - NormalVelocity - TangentVelocity;
+		if (Sweep(Positions[I], Positions[I + 1], Radius + Skin * 1.5f, Hit)) RecordContact(I, Hit);
 	}
 }
 
-void UChopItRopeComponent::PinSpan(FChopItVisualRopeSpan& Span, const int32 SpanIndex)
+float UChopItRopeComponent::GetContactGuidedLength(const FVector& Start, const FVector& End) const
 {
-	if (!RoutePoints.IsValidIndex(SpanIndex + 1) || Span.Positions.Num() < 2)
+	// A folded last link is not a request for more material. Measure endpoint
+	// travel relative to ordered contacts of the physical chain instead. Floor
+	// support does not pin loose material; side/ceiling contacts retain wraps.
+	TArray<bool, TInlineAllocator<512>> Supported;
+	Supported.Init(false, Positions.Num());
+	for (const FChopItRopeContact& Contact : Contacts)
 	{
-		return;
+		if (!Contact.Component.IsValid() || Contact.Normal.Z > 0.65f) continue;
+		for (int32 Joint : {Contact.Segment, Contact.Segment + 1})
+			if (Joint > 0 && Joint < Positions.Num() - 1) Supported[Joint] = true;
 	}
-	Span.Positions[0] = RoutePoints[SpanIndex];
-	Span.PreviousPositions[0] = RoutePoints[SpanIndex];
-	Span.Positions.Last() = RoutePoints[SpanIndex + 1];
-	Span.PreviousPositions.Last() = RoutePoints[SpanIndex + 1];
-}
-
-void UChopItRopeComponent::RefreshFlattenedPositions()
-{
-	BuildFlattenedPolyline(false, FlattenedPositions);
-}
-
-void UChopItRopeComponent::BuildFlattenedPolyline(const bool bPrevious, TArray<FVector>& OutPoints) const
-{
-	OutPoints.Reset();
-	for (int32 SpanIndex = 0; SpanIndex < Spans.Num(); ++SpanIndex)
+	FVector Last = Start;
+	float RequiredLength = 0.0f;
+	for (int32 Joint = 1; Joint < Positions.Num() - 1; ++Joint)
 	{
-		const TArray<FVector>& Source = bPrevious ? Spans[SpanIndex].PreviousPositions : Spans[SpanIndex].Positions;
-		for (int32 Index = SpanIndex == 0 ? 0 : 1; Index < Source.Num(); ++Index)
+		if (!Supported[Joint]) continue;
+		RequiredLength += FVector::Distance(Last, Positions[Joint]);
+		Last = Positions[Joint];
+	}
+	RequiredLength += FVector::Distance(Last, End);
+	// Only changes in this length drive the motor. No contacts are reconstructed;
+	// every material change still passes the complete physical solve.
+	return RequiredLength;
+}
+
+void UChopItRopeComponent::Simulate(float DeltaSeconds)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE(ChopItChainV2);
+	if (!bInitialized || DeltaSeconds <= 0 || !FMath::IsFinite(DeltaSeconds)) return;
+	const double StartTime = FPlatformTime::Seconds();
+	AcceptedStepsThisFrame = 0;
+	IterationsThisFrame = 0;
+	SweepQueriesThisFrame = ContactChecksThisFrame = 0;
+	bFrameBudgetLimited = false;
+	const float BudgetMs = CVarChainFrameBudgetMs.GetValueOnGameThread();
+	SimulationDeadline = BudgetMs > 0.0f ? StartTime + BudgetMs * 0.001 : 0.0;
+	ON_SCOPE_EXIT
+	{
+		if (IsFrameBudgetExhausted())
 		{
-			OutPoints.Add(Source[Index]);
+			bFrameBudgetLimited = true;
+			++BudgetLimitedFrames;
+			// Drop simulation debt: a slow frame must not cause a catch-up spiral.
+			AccumulatedTime = 0.0f;
+			// If nothing could advance, do not replay the same incompatible
+			// inertial prediction forever. The motor can still pay out next frame.
+			if (AcceptedStepsThisFrame == 0) PreviousPositions = Positions;
+			// AdvanceStep already restored its last valid velocity and reel state.
+			// Keep them: resetting the motor here makes repeated overload prevent
+			// payout altogether, even when earlier substeps made valid progress.
+			bMovementBlocked = true;
+		}
+		SimulationDeadline = 0.0;
+		LastSimulationMilliseconds = static_cast<float>((FPlatformTime::Seconds() - StartTime) * 1000.0);
+	};
+	RefreshCollisionBounds();
+	bMovementBlocked = !ResolveInitialPenetrations();
+	if (bMovementBlocked) return;
+	RefreshContacts();
+	AccumulatedTime = FMath::Min(AccumulatedTime + DeltaSeconds, StepTime * MaximumSteps);
+	const int32 Steps = FMath::Min(MaximumSteps, FMath::FloorToInt((AccumulatedTime + 0.000001f) / StepTime));
+	const FVector FrameStart = Positions[0], FrameEnd = Positions.Last();
+	const bool bStationaryEndpoint = FrameEnd.Equals(EndTarget, 0.1f);
+	for (int32 S = 0; S < Steps; ++S)
+	{
+		if (IsFrameBudgetExhausted()) break;
+		const FVector DesiredStart = FMath::Lerp(FrameStart, StartTarget, static_cast<double>(S + 1) / Steps);
+		const FVector DesiredEnd = FMath::Lerp(FrameEnd, EndTarget, static_cast<double>(S + 1) / Steps);
+		const FVector OldEnd = Positions.Last();
+		const float OutwardTravel = FVector::DotProduct(DesiredEnd - OldEnd, GetOutwardDirection());
+		if (bAutomaticReel)
+		{
+			const float GuidedLength = GetContactGuidedLength(DesiredStart, DesiredEnd);
+			const float GuidedTravel = GuidedLength
+				- GetContactGuidedLength(DesiredStart, OldEnd);
+			const float DirectLength = static_cast<float>(FVector::Distance(DesiredStart, DesiredEnd));
+			// Advance the motor demand, not the amount already deployed: loose
+			// material left after a return must be reused on the next outward leg.
+			RequestedLength = !bStationaryEndpoint
+				? FMath::Clamp(FMath::Max(RequestedLength + GuidedTravel, GuidedLength + Slack), MinimumLength, MaxLength)
+				: FMath::Clamp(DirectLength + Slack, MinimumLength, MaxLength);
+			// Moving around a support can reduce direct endpoint distance while
+			// existing wraps still consume material. Do not command the reel to
+			// pull that material back through the obstacle.
+			// Use the signed endpoint travel against the same contact set for
+			// both directions. Losing a side contact to a floor query must not
+			// abruptly subtract an entire wrap from the motor's demand.
+		}
+		const float Difference = RequestedLength - DeployedLength;
+		// Hysteresis gates the motor, not its integrated destination. Resetting
+		// the destination here discards every small inward movement forever.
+		const float MotorDifference = bAutomaticReel && Difference < 0 && -Difference < Hysteresis ? 0 : Difference;
+		const float WantedSpeed = FMath::Sign(MotorDifference)
+			* FMath::Min(FeedSpeed, FMath::Sqrt(2.0f * FeedAcceleration * FMath::Abs(MotorDifference)));
+		ReelVelocity = FMath::FInterpConstantTo(ReelVelocity, WantedSpeed, StepTime, FeedAcceleration);
+		const float MotorScale = ReelVelocity < 0.0f && bStationaryEndpoint ? TakeUpScale : 1.0f;
+		float LengthChange = FMath::Clamp(ReelVelocity * StepTime * MotorScale, -FMath::Abs(Difference), FMath::Abs(Difference));
+		if (LengthChange < 0.0f && !bStationaryEndpoint)
+		{
+			// While the player moves, take up only a fraction of the inward
+			// progress toward the fixed machine. Euclidean distance alone can
+			// fall quickly as the endpoint turns around an obstacle, tightening
+			// the remaining wrapped chain against the player. Any extra slack is
+			// collected gradually after the endpoint settles.
+			const float DirectInwardTravel = FMath::Max(0.0f,
+				static_cast<float>(FVector::Distance(DesiredStart, OldEnd)
+						- FVector::Distance(DesiredStart, DesiredEnd)));
+			LengthChange = FMath::Max(LengthChange, -DirectInwardTravel * 0.5f);
+			// This cap is the motor's actual take-up speed. Retaining the old
+			// (much faster) requested speed invents braking time before payout
+			// when the player turns around an obstacle, exhausting the slack.
+			ReelVelocity = LengthChange / StepTime;
+		}
+		const float ProposedLength = FMath::Clamp(DeployedLength + LengthChange, MinimumLength, MaxLength);
+		const float Travel = FMath::Max(FVector::Distance(Positions[0], DesiredStart), FVector::Distance(Positions.Last(), DesiredEnd));
+		// Endpoint motion is already swept over the complete adjacent edge.
+		// One radius fits its movement cap; normal walking therefore keeps the
+		// configured 120 Hz clock instead of unnecessarily solving at 240 Hz.
+		// At the hard material limit keep the finer solve: the endpoint must
+		// slide along a taut constraint without a larger proposed step jamming it.
+		const float MotionFraction = ProposedLength >= MaxLength - 0.1f ? 0.5f : 0.9f;
+		const int32 MotionSteps = FMath::Clamp(FMath::CeilToInt(Travel / FMath::Max(1.0f, Radius * MotionFraction)), 1, 16);
+		const FVector SubStart = Positions[0], SubEnd = Positions.Last();
+		const float InitialLength = DeployedLength;
+		for (int32 M = 0; M < MotionSteps; ++M)
+		{
+			if (IsFrameBudgetExhausted()) break;
+			const double T = static_cast<double>(M + 1) / MotionSteps;
+			const FVector A = FMath::Lerp(SubStart, DesiredStart, T);
+			const FVector B = FMath::Lerp(SubEnd, DesiredEnd, T);
+			const float L = FMath::Lerp(InitialLength, ProposedLength, T);
+			const float Dt = StepTime / MotionSteps;
+			const bool bTakingUp = L < DeployedLength;
+			bool bAccepted = AdvanceStep(Dt, A, B, L);
+			if (bTakingUp && bStationaryEndpoint)
+				TakeUpScale = bAccepted ? FMath::Min(1.0f, TakeUpScale * 1.05f) : FMath::Max(0.001f, TakeUpScale * 0.5f);
+			if (IsFrameBudgetExhausted()) break;
+			if (!bAccepted && L < DeployedLength)
+			{
+				if (!bStationaryEndpoint)
+					for (float Fraction = 0.5f; !bAccepted && !IsFrameBudgetExhausted() && Fraction >= 0.125f; Fraction *= 0.5f)
+						bAccepted = AdvanceStep(Dt, A, B, FMath::Lerp(DeployedLength, L, Fraction));
+				if (!bAccepted) bAccepted = AdvanceStep(Dt, A, B, DeployedLength);
+			}
+			if (!bAccepted)
+			{
+				// Payout is still rate-limited. Request enough for the next step,
+				// rather than inventing instantaneous rope when a bend appears.
+				if (bAutomaticReel && OutwardTravel > 0)
+				{
+					RequestedLength = FMath::Min(MaxLength, FMath::Max(RequestedLength, DeployedLength + Slack));
+
+				}
+				const FVector OldA = Positions[0], OldB = Positions.Last();
+				for (float Fraction = 0.5f; !IsFrameBudgetExhausted() && Fraction >= 1.0f / 64.0f; Fraction *= 0.5f)
+				{
+					if (AdvanceStep(Dt, FMath::Lerp(OldA, A, Fraction), FMath::Lerp(OldB, B, Fraction), FMath::Max(L, DeployedLength)))
+					{
+						bAccepted = true;
+						break;
+					}
+				}
+				bMovementBlocked = !Positions.Last().Equals(B, 0.1f);
+				if (!bAccepted && L > DeployedLength) bAccepted = AdvanceStep(Dt, OldA, OldB, L);
+				if (!bAccepted && !IsFrameBudgetExhausted())
+				{
+					// Restoring the same incompatible velocity would replay the failed
+					// prediction forever. Brake the rejected material motion at the
+					// last valid shape; the next step can slide or pay out normally.
+					PreviousPositions = Positions;
+					ReelVelocity = 0.0f;
+				}
+				break;
+			}
+		}
+		AccumulatedTime = FMath::Max(0.0f, AccumulatedTime - StepTime);
+	}
+	bMovementBlocked |= !Positions.Last().Equals(EndTarget, 0.5f);
+	LastSimulationMilliseconds = static_cast<float>((FPlatformTime::Seconds() - StartTime) * 1000.0);
+}
+
+TArray<FChopItRopeBodyLoad> UChopItRopeComponent::CalculateBodyLoads() const
+{
+	TArray<FChopItRopeBodyLoad> Result;
+	TMap<UPrimitiveComponent*, TSet<int32>> BodyJoints;
+	for (const FChopItRopeContact& C : Contacts)
+	{
+		UPrimitiveComponent* Body = C.Component.Get();
+		if (!Body || !Body->IsSimulatingPhysics()) continue;
+		for (int32 I : {C.Segment, C.Segment + 1})
+			if (I > 0 && I < Positions.Num() - 1) BodyJoints.FindOrAdd(Body).Add(I);
+	}
+	for (const auto& Entry : BodyJoints)
+	{
+		FChopItRopeBodyLoad Load;
+		Load.Body = Entry.Key;
+		float TotalForceMagnitude = 0;
+		for (int32 I : Entry.Value)
+		{
+			const float Left = FMath::Max(0.0f, -Multipliers[I - 1] / FMath::Square(LastConstraintStep));
+			const float Right = FMath::Max(0.0f, -Multipliers[I] / FMath::Square(LastConstraintStep));
+			const FVector Force = ((Positions[I - 1] - Positions[I]).GetSafeNormal() * Left
+				+ (Positions[I + 1] - Positions[I]).GetSafeNormal() * Right) * ForceScale;
+			Load.Force += Force;
+			Load.Torque += FVector::CrossProduct(Positions[I] - Entry.Key->GetCenterOfMass(), Force);
+			TotalForceMagnitude += Force.Size();
+		}
+		// Limit the aggregate, including cancelling forces which produce torque.
+		const float Scale = FMath::Min(1.0f, MaximumForce / FMath::Max(1.0f, TotalForceMagnitude));
+		Load.Force *= Scale;
+		Load.Torque *= Scale;
+		Result.Add(Load);
+	}
+	return Result;
+}
+
+void UChopItRopeComponent::ApplyForcesToPhysicsProps(float DeltaSeconds)
+{
+	if (DeltaSeconds <= 0 || MaximumForce <= 0 || ForceScale <= 0) return;
+	for (const FChopItRopeBodyLoad& Load : CalculateBodyLoads())
+	{
+		if (!Load.Body.IsValid()) continue;
+		// Chaos supplies inverse mass and inertia. Never cancel them by scaling
+		// the force with mass, and never apply the same joint force twice.
+		Load.Body->AddForce(Load.Force);
+		Load.Body->AddTorqueInRadians(Load.Torque);
+	}
+}
+
+bool UChopItRopeComponent::ResolveInitialPenetrations()
+{
+	if (IsCollisionFree()) return true;
+	// A dynamic obstacle may have entered the chain during the last Chaos
+	// step. Resolve its actual penetration before attempting player/reel work.
+	for (int32 Pass = 0; Pass < 16; ++Pass)
+	{
+		if (IsFrameBudgetExhausted()) return false;
+		for (int32 I = 0; I < RestLengths.Num(); ++I)
+		{
+			if (IsFrameBudgetExhausted()) return false;
+			FHitResult Hit;
+			if (!Sweep(Positions[I], Positions[I + 1], Radius + Skin * 0.25f, Hit)) continue;
+			const FVector N = Hit.Normal.GetSafeNormal(UE_SMALL_NUMBER, Hit.ImpactNormal);
+			const float Depth = Hit.bStartPenetrating ? Hit.PenetrationDepth + Skin
+				: FMath::Max(0.0, FVector::DotProduct(Hit.Location - Positions[I + 1], N)) + Skin;
+			const FVector Correction = N * Depth;
+			// Escape the body that entered this edge, while still sweeping every
+			// correction against the rest of the world. A moving prop must not
+			// project the rope through a neighbouring wall.
+			const FCollisionQueryParams SavedQuery = QueryParams;
+			QueryParams.AddIgnoredComponent(Hit.GetComponent());
+			for (int32 Joint : {I, I + 1})
+			{
+				if (Joint == 0) continue;
+				const FVector Old = Positions[Joint];
+				Positions[Joint] = MoveParticle(Joint, Old + Correction);
+				PreviousPositions[Joint] += Positions[Joint] - Old;
+			}
+			QueryParams = SavedQuery;
+		}
+		if (IsCollisionFree())
+		{
+			RefreshContacts();
+			return true;
 		}
 	}
-}
-
-float UChopItRopeComponent::FindNearestPathDistance(const TArray<FVector>& Points, const FVector& Point)
-{
-	float BestSquared = TNumericLimits<float>::Max();
-	float BestPathDistance = 0.0f;
-	float Traversed = 0.0f;
-	for (int32 Index = 1; Index < Points.Num(); ++Index)
-	{
-		const FVector Segment = Points[Index] - Points[Index - 1];
-		const float SegmentSquared = Segment.SizeSquared();
-		const float SegmentLength = FMath::Sqrt(SegmentSquared);
-		const float Alpha = SegmentSquared > UE_SMALL_NUMBER
-			? FMath::Clamp(FVector::DotProduct(Point - Points[Index - 1], Segment) / SegmentSquared, 0.0f, 1.0f)
-			: 0.0f;
-		const float Squared = FVector::DistSquared(Points[Index - 1] + Segment * Alpha, Point);
-		if (Squared < BestSquared)
-		{
-			BestSquared = Squared;
-			BestPathDistance = Traversed + SegmentLength * Alpha;
-		}
-		Traversed += SegmentLength;
-	}
-	return BestPathDistance;
-}
-
-FVector UChopItRopeComponent::SamplePath(const TArray<FVector>& Points, const float Distance)
-{
-	float Traversed = 0.0f;
-	for (int32 Index = 1; Index < Points.Num(); ++Index)
-	{
-		const float SegmentLength = FVector::Distance(Points[Index - 1], Points[Index]);
-		if (Traversed + SegmentLength >= Distance && SegmentLength > UE_SMALL_NUMBER)
-		{
-			return FMath::Lerp(Points[Index - 1], Points[Index],
-				FMath::Clamp((Distance - Traversed) / SegmentLength, 0.0f, 1.0f));
-		}
-		Traversed += SegmentLength;
-	}
-	return Points.IsEmpty() ? FVector::ZeroVector : Points.Last();
+	return false;
 }
 
 float UChopItRopeComponent::GetSimulatedPathLength() const
 {
-	float Length = 0.0f;
-	for (int32 Index = 1; Index < FlattenedPositions.Num(); ++Index)
-	{
-		Length += FVector::Distance(FlattenedPositions[Index - 1], FlattenedPositions[Index]);
-	}
+	float Length = 0;
+	for (int32 I = 1; I < Positions.Num(); ++I) Length += FVector::Distance(Positions[I - 1], Positions[I]);
 	return Length;
+}
+
+FString UChopItRopeComponent::DescribeState() const
+{
+	int32 ConvexBodies = 0;
+	for (const TArray<FPlane>& Planes : CollisionPlanes) ConvexBodies += !Planes.IsEmpty();
+	return FString::Printf(TEXT("ChainV2: deployed %.2f target %.2f motor %.2f, joints %d, outlet rest %.3f actual %.3f, rejected resize/end/constraints %d/%d/%d, CPU %.2f ms budget frames %d, sweeps %lld contact checks %lld, iterations %d steps %d local %.3f total %.3f convex %d"),
+		DeployedLength, RequestedLength, ReelVelocity, Positions.Num(), RestLengths.IsEmpty() ? 0 : RestLengths[0],
+		Positions.Num() < 2 ? 0 : FVector::Distance(Positions[0], Positions[1]), ResizeRejects, EndpointRejects, ConstraintRejects, LastSimulationMilliseconds, BudgetLimitedFrames,
+		static_cast<long long>(SweepQueriesThisFrame), static_cast<long long>(ContactChecksThisFrame),
+		IterationsThisFrame, AcceptedStepsThisFrame, GetMaximumLengthError(), GetSimulatedPathLength() - DeployedLength, ConvexBodies);
+}
+
+float UChopItRopeComponent::GetMaximumLengthError() const
+{
+	float Error = 0;
+	for (int32 I = 0; I < RestLengths.Num(); ++I)
+		Error = FMath::Max(Error, static_cast<float>(FVector::Distance(Positions[I], Positions[I + 1])) - RestLengths[I]);
+	return Error;
+}
+
+FVector UChopItRopeComponent::GetOutwardDirection() const
+{
+	return Positions.Num() > 1 ? (Positions.Last() - Positions[Positions.Num() - 2]).GetSafeNormal() : FVector::ZeroVector;
 }
 
 void UChopItRopeComponent::ResetRope()
 {
-	Spans.Reset();
-	RoutePoints.Reset();
-	RoutePointIds.Reset();
-	FlattenedPositions.Reset();
-	IgnoredEndActor.Reset();
-	AccumulatedTime = 0.0f;
-	bInitialized = false;
+	Positions.Reset(); PreviousPositions.Reset(); RestLengths.Reset();
+	InverseMasses.Reset(); Multipliers.Reset(); Contacts.Reset();
+	ContactHeads.Reset(); ContactNext.Reset();
+	CollisionBounds.Reset(); bCollisionBoundsReady = false;
+	CollisionPlanes.Reset();
+	DeployedLength = RequestedLength = AccumulatedTime = ReelVelocity = EndpointTension = 0;
+	LastConstraintStep = StepTime;
+	RejectedSteps = 0;
+	TakeUpScale = 1.0f;
+	SimulationDeadline = 0.0;
+	BudgetLimitedFrames = 0;
+	ResizeRejects = EndpointRejects = ConstraintRejects = 0;
+	bInitialized = bMovementBlocked = false;
+	bFrameBudgetLimited = false;
 }

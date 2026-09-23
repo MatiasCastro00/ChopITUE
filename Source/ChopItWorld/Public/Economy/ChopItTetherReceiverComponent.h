@@ -3,9 +3,11 @@
 #include "Components/ActorComponent.h"
 #include "ChopItTetherReceiverComponent.generated.h"
 
+class AChopItQuotaMachine;
+
 /**
- * Player-side tether response. It filters only outward movement and applies a
- * soft pull; the visual rope is deliberately unable to write to this component.
+ * Player-side tether response. Runs the machine solve after character movement.
+ * Input filtering consumes the same physical endpoint and tension state.
  */
 UCLASS(ClassGroup = (ChopIt), meta = (BlueprintSpawnableComponent))
 class CHOPITWORLD_API UChopItTetherReceiverComponent final : public UActorComponent
@@ -14,6 +16,7 @@ class CHOPITWORLD_API UChopItTetherReceiverComponent final : public UActorCompon
 
 public:
 	UChopItTetherReceiverComponent();
+	void BindMachine(AChopItQuotaMachine* InMachine);
 
 	void SetTetherState(
 		const FVector& InGuidePoint,
@@ -34,6 +37,8 @@ public:
 		FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AChopItQuotaMachine> Machine;
 	FVector GetOutwardDirection() const;
 
 	FVector GuidePoint = FVector::ZeroVector;

@@ -90,7 +90,9 @@ AChopItTree::AChopItTree()
 
 	HealthComponent = CreateDefaultSubobject<UChopItHealthComponent>(TEXT("HealthComponent"));
 	HitFeedbackComponent = CreateDefaultSubobject<UChopItHitFeedbackComponent>(TEXT("HitFeedbackComponent"));
-	HitFeedbackComponent->SetVisualComponent(PhysicsRoot);
+	// Cosmetic hit pulses must not enlarge the capsule into a nearby chain
+	// (or pawn), especially after their movement/rope solve already ran.
+	HitFeedbackComponent->SetVisualComponent(TrunkMesh);
 	HitFeedbackComponent->SetWoodenTarget(true);
 	HitFeedbackComponent->SetFoliageComponent(CrownMesh);
 	// Tree death is resolved on its physical impact, not when health reaches zero.

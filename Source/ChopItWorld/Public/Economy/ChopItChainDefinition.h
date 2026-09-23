@@ -15,22 +15,43 @@ class CHOPITWORLD_API UChopItChainDefinition final : public UPrimaryDataAsset
 	GENERATED_BODY()
 
 public:
+	/** Zero identifies presets authored before Chain V2. */
+	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Chain|01 Master")
+	int32 PhysicsVersion = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "4", ClampMax = "30", Units = "cm"))
+	float PhysicalSegmentLength = 12.0f;
+
+	/** kg per metre. Mass changes inertia, never gravitational acceleration. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "0.01"))
+	float LinearMassDensity = 2.0f;
+
+	/** XPBD compliance; zero is an inextensible chain. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "0", ClampMax = "0.00001"))
+	float StretchCompliance = 0.0000001f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "20", Units = "cm"))
+	float MinimumDeployedLength = 100.0f;
+
+	void MigrateToV2();
+	virtual void PostLoad() override;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|01 Master")
 	bool bChainPlayerToMachine = true;
 
-	/** Maximum number of visible links stored by the machine. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|02 Links", meta = (ClampMin = "3", ClampMax = "64"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "3", ClampMax = "64"))
 	int32 ChainLinkCount = 64;
 
 	/** Total physical length stored in the machine. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|02 Links", meta = (ClampMin = "100.0", Units = "cm"))
 	float MaxChainLength = 3600.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|02 Links", meta = (ClampMin = "3", ClampMax = "16"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "3", ClampMax = "16"))
 	int32 MinimumDeployedLinks = 16;
 
-	/** Scales cable gravity relative to the 1.25 kg reference weight. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|02 Links", meta = (ClampMin = "0.01", Units = "kg"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "0.01", Units = "kg"))
 	float ChainLinkWeight = 1.25f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "20.0", ClampMax = "2000.0", Units = "cm/s"))
@@ -48,11 +69,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "1.0", ClampMax = "50.0", Units = "cm"))
 	float ChainStretchTolerance = 10.0f;
 
-	/** Collision particles per visible link. More particles improve wrapping around trunks. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "2", ClampMax = "6"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "2", ClampMax = "6"))
 	int32 CableSegmentsPerLink = 4;
 
-	/** Minimum rigidity passes per fixed simulation step. Long ropes automatically add enough passes to avoid rubber-band stretch. */
+	/** Resolution budget per fixed step; up to twice this value is available for loaded contacts. Solving exits early after convergence. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "1", ClampMax = "64"))
 	int32 CableSolverIterations = 32;
 
@@ -60,7 +81,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float CableConstraintVelocityDamping = 0.9f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "0.005", ClampMax = "0.033", Units = "s"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "0.005", ClampMax = "0.033", Units = "s"))
 	float CableSubstepTime = 0.008333f;
 
 	/** Caps catch-up work after a slow frame instead of making the rope explode. */
@@ -77,7 +99,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision")
 	bool bCableWorldCollision = true;
 
-	/** Requested swept-particle diameter. The solver raises it when necessary so collision never has gaps. */
+	/** Swept capsule diameter, covering both particles and the complete segments between them. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "2.0", Units = "cm"))
 	float CableParticleDiameter = 12.5f;
 
@@ -85,8 +107,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "0.1", ClampMax = "5.0", Units = "cm"))
 	float CableCollisionSkin = 1.0f;
 
-	/** Collision passes interleaved with constraint solving. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "1", ClampMax = "8"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "1", ClampMax = "8"))
 	int32 CableCollisionIterations = 5;
 
 	/** Keep at zero so deployed rope can slide freely over the floor. */
@@ -97,44 +119,48 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float CableCollisionFriction = 0.08f;
 
-	/** Radius used by the authoritative route sweeps. This is independent from the visual particles. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "1.0", Units = "cm"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "1.0", Units = "cm"))
 	float WrapSweepRadius = 6.0f;
 
-	/** Keeps a wrap point just outside the contacted surface. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "0.1", Units = "cm"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "0.1", Units = "cm"))
 	float WrapAnchorSurfaceOffset = 0.75f;
 
-	/** Contacts closer than this on the same component update one anchor instead of creating a duplicate. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "1.0", Units = "cm"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "1.0", Units = "cm"))
 	float WrapMinimumAnchorSeparation = 12.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "1", ClampMax = "32"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "1", ClampMax = "32"))
 	int32 MaximumWrapAnchors = 32;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "1", ClampMax = "8"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "1", ClampMax = "8"))
 	int32 MaximumWrapInsertionsPerFrame = 4;
 
-	/** A direct path must remain clear for this many frames before a bend is removed. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|05 Collision", meta = (ClampMin = "1", ClampMax = "12"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "1", ClampMax = "12"))
 	int32 UnwrapConfirmationFrames = 2;
 
-	/** Fraction of visual constraints solved each XPBD pass. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "0.5", ClampMax = "1.0"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "0.5", ClampMax = "1.0"))
 	float CableXPBDStiffness = 1.0f;
 
-	/** Minimum particle count allocated to every independently simulated route span. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|04 Simulation", meta = (ClampMin = "3", ClampMax = "64"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "3", ClampMax = "64"))
 	int32 MinimumVisualParticlesPerSpan = 5;
 
-	/** The final part of the chain blends into tension over this distance. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|09 Gameplay Tension", meta = (ClampMin = "1.0", Units = "cm"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "1.0", Units = "cm"))
 	float TensionSoftBand = 30.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|09 Gameplay Tension", meta = (ClampMin = "0.0", Units = "cm/s^2"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "0.0", Units = "cm/s^2"))
 	float PlayerPullAcceleration = 1800.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|09 Gameplay Tension", meta = (ClampMin = "0.0", ClampMax = "30.0"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "0.0", ClampMax = "30.0"))
 	float PlayerPullDamping = 8.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|09 Gameplay Tension", meta = (ClampMin = "0.0"))
@@ -149,7 +175,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|06 Visual")
 	TObjectPtr<UStaticMesh> ChainLinkMesh;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|06 Visual", meta = (ClampMin = "10.0", Units = "cm"))
+	/** Legacy V1 setting, retained for asset/Blueprint compatibility; unused by V2. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "10.0", Units = "cm"))
 	float ChainLinkLength = 28.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|06 Visual", meta = (ClampMin = "2.0", Units = "cm"))
