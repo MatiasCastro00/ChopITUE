@@ -36,6 +36,7 @@ private:
 	void SelectUpgradeThree();
 	void SelectUpgrade(int32 Index);
 	void CloseShop();
+	void RestartAfterDefeat();
 
 	UPROPERTY(Transient) TObjectPtr<class UInputAction> DialogueAdvanceAction;
 	UPROPERTY(Transient) TObjectPtr<class UInputAction> DialogueNextChoiceAction;

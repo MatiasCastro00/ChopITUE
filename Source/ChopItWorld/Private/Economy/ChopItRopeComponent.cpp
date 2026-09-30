@@ -17,6 +17,18 @@ static TAutoConsoleVariable<float> CVarChainFrameBudgetMs(
 	TEXT("ChopIt.Chain.FrameBudgetMs"), 32.0f,
 	TEXT("CPU budget per chain per frame in milliseconds. 0 disables the budget for offline validation."));
 
+static TAutoConsoleVariable<float> CVarChainDeathFrameBudgetMs(
+	TEXT("ChopIt.Chain.DeathFrameBudgetMs"), 4.0f,
+	TEXT("Hard CPU budget for the death reel solver per frame in milliseconds."));
+
+static TAutoConsoleVariable<int32> CVarChainDeathMaxSubsteps(
+	TEXT("ChopIt.Chain.DeathMaxSubsteps"), 6,
+	TEXT("Maximum fixed rope substeps processed by the death reel in one frame."));
+
+static TAutoConsoleVariable<int32> CVarChainDeathSolverIterations(
+	TEXT("ChopIt.Chain.DeathSolverIterations"), 12,
+	TEXT("Maximum constraint iterations per accepted death-reel substep."));
+
 bool UChopItRopeComponent::IsFrameBudgetExhausted() const
 {
 	return SimulationDeadline > 0.0 && FPlatformTime::Seconds() >= SimulationDeadline;
@@ -49,6 +61,9 @@ void UChopItRopeComponent::Configure(const UChopItChainDefinition* D)
 	StretchTolerance = FMath::Clamp(D->ChainStretchTolerance, 0.1f, 50.0f);
 	FeedSpeed = FMath::Max(20.0f, D->ChainFeedSpeed);
 	FeedAcceleration = FMath::Max(20.0f, D->ChainFeedAcceleration);
+	DeathRetractionSpeed = FMath::Max(0.0f, D->DeathRetractionMinSpeed);
+	DeathFeedSpeedMultiplier = FMath::Clamp(D->DeathReelSpeedMultiplier, 1.0f, 10.0f);
+	DeathFeedAccelerationMultiplier = FMath::Clamp(D->DeathReelAccelerationMultiplier, 1.0f, 10.0f);
 	Slack = FMath::Max(0.0f, D->ChainSlack);
 	Hysteresis = FMath::Max(0.0f, D->ChainReelHysteresis);
 	MaximumForce = FMath::Max(0.0f, D->MaximumPropTensionForce);
@@ -104,6 +119,21 @@ void UChopItRopeComponent::SetEndpoints(const FVector& Start, const FVector& End
 void UChopItRopeComponent::SetRopeLength(float Length)
 {
 	if (FMath::IsFinite(Length)) RequestedLength = FMath::Clamp(Length, MinimumLength, MaxLength);
+}
+
+void UChopItRopeComponent::SetDeathAllowedLength(float Length)
+{
+	if (!bCinematicRetraction || !bInitialized || !FMath::IsFinite(Length)) return;
+	const float NewLength = FMath::Clamp(Length, MinimumLength, MaxLength);
+	if (FMath::IsNearlyEqual(NewLength, DeployedLength, 0.0001f))
+	{
+		RequestedLength = NewLength;
+		return;
+	}
+	const float Scale = NewLength / FMath::Max(DeployedLength, UE_SMALL_NUMBER);
+	for (float& RestLength : RestLengths) RestLength *= Scale;
+	DeployedLength = RequestedLength = NewLength;
+	RefreshMasses();
 }
 
 bool UChopItRopeComponent::Sweep(const FVector& A, const FVector& B, float QueryRadius, FHitResult& Hit) const
@@ -595,7 +625,10 @@ bool UChopItRopeComponent::AdvanceStep(float Dt, const FVector& Start, const FVe
 	float PreviousLocalError = TNumericLimits<float>::Max();
 	float PreviousTotalError = TNumericLimits<float>::Max();
 	int32 StableIterations = 0;
-	for (int32 Iteration = 0; Iteration < Iterations * 2; ++Iteration)
+	const int32 SolverIterations = bCinematicRetraction
+		? FMath::Clamp(CVarChainDeathSolverIterations.GetValueOnGameThread(), 4, Iterations * 2)
+		: Iterations * 2;
+	for (int32 Iteration = 0; Iteration < SolverIterations; ++Iteration)
 	{
 		if (IsFrameBudgetExhausted()) break;
 		++IterationsThisFrame;
@@ -693,10 +726,20 @@ void UChopItRopeComponent::Simulate(float DeltaSeconds)
 	IterationsThisFrame = 0;
 	SweepQueriesThisFrame = ContactChecksThisFrame = 0;
 	bFrameBudgetLimited = false;
-	const float BudgetMs = CVarChainFrameBudgetMs.GetValueOnGameThread();
+	const float BudgetMs = bCinematicRetraction
+		? CVarChainDeathFrameBudgetMs.GetValueOnGameThread()
+		: CVarChainFrameBudgetMs.GetValueOnGameThread();
 	SimulationDeadline = BudgetMs > 0.0f ? StartTime + BudgetMs * 0.001 : 0.0;
 	ON_SCOPE_EXIT
 	{
+		if (bCinematicRetraction && Positions.Num() > 1)
+		{
+			// Preserve the player connection even if penetration recovery or the
+			// frame budget exits before the constraint solve finishes.
+			const FVector Shift = EndTarget - Positions.Last();
+			Positions.Last() = EndTarget;
+			PreviousPositions.Last() += Shift;
+		}
 		if (IsFrameBudgetExhausted())
 		{
 			bFrameBudgetLimited = true;
@@ -718,8 +761,11 @@ void UChopItRopeComponent::Simulate(float DeltaSeconds)
 	bMovementBlocked = !ResolveInitialPenetrations();
 	if (bMovementBlocked) return;
 	RefreshContacts();
-	AccumulatedTime = FMath::Min(AccumulatedTime + DeltaSeconds, StepTime * MaximumSteps);
-	const int32 Steps = FMath::Min(MaximumSteps, FMath::FloorToInt((AccumulatedTime + 0.000001f) / StepTime));
+	const int32 AllowedSteps = bCinematicRetraction
+		? FMath::Clamp(CVarChainDeathMaxSubsteps.GetValueOnGameThread(), 1, MaximumSteps)
+		: MaximumSteps;
+	AccumulatedTime = FMath::Min(AccumulatedTime + DeltaSeconds, StepTime * AllowedSteps);
+	const int32 Steps = FMath::Min(AllowedSteps, FMath::FloorToInt((AccumulatedTime + 0.000001f) / StepTime));
 	const FVector FrameStart = Positions[0], FrameEnd = Positions.Last();
 	const bool bStationaryEndpoint = FrameEnd.Equals(EndTarget, 0.1f);
 	for (int32 S = 0; S < Steps; ++S)
@@ -751,12 +797,19 @@ void UChopItRopeComponent::Simulate(float DeltaSeconds)
 		// Hysteresis gates the motor, not its integrated destination. Resetting
 		// the destination here discards every small inward movement forever.
 		const float MotorDifference = bAutomaticReel && Difference < 0 && -Difference < Hysteresis ? 0 : Difference;
-		const float WantedSpeed = FMath::Sign(MotorDifference)
-			* FMath::Min(FeedSpeed, FMath::Sqrt(2.0f * FeedAcceleration * FMath::Abs(MotorDifference)));
-		ReelVelocity = FMath::FInterpConstantTo(ReelVelocity, WantedSpeed, StepTime, FeedAcceleration);
-		const float MotorScale = ReelVelocity < 0.0f && bStationaryEndpoint ? TakeUpScale : 1.0f;
+		const float ActiveFeedSpeed = bCinematicRetraction ? GetCinematicFeedSpeed() : FeedSpeed;
+		const float ActiveFeedAcceleration = FeedAcceleration * (bCinematicRetraction ? DeathFeedAccelerationMultiplier : 1.0f);
+		// Death is a commanded reel, not the normal endpoint-following motor.
+		// Keep requesting full take-up until the controller's desired length is
+		// actually accepted; a rejected solve leaves the difference as debt.
+		const float WantedSpeed = bCinematicRetraction && MotorDifference < 0.0f
+			? -ActiveFeedSpeed
+			: FMath::Sign(MotorDifference)
+				* FMath::Min(ActiveFeedSpeed, FMath::Sqrt(2.0f * ActiveFeedAcceleration * FMath::Abs(MotorDifference)));
+		ReelVelocity = FMath::FInterpConstantTo(ReelVelocity, WantedSpeed, StepTime, ActiveFeedAcceleration);
+		const float MotorScale = ReelVelocity < 0.0f && bStationaryEndpoint && !bCinematicRetraction ? TakeUpScale : 1.0f;
 		float LengthChange = FMath::Clamp(ReelVelocity * StepTime * MotorScale, -FMath::Abs(Difference), FMath::Abs(Difference));
-		if (LengthChange < 0.0f && !bStationaryEndpoint)
+		if (LengthChange < 0.0f && !bStationaryEndpoint && !bCinematicRetraction)
 		{
 			// While the player moves, take up only a fraction of the inward
 			// progress toward the fixed machine. Euclidean distance alone can
@@ -793,13 +846,14 @@ void UChopItRopeComponent::Simulate(float DeltaSeconds)
 			const float Dt = StepTime / MotionSteps;
 			const bool bTakingUp = L < DeployedLength;
 			bool bAccepted = AdvanceStep(Dt, A, B, L);
-			if (bTakingUp && bStationaryEndpoint)
+			if (bTakingUp && bStationaryEndpoint && !bCinematicRetraction)
 				TakeUpScale = bAccepted ? FMath::Min(1.0f, TakeUpScale * 1.05f) : FMath::Max(0.001f, TakeUpScale * 0.5f);
 			if (IsFrameBudgetExhausted()) break;
 			if (!bAccepted && L < DeployedLength)
 			{
 				if (!bStationaryEndpoint)
-					for (float Fraction = 0.5f; !bAccepted && !IsFrameBudgetExhausted() && Fraction >= 0.125f; Fraction *= 0.5f)
+					for (float Fraction = 0.5f; !bAccepted && !IsFrameBudgetExhausted()
+						&& Fraction >= (bCinematicRetraction ? 0.25f : 0.125f); Fraction *= 0.5f)
 						bAccepted = AdvanceStep(Dt, A, B, FMath::Lerp(DeployedLength, L, Fraction));
 				if (!bAccepted) bAccepted = AdvanceStep(Dt, A, B, DeployedLength);
 			}
@@ -813,7 +867,8 @@ void UChopItRopeComponent::Simulate(float DeltaSeconds)
 
 				}
 				const FVector OldA = Positions[0], OldB = Positions.Last();
-				for (float Fraction = 0.5f; !IsFrameBudgetExhausted() && Fraction >= 1.0f / 64.0f; Fraction *= 0.5f)
+				for (float Fraction = 0.5f; !IsFrameBudgetExhausted()
+					&& Fraction >= (bCinematicRetraction ? 0.125f : 1.0f / 64.0f); Fraction *= 0.5f)
 				{
 					if (AdvanceStep(Dt, FMath::Lerp(OldA, A, Fraction), FMath::Lerp(OldB, B, Fraction), FMath::Max(L, DeployedLength)))
 					{
@@ -935,6 +990,32 @@ float UChopItRopeComponent::GetSimulatedPathLength() const
 	return Length;
 }
 
+FVector UChopItRopeComponent::GetDeathConstrainedEndpoint() const
+{
+	if (!bCinematicRetraction || Positions.Num() < 2) return GetAcceptedEndpoint();
+	float Excess = GetSimulatedPathLength() - DeployedLength;
+	if (Excess <= 0.01f) return Positions.Last();
+	for (int32 Index = Positions.Num() - 2; Index >= 0; --Index)
+	{
+		const FVector From = Positions[Index + 1];
+		const FVector To = Positions[Index];
+		const float SegmentLength = static_cast<float>(FVector::Distance(From, To));
+		if (Excess <= SegmentLength)
+			return FMath::Lerp(From, To, Excess / FMath::Max(SegmentLength, UE_SMALL_NUMBER));
+		Excess -= SegmentLength;
+	}
+	return Positions[0];
+}
+
+void UChopItRopeComponent::AttachDeathEndpoint(const FVector& EndWorld)
+{
+	if (!bCinematicRetraction || Positions.Num() < 2 || EndWorld.ContainsNaN()) return;
+	const FVector Shift = EndWorld - Positions.Last();
+	EndTarget = EndWorld;
+	Positions.Last() = EndWorld;
+	PreviousPositions.Last() += Shift;
+}
+
 FString UChopItRopeComponent::DescribeState() const
 {
 	int32 ConvexBodies = 0;
@@ -975,4 +1056,5 @@ void UChopItRopeComponent::ResetRope()
 	ResizeRejects = EndpointRejects = ConstraintRejects = 0;
 	bInitialized = bMovementBlocked = false;
 	bFrameBudgetLimited = false;
+	bCinematicRetraction = false;
 }

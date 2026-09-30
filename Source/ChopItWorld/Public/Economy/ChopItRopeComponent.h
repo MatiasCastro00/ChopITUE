@@ -34,7 +34,14 @@ public:
 	void InitializeRope(const FVector& StartWorld, const FVector& EndWorld, float InRopeLength, AActor* InIgnoredEndActor);
 	void SetEndpoints(const FVector& StartWorld, const FVector& EndWorld);
 	void SetRopeLength(float InRopeLength);
+	/** Shrinks the existing segment limits in place without replacing their positions or contacts. */
+	void SetDeathAllowedLength(float InRopeLength);
+	/** Death-only fallback for a blocker the capsule cannot route around. */
+	void IgnoreActorDuringDeath(AActor* Actor) { if (Actor) QueryParams.AddIgnoredActor(Actor); }
 	void SetAutomaticReel(bool bEnabled) { bAutomaticReel = bEnabled; }
+	/** Changes mode without touching particles, contacts, or the player connection. */
+	void SetDeathRetracting(bool bEnabled) { bCinematicRetraction = bEnabled; bAutomaticReel = !bEnabled; }
+	bool IsDeathRetracting() const { return bCinematicRetraction; }
 	void Simulate(float DeltaSeconds);
 	void ResetRope();
 	void ApplyForcesToPhysicsProps(float DeltaSeconds);
@@ -45,12 +52,23 @@ public:
 	const TArray<float>& GetSegmentRestLengths() const { return RestLengths; }
 	const TArray<FChopItRopeContact>& GetContacts() const { return Contacts; }
 	float GetRopeLength() const { return DeployedLength; }
+	float GetCinematicFeedSpeed() const { return DeathRetractionSpeed; }
+	float GetCinematicFeedAcceleration() const { return FeedAcceleration * DeathFeedAccelerationMultiplier; }
+	float GetReelVelocity() const { return ReelVelocity; }
 	float GetStoredLength() const { return FMath::Max(0.0f, MaxLength - DeployedLength); }
 	float GetSimulatedPathLength() const;
+	/** Endpoint allowed by the current death length along the existing rope path. */
+	FVector GetDeathConstrainedEndpoint() const;
+	/** Keep the visual/physical endpoint attached after a swept capsule correction. */
+	void AttachDeathEndpoint(const FVector& EndWorld);
 	float GetMaximumLengthError() const;
 	float GetCollisionRadius() const { return Radius; }
 	float GetEndpointTension() const { return EndpointTension; }
 	float GetLastSimulationMilliseconds() const { return LastSimulationMilliseconds; }
+	int32 GetIterationsThisFrame() const { return IterationsThisFrame; }
+	int32 GetAcceptedStepsThisFrame() const { return AcceptedStepsThisFrame; }
+	int64 GetSweepQueriesThisFrame() const { return SweepQueriesThisFrame; }
+	int64 GetContactChecksThisFrame() const { return ContactChecksThisFrame; }
 	FVector GetAcceptedEndpoint() const { return Positions.IsEmpty() ? EndTarget : Positions.Last(); }
 	FVector GetOutwardDirection() const;
 	bool IsMovementBlocked() const { return bMovementBlocked; }
@@ -106,8 +124,10 @@ private:
 	float GravityScale = 1.0f, Damping = 0.02f, ConstraintDamping = 0.9f;
 	float GroundFriction = 0.0f, ObstacleFriction = 0.08f;
 	float StepTime = 1.0f / 120.0f, AccumulatedTime = 0.0f;
+	float DeathRetractionSpeed = 1800.0f;
 	float StretchTolerance = 10.0f, MinimumLength = 100.0f;
 	float FeedSpeed = 1000.0f, FeedAcceleration = 3200.0f, ReelVelocity = 0.0f;
+	float DeathFeedSpeedMultiplier = 2.5f, DeathFeedAccelerationMultiplier = 4.0f;
 	float TakeUpScale = 1.0f;
 	float Slack = 200.0f, Hysteresis = 20.0f;
 	float MaximumForce = 250000.0f, ForceScale = 1.0f;
@@ -116,5 +136,6 @@ private:
 	int32 Iterations = 32, MaximumSteps = 8, RejectedSteps = 0;
 	int32 ResizeRejects = 0, EndpointRejects = 0, ConstraintRejects = 0;
 	bool bCollision = true, bInitialized = false, bAutomaticReel = false, bMovementBlocked = false;
+	bool bCinematicRetraction = false;
 	bool bFrameBudgetLimited = false;
 };

@@ -2,14 +2,21 @@
 
 #include "ChopItCollision.h"
 #include "ChopItLogChannels.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/ChopItCameraFacingTextComponent.h"
+#include "Camera/ChopItCameraAnchor.h"
+#include "Camera/ChopItCameraCue.h"
+#include "Camera/ChopItCameraDirectorSubsystem.h"
+#include "Core/CameraShakeAsset.h"
+#include "Curves/CurveFloat.h"
 #include "Cycle/ChopItCycleStateMachineComponent.h"
 #include "Economy/ChopItChainDefinition.h"
+#include "Economy/ChopItDeathRemains.h"
 #include "Economy/ChopItQuotaComponent.h"
 #include "Economy/ChopItRopeComponent.h"
 #include "Economy/ChopItTetherPathComponent.h"
@@ -18,9 +25,17 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Engine/LocalPlayer.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
+
+namespace
+{
+	thread_local int32 GDeathCollisionQueries = 0;
+}
 
 AChopItQuotaMachine::AChopItQuotaMachine()
 {
@@ -155,6 +170,7 @@ void AChopItQuotaMachine::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(ChainCreationTimer);
+		if (bDeathSlowMotionApplied) UGameplayStatics::SetGlobalTimeDilation(this, 1.0f);
 	}
 	DestroyPlayerChain();
 	Super::EndPlay(EndPlayReason);
@@ -164,6 +180,7 @@ void AChopItQuotaMachine::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateDeliveryReaction(DeltaSeconds);
+	UpdateDeathCrush(DeltaSeconds);
 	UpdateWoodChips(DeltaSeconds);
 	if (DeliveryGlowRemaining > 0.0f)
 	{
@@ -177,7 +194,7 @@ void AChopItQuotaMachine::Tick(const float DeltaSeconds)
 	}
 	if (const UChopItChainDefinition* Chain = GetChainDefinition(); Chain && Chain->bChainPlayerToMachine)
 	{
-		if (!TetherReceiver) UpdateRetractableChain(DeltaSeconds);
+		if (!TetherReceiver && !bChainedPlayerConsumed) UpdateRetractableChain(DeltaSeconds);
 		TetherPath->Synchronize();
 		UpdateChainVisuals();
 	}
@@ -342,6 +359,16 @@ void AChopItQuotaMachine::HandleQuotaChanged(const int32 Progress, const int32 T
 
 void AChopItQuotaMachine::HandlePhaseChanged(const EChopItCyclePhase, const EChopItCyclePhase, const int32)
 {
+	if (GetWorld())
+	{
+		if (AGameStateBase* GameState = GetWorld()->GetGameState())
+		{
+			if (const UChopItCycleStateMachineComponent* Cycle = GameState->FindComponentByClass<UChopItCycleStateMachineComponent>())
+			{
+				if (Cycle->GetCurrentPhase() == EChopItCyclePhase::Death) BeginDeathSequence();
+			}
+		}
+	}
 	RefreshLeverLabel();
 }
 
@@ -379,7 +406,7 @@ void AChopItQuotaMachine::RefreshLeverLabel()
 void AChopItQuotaMachine::TryCreatePlayerChain()
 {
 	const UChopItChainDefinition* Chain = GetChainDefinition();
-	if (!Chain || !Chain->bChainPlayerToMachine || IsValid(ChainedPlayer))
+	if (!Chain || !Chain->bChainPlayerToMachine || bChainedPlayerConsumed || IsValid(ChainedPlayer))
 	{
 		return;
 	}
@@ -419,7 +446,257 @@ void AChopItQuotaMachine::CreatePlayerChain(AActor* PlayerActor)
 
 void AChopItQuotaMachine::AdvancePlayerChain(float DeltaSeconds)
 {
+	if (bDeathSequenceActive)
+	{
+		UpdateDeathSequence(DeltaSeconds);
+		return;
+	}
 	UpdateRetractableChain(DeltaSeconds);
+}
+
+void AChopItQuotaMachine::BeginDeathSequence()
+{
+	if (bDeathSequenceActive || bChainedPlayerConsumed) return;
+	if (!IsValid(ChainedPlayer) || !RopeSimulation || !RopeSimulation->IsInitialized())
+	{
+		UE_LOG(LogChopIt, Warning, TEXT("Death began without an existing player chain; skipping chain pull"));
+		BeginDefeatPresentation();
+		return;
+	}
+	bDeathSequenceActive = true;
+	RopeSimulation->SetDeathRetracting(true);
+	const UChopItChainDefinition* Chain = GetChainDefinition();
+	DeathStartRopeLength = RopeSimulation->GetRopeLength();
+	DeathDesiredRopeLength = DeathStartRopeLength;
+	CurrentDeathRetractionTime = 0.0f;
+	DeathCurrentRetractionSpeed = 0.0f;
+	DeathRetractionDebt = 0.0f;
+	DeathBestDistance = Chain ? static_cast<float>(FVector::Dist2D(
+		ChainedPlayer->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor),
+		GetActorTransform().TransformPosition(Chain->MachineChainAnchor))) : TNumericLimits<float>::Max();
+	DeathNoProgressTime = 0.0f;
+	if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
+	{
+		Character->DisableInput(Cast<APlayerController>(Character->GetController()));
+		if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+		{
+			Movement->StopMovementImmediately();
+			Movement->SetMovementMode(MOVE_Falling);
+		}
+	}
+	if (TetherReceiver) TetherReceiver->ClearTetherState();
+	DeathBypassedActors.Reset();
+	if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
+		if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+		{
+			Capsule->IgnoreActorWhenMoving(this, true);
+			DeathBypassedActors.Add(this);
+		}
+	DeathStallCount = 0;
+	DeliveryReactionStrength = 1.0f;
+	DeliveryAnimationTime = 0.0f;
+	DeliveryGlowRemaining = 1.6f;
+	PlayDeathShake(0.18f);
+}
+
+void AChopItQuotaMachine::UpdateDeathSequence(const float DeltaSeconds)
+{
+	const double UpdateStart = FPlatformTime::Seconds();
+	GDeathCollisionQueries = 0;
+	ON_SCOPE_EXIT
+	{
+		DeathUpdateMilliseconds = static_cast<float>((FPlatformTime::Seconds() - UpdateStart) * 1000.0);
+		DeathCollisionQueries = GDeathCollisionQueries;
+	};
+	const UChopItChainDefinition* Chain = GetChainDefinition();
+	if (!Chain || !IsValid(ChainedPlayer) || !RopeSimulation || !RopeSimulation->IsInitialized()) return;
+	const float Dt = FMath::Max(0.0f, DeltaSeconds);
+	const FVector Start = GetActorTransform().TransformPosition(Chain->MachineChainAnchor);
+	const FVector End = ChainedPlayer->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
+
+	// A curve value is a speed blend, never a direct rope-length blend.
+	CurrentDeathRetractionTime += Dt;
+	const float CurveAlpha = Chain->DeathRetractionCurve
+		? FMath::Clamp(Chain->DeathRetractionCurve->GetFloatValue(CurrentDeathRetractionTime), 0.0f, 1.0f)
+		: FMath::SmoothStep(0.0f, FMath::Max(0.01f, Chain->DeathRetractionDuration), CurrentDeathRetractionTime);
+	const float MinSpeed = FMath::Max(0.0f, Chain->DeathRetractionMinSpeed);
+	const float MaxSpeed = FMath::Max(MinSpeed, Chain->DeathRetractionMaxSpeed);
+	DeathCurrentRetractionSpeed = FMath::Lerp(MinSpeed, MaxSpeed, CurveAlpha);
+	// The target keeps shrinking at the commanded speed even while the pawn is blocked.
+	DeathDesiredRopeLength = FMath::Max(Chain->MinimumDeployedLength,
+		DeathDesiredRopeLength - DeathCurrentRetractionSpeed * Dt);
+	RopeSimulation->SetEndpoints(Start, End);
+	RopeSimulation->SetDeathAllowedLength(DeathDesiredRopeLength);
+	RopeSimulation->Simulate(Dt);
+	ApplyTetherConstraint(End, RopeSimulation->GetDeathConstrainedEndpoint(), Dt);
+	const FVector ConstrainedEnd = ChainedPlayer->GetActorTransform().TransformPosition(Chain->PlayerChainAnchor);
+	RopeSimulation->AttachDeathEndpoint(ConstrainedEnd);
+	const float ActualLength = RopeSimulation->GetRopeLength();
+	DeathRetractionDebt = FMath::Max(0.0f, RopeSimulation->GetSimulatedPathLength() - ActualLength);
+
+	CurrentCableLength = ActualLength;
+	TetherPath->Synchronize();
+	DeliveryReactionStrength = 1.0f;
+	DeliveryGlowRemaining = FMath::Max(DeliveryGlowRemaining, 0.2f);
+
+	const float Distance = static_cast<float>(FVector::Dist2D(ConstrainedEnd, Start));
+	if (Distance <= Chain->DeathIntakeRadius)
+	{
+		ConsumeChainedPlayer();
+		return;
+	}
+	if (Distance < DeathBestDistance - Chain->DeathPullMinProgress)
+	{
+		DeathBestDistance = Distance;
+		DeathNoProgressTime = 0.0f;
+	}
+	else DeathNoProgressTime += Dt;
+
+	if (Chain->bDebugDeathPull)
+		UE_LOG(LogChopIt, Display, TEXT("Death tether distance %.1f target %.1f deployed %.1f excess %.1f speed %.1f endpoint %.1f"),
+			Distance, DeathDesiredRopeLength, ActualLength, DeathRetractionDebt,
+			DeathCurrentRetractionSpeed, FVector::Distance(ConstrainedEnd, RopeSimulation->GetAcceptedEndpoint()));
+
+	// A sealed geometry pocket cannot be solved by the tether. End the cinematic
+	// after a long stall without moving or teleporting the character.
+	if (DeathNoProgressTime < FMath::Max(2.5f, Chain->DeathObstacleBypassDelay)) return;
+	++DeathStallCount;
+	bDeathSequenceActive = false;
+	if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
+		if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+			for (const TWeakObjectPtr<AActor>& Actor : DeathBypassedActors)
+				if (Actor.IsValid()) Capsule->IgnoreActorWhenMoving(Actor.Get(), false);
+	DeathBypassedActors.Reset();
+	if (TetherReceiver)
+	{
+		TetherReceiver->ClearTetherState();
+		TetherReceiver->BindMachine(nullptr);
+	}
+	UE_LOG(LogChopIt, Warning, TEXT("Death tether remained blocked; ending the cinematic at the player's location"));
+	BeginDefeatPresentation();
+}
+
+void AChopItQuotaMachine::ConsumeChainedPlayer()
+{
+	if (bChainedPlayerConsumed || !IsValid(ChainedPlayer)) return;
+	bChainedPlayerConsumed = true;
+	bDeathSequenceActive = false;
+	const FVector Mouth = GetActorTransform().TransformPosition(FVector(0.0f, 0.0f, 190.0f));
+	const FVector Ejection = (ChainedPlayer->GetActorLocation() - Mouth).GetSafeNormal(UE_SMALL_NUMBER, -GetActorForwardVector());
+	if (UWorld* World = GetWorld())
+	{
+		FActorSpawnParameters Parameters;
+		Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (AChopItDeathRemains* Remains = World->SpawnActor<AChopItDeathRemains>(Mouth, FRotator::ZeroRotator, Parameters))
+		{
+			Remains->InitializeRemains(Ejection);
+		}
+	}
+	if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
+	{
+		Character->GetMesh()->SetVisibility(false, true);
+	}
+	else
+	{
+		ChainedPlayer->SetActorHiddenInGame(true);
+	}
+	ChainedPlayer->SetActorEnableCollision(false);
+	DeliveryReactionStrength = 1.0f;
+	DeliveryGlowRemaining = 1.6f;
+	PlayDeathShake(0.46f);
+	bDeathCrushActive = true;
+	DeathCrushElapsed = 0.0f;
+	DestroyPlayerChain();
+}
+
+void AChopItQuotaMachine::UpdateDeathCrush(const float DeltaSeconds)
+{
+	if (!bDeathCrushActive || bDeathPresentationReady) return;
+	DeathCrushElapsed += FMath::Max(0.0f, DeltaSeconds);
+	DeliveryReactionStrength = 1.0f;
+	DeliveryGlowRemaining = FMath::Max(DeliveryGlowRemaining, 0.2f);
+	// The first half is the visible swallow. Freeze the moment the grinder has
+	// properly bitten down, rather than covering the whole pull with a defeat UI.
+	if (DeathCrushElapsed >= 0.60f) BeginDefeatPresentation();
+}
+
+void AChopItQuotaMachine::BeginDefeatPresentation()
+{
+	if (bDeathPresentationReady) return;
+	bDeathPresentationReady = true;
+	bDeathSlowMotionApplied = true;
+	UGameplayStatics::SetGlobalTimeDilation(this, 0.20f);
+	UWorld* World = GetWorld();
+	APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
+	ULocalPlayer* LocalPlayer = Controller ? Controller->GetLocalPlayer() : nullptr;
+	if (!World || !LocalPlayer) return;
+	const FVector Mouth = GetActorTransform().TransformPosition(FVector(0.0f, 0.0f, 190.0f));
+	const FVector CurrentCameraLocation = Controller->PlayerCameraManager
+		? Controller->PlayerCameraManager->GetCameraLocation()
+		: Mouth + GetActorTransform().TransformVectorNoScale(FVector(520.0f, -520.0f, 340.0f));
+	// Move the current camera ten percent closer to the machine; this avoids the
+	// abrupt close-up caused by the former fixed death-camera offset and FOV.
+	const FVector CameraLocation = Mouth + (CurrentCameraLocation - Mouth) * 0.90f;
+	FActorSpawnParameters Parameters;
+	Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	DeathCameraAnchor = World->SpawnActor<AChopItCameraAnchor>(CameraLocation, (Mouth - CameraLocation).Rotation(), Parameters);
+	if (!DeathCameraAnchor) return;
+	DeathCameraAnchor->DefaultSubject = this;
+	DeathCameraAnchor->bUseActorLocationForSubject = true;
+	DeathCameraAnchor->SubjectFocusOffset = Mouth - GetActorLocation();
+	DeathCameraCue = NewObject<UChopItCameraCue>(this);
+	DeathCameraCue->Mode = EChopItCameraMode::Death;
+	DeathCameraCue->FieldOfView = Controller->PlayerCameraManager
+		? Controller->PlayerCameraManager->GetFOVAngle()
+		: 85.0f;
+	DeathCameraCue->Priority = 2000;
+	DeathCameraCue->InputLocks = static_cast<int32>(EChopItCameraInputLock::Camera | EChopItCameraInputLock::Actions);
+	if (UChopItCameraDirectorSubsystem* Camera = LocalPlayer->GetSubsystem<UChopItCameraDirectorSubsystem>())
+	{
+		Camera->PushCameraCueWithFieldOfView(DeathCameraCue, DeathCameraAnchor, this, DeathCameraCue->FieldOfView, 0.18f);
+	}
+}
+
+void AChopItQuotaMachine::PlayDeathShake(const float Scale)
+{
+	UWorld* World = GetWorld();
+	APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
+	ULocalPlayer* LocalPlayer = Controller ? Controller->GetLocalPlayer() : nullptr;
+	const UCameraShakeAsset* Shake = LoadObject<UCameraShakeAsset>(nullptr,
+		TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical.CS_Critical"));
+	if (LocalPlayer && Shake)
+	{
+		if (UChopItCameraDirectorSubsystem* Camera = LocalPlayer->GetSubsystem<UChopItCameraDirectorSubsystem>())
+		{
+			Camera->PlayCameraShake(Shake, Scale, GetActorLocation());
+		}
+	}
+}
+
+void AChopItQuotaMachine::ApplyTetherConstraint(
+	const FVector& CurrentEnd, const FVector& AcceptedEnd, const float DeltaSeconds)
+{
+	const FVector Correction = AcceptedEnd - CurrentEnd;
+	if (Correction.IsNearlyZero(0.01f) || !IsValid(ChainedPlayer)) return;
+	FHitResult Hit;
+	// This is the existing swept tether constraint correction, shared by play
+	// and death. The death controller never supplies a player movement target.
+	ChainedPlayer->SetActorLocation(ChainedPlayer->GetActorLocation() + Correction,
+		true, &Hit, ETeleportType::None);
+	if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
+	{
+		UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
+		if (Hit.IsValidBlockingHit() && Hit.Time < 1.0f)
+			static_cast<UMovementComponent*>(Movement)->SlideAlongSurface(
+				Correction, 1.0f - Hit.Time, Hit.Normal, Hit, true);
+		const bool bAtMaterialLimit = RopeSimulation->GetStoredLength() < 0.1f;
+		const FVector BlockedDirection = bAtMaterialLimit
+			? RopeSimulation->GetOutwardDirection() : -Correction.GetSafeNormal();
+		const float Speed = FVector::DotProduct(Movement->Velocity, BlockedDirection);
+		if (Speed > 0) Movement->Velocity -= BlockedDirection
+			* (bAtMaterialLimit ? Speed : FMath::Min(Speed,
+				static_cast<float>(Correction.Size()) / FMath::Max(DeltaSeconds, UE_SMALL_NUMBER)));
+	}
 }
 
 void AChopItQuotaMachine::UpdateRetractableChain(float DeltaSeconds)
@@ -438,26 +715,7 @@ void AChopItQuotaMachine::UpdateRetractableChain(float DeltaSeconds)
 	}
 	RopeSimulation->SetEndpoints(Start, End);
 	RopeSimulation->Simulate(DeltaSeconds);
-	const FVector Accepted = RopeSimulation->GetAcceptedEndpoint();
-	const FVector Correction = Accepted - End;
-	if (!Correction.IsNearlyZero(0.01f))
-	{
-		FHitResult Hit;
-		// Swept in 3D, including a jump/fall. Never teleport through level geometry.
-		ChainedPlayer->SetActorLocation(ChainedPlayer->GetActorLocation() + Correction, true, &Hit, ETeleportType::None);
-		if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
-		{
-			UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
-			const bool bAtMaterialLimit = RopeSimulation->GetStoredLength() < 0.1f;
-			const FVector BlockedDirection = bAtMaterialLimit ? RopeSimulation->GetOutwardDirection() : -Correction.GetSafeNormal();
-			const float Speed = FVector::DotProduct(Movement->Velocity, BlockedDirection);
-			// A partial accepted step only removes the rejected part of velocity.
-			// The last link can face backwards inside a loose fold and is not the
-			// normal of the displacement that was actually blocked.
-			if (Speed > 0) Movement->Velocity -= BlockedDirection
-				* (bAtMaterialLimit ? Speed : FMath::Min(Speed, static_cast<float>(Correction.Size()) / FMath::Max(DeltaSeconds, UE_SMALL_NUMBER)));
-		}
-	}
+	ApplyTetherConstraint(End, RopeSimulation->GetAcceptedEndpoint(), DeltaSeconds);
 	CurrentCableLength = RopeSimulation->GetRopeLength();
 	// A frame-time cutoff preserves the last valid rope shape; it is not a
 	// physical obstruction and must never remove the player's outward input.
@@ -470,7 +728,7 @@ void AChopItQuotaMachine::UpdateRetractableChain(float DeltaSeconds)
 		const FVector Guide = ChainedPlayer->GetActorLocation() - RopeSimulation->GetOutwardDirection() * 100.0f;
 		TetherReceiver->SetTetherState(Guide,
 			FMath::Clamp(RopeSimulation->GetEndpointTension() / FMath::Max(1.0f, Chain->MaximumPropTensionForce), 0.0f, 1.0f),
-			bHardLimited, 0.0f, 0.0f);
+			bHardLimited);
 	}
 	RopeSimulation->ApplyForcesToPhysicsProps(DeltaSeconds);
 	TetherPath->Synchronize();
@@ -529,6 +787,15 @@ const UChopItChainDefinition* AChopItQuotaMachine::GetChainDefinition() const
 
 void AChopItQuotaMachine::DestroyPlayerChain()
 {
+	if (ACharacter* Character = Cast<ACharacter>(ChainedPlayer))
+	{
+		if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+		{
+			for (const TWeakObjectPtr<AActor>& Actor : DeathBypassedActors)
+				if (Actor.IsValid()) Capsule->IgnoreActorWhenMoving(Actor.Get(), false);
+		}
+	}
+	DeathBypassedActors.Reset();
 	if (TetherReceiver)
 	{
 		TetherReceiver->BindMachine(nullptr);

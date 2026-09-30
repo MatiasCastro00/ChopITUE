@@ -159,4 +159,57 @@ static FAutoConsoleCommandWithWorldAndArgs ReplayChainReturn(
 			return false;
 		}), 5.0f);
 	}));
+
+// Opt-in real-map profiler for the complete death controller. It exercises the
+// authored pawn, machine, collision and renderer, then exits without saving.
+static FAutoConsoleCommandWithWorldAndArgs ProfileChainDeath(
+	TEXT("ChopIt.Chain.ProfileDeath"), TEXT("Profile the Furnace death pull in the running map; optional 'exit'."),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		if (!World || !World->IsGameWorld()) return;
+		const bool bExit = Args.Contains(TEXT("exit"));
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateWeakLambda(World, [World, bExit](float)
+		{
+			if (APlayerController* Controller = World->GetFirstPlayerController()) Controller->SetPause(false);
+			ACharacter* Player = World->GetFirstPlayerController()
+				? Cast<ACharacter>(World->GetFirstPlayerController()->GetPawn()) : nullptr;
+			AChopItQuotaMachine* Machine = nullptr;
+			for (TActorIterator<AChopItQuotaMachine> It(World); It; ++It)
+				if (UChopItRopeComponent* Rope = It->FindComponentByClass<UChopItRopeComponent>();
+					Rope && Rope->IsInitialized()) { Machine = *It; break; }
+			if (!Player || !Machine)
+			{
+				UE_LOG(LogTemp, Error, TEXT("DeathProfile: missing authored pawn or initialized Furnace chain"));
+				if (bExit) FPlatformMisc::RequestExit(false);
+				return false;
+			}
+			Player->GetCharacterMovement()->StopMovementImmediately();
+			Player->GetCharacterMovement()->DisableMovement();
+			UE_LOG(LogTemp, Display, TEXT("DeathProfile START player=%s machine=%s distance=%.1f"),
+				*Player->GetActorLocation().ToString(), *Machine->GetActorLocation().ToString(),
+				FVector::Dist(Player->GetActorLocation(), Machine->GetActorLocation()));
+			Machine->BeginDeathSequenceForAutomation();
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateWeakLambda(World,
+				[World, bExit, Player = TWeakObjectPtr<ACharacter>(Player), Machine = TWeakObjectPtr<AChopItQuotaMachine>(Machine),
+				Time = 0.0f, FrameTimes = TArray<float>(), DeathTimes = TArray<float>(), PeakQueries = 0](float DeltaTime) mutable
+			{
+				if (!Player.IsValid() || !Machine.IsValid()) return false;
+				if (APlayerController* Controller = World->GetFirstPlayerController()) Controller->SetPause(false);
+				Time += DeltaTime;
+				FrameTimes.Add(DeltaTime * 1000.0f);
+				DeathTimes.Add(Machine->GetDeathUpdateMillisecondsForAutomation());
+				PeakQueries = FMath::Max(PeakQueries, Machine->GetDeathCollisionQueriesForAutomation());
+				if (Player->GetActorEnableCollision() && Time < 15.0f) return true;
+				FrameTimes.Sort(); DeathTimes.Sort();
+				const int32 P95 = FMath::Clamp(FMath::FloorToInt(FrameTimes.Num() * 0.95f), 0, FrameTimes.Num() - 1);
+				const float P95FrameMs = FrameTimes[P95];
+				UE_LOG(LogTemp, Display, TEXT("DeathProfile FINISH consumed=%d frames=%d P95Frame=%.3fms P95FPS=%.1f P95Death=%.3fms peakQueries=%d"),
+					!Player->GetActorEnableCollision(), FrameTimes.Num(), P95FrameMs,
+					1000.0f / FMath::Max(0.001f, P95FrameMs), DeathTimes[P95], PeakQueries);
+				if (bExit) FPlatformMisc::RequestExit(false);
+				return false;
+			}));
+			return false;
+		}), 5.0f);
+	}));
 #endif

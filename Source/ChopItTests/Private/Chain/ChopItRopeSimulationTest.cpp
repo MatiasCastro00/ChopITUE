@@ -8,7 +8,9 @@
 #include "Feedback/ChopItHitFeedbackComponent.h"
 #include "TimerManager.h"
 #include "Economy/ChopItChainDefinition.h"
+#include "Economy/ChopItDeathRemains.h"
 #include "Economy/ChopItQuotaMachine.h"
+#include "Curves/CurveFloat.h"
 #include "GameFramework/Character.h"
 
 #include "GameFramework/WorldSettings.h"
@@ -761,4 +763,270 @@ bool FChainV2TreeHitTest::RunTest(const FString&)
             && Tree->GetPhysicsRoot()->GetComponentTransform().Equals(PhysicalTransform));
     }
     return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDeathRemainsPhysicsTest, "ChopIt.Death.RemainsPhysics",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDeathRemainsPhysicsTest::RunTest(const FString&)
+{
+	ChainV2Tests::FScene Scene(true);
+	Scene.Box(FVector(0, 0, -25), FVector(1500, 1500, 25));
+	AChopItDeathRemains* Remains = Scene.World->SpawnActor<AChopItDeathRemains>(FVector(0, 0, 250), FRotator::ZeroRotator);
+	Remains->InitializeRemains(FVector::ForwardVector);
+	TInlineComponentArray<UStaticMeshComponent*> Fragments(Remains);
+	TestEqual(TEXT("The machine emits blood droplets and meat fragments"), Fragments.Num(), 22);
+	bool bAllPhysical = true;
+	for (UStaticMeshComponent* Fragment : Fragments)
+	{
+		bAllPhysical &= Fragment && Fragment->IsSimulatingPhysics() && Fragment->IsCollisionEnabled();
+	}
+	TestTrue(TEXT("Every emitted fragment has gravity and collision"), bAllPhysical);
+	const float InitialHeight = Fragments.IsEmpty() ? 0.0f : Fragments[0]->GetComponentLocation().Z;
+	for (int32 Frame = 0; Frame < 60; ++Frame)
+	{
+		++GFrameCounter;
+		Scene.World->Tick(LEVELTICK_All, 1.0f / 60.0f);
+	}
+	TestTrue(TEXT("A physical fragment falls instead of fading in place"), !Fragments.IsEmpty()
+		&& Fragments[0]->GetComponentLocation().Z < InitialHeight - 10.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDeathPullObstacleTest, "ChopIt.Death.PullPastObstacle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDeathPullObstacleTest::RunTest(const FString&)
+{
+	ChainV2Tests::FScene Scene(true);
+	Scene.Box(FVector(0, 0, -25), FVector(1500, 1500, 25));
+	// The physical chain clears this gap; the wider player capsule does not.
+	Scene.Post(FVector(250, 75, 100));
+	Scene.Post(FVector(250, -75, 100));
+	Scene.Definition->MaxChainLength = 800.0f;
+	Scene.Definition->ChainFeedSpeed = 650.0f;
+	Scene.Definition->ChainFeedAcceleration = 3200.0f;
+	ACharacter* Character = Scene.World->SpawnActor<ACharacter>(FVector(550, 0, 100), FRotator::ZeroRotator);
+	UChopItTetherReceiverComponent* Receiver = NewObject<UChopItTetherReceiverComponent>(Character);
+	Character->AddInstanceComponent(Receiver);
+	Receiver->RegisterComponent();
+	APlayerController* Controller = Scene.World->SpawnActor<APlayerController>();
+	Controller->SetAsLocalPlayerController();
+	Controller->Possess(Character);
+	AChopItQuotaMachine* Machine = Scene.World->SpawnActorDeferred<AChopItQuotaMachine>(
+		AChopItQuotaMachine::StaticClass(), FTransform::Identity);
+	Machine->SetChainDefinition(Scene.Definition);
+	Machine->FinishSpawning(FTransform::Identity);
+	if (!Machine->HasActorBegunPlay()) Machine->DispatchBeginPlay();
+	UChopItRopeComponent* Rope = Machine->FindComponentByClass<UChopItRopeComponent>();
+	TestTrue(TEXT("Death fixture starts with a physical chain"), Rope && Rope->IsInitialized());
+	if (!Rope || !Rope->IsInitialized()) return false;
+	Character->GetCharacterMovement()->DisableMovement();
+	Machine->BeginDeathSequenceForAutomation();
+	float MaximumAttachmentError = 0.0f;
+	float MinimumX = Character->GetActorLocation().X;
+	float ClearPullTravel = 0.0f;
+	float ClearReelTravel = 0.0f;
+	float PreviousX = Character->GetActorLocation().X;
+	float PreviousLength = Rope->GetRopeLength();
+	bool bConsumed = false;
+	bool bStalled = false;
+	for (int32 Frame = 0; Frame < 600; ++Frame)
+	{
+		++GFrameCounter;
+		Scene.World->Tick(LEVELTICK_All, 1.0f / 60.0f);
+		MinimumX = FMath::Min(MinimumX, static_cast<float>(Character->GetActorLocation().X));
+		if (Machine->IsDeathPresentationReady() && Rope->IsInitialized()) { bStalled = true; break; }
+		if (!Rope->IsInitialized()) { bConsumed = !Character->GetActorEnableCollision(); break; }
+		const float CurrentX = Character->GetActorLocation().X;
+		const float CurrentLength = Rope->GetRopeLength();
+		if (Frame >= 2 && PreviousX > 350.0f && CurrentX > 350.0f)
+		{
+			ClearPullTravel += FMath::Max(0.0f, PreviousX - CurrentX);
+			ClearReelTravel += FMath::Max(0.0f, PreviousLength - CurrentLength);
+		}
+		PreviousX = CurrentX;
+		PreviousLength = CurrentLength;
+		const FVector Anchor = Character->GetActorTransform().TransformPosition(Scene.Definition->PlayerChainAnchor);
+		MaximumAttachmentError = FMath::Max(MaximumAttachmentError,
+			static_cast<float>(FVector::Distance(Anchor, Rope->GetAcceptedEndpoint())));
+	}
+	AddInfo(FString::Printf(TEXT("Death pull: minimum X %.1f, final %s, attachment %.3f cm, clear pull %.1f cm, reel %.1f cm, consumed %d"),
+		MinimumX, *Character->GetActorLocation().ToString(), MaximumAttachmentError,
+		ClearPullTravel, ClearReelTravel, bConsumed));
+	TestTrue(TEXT("The capsule remains blocked by a gap it cannot fit through"), MinimumX > 270.0f);
+	TestTrue(TEXT("The chain stays attached during the pull"), MaximumAttachmentError < 1.0f);
+	TestTrue(TEXT("An impossible capsule gap ends without repositioning"),
+		bStalled && !bConsumed && Machine->GetDeathStallCountForAutomation() > 0);
+	TestEqual(TEXT("Temporary pawn collision ignores are restored after the stall"),
+		Character->GetCapsuleComponent()->GetMoveIgnoreActors().Num(), 0);
+	TestTrue(TEXT("The cinematic reel keeps up with the pull on a clear span"),
+		ClearPullTravel > 50.0f && ClearReelTravel >= ClearPullTravel * 0.95f);
+	TestTrue(TEXT("Blocked death ends without moving the character into the machine"), bStalled && !bConsumed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDeathPullScenariosTest, "ChopIt.Death.ScenariosAtoF",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDeathPullScenariosTest::RunTest(const FString&)
+{
+	for (int32 Scenario = 0; Scenario < 7; ++Scenario)
+	{
+		ChainV2Tests::FScene Scene(true);
+		Scene.Box(FVector(0, 0, -25), FVector(1500, 1500, 25));
+		Scene.Definition->MaxChainLength = Scenario == 6 ? 2400.0f : 900.0f;
+		Scene.Definition->ChainFeedSpeed = 650.0f;
+		Scene.Definition->ChainFeedAcceleration = 3200.0f;
+		Scene.Definition->DeathPullStuckTime = 0.5f;
+		if (Scenario == 6)
+		{
+			UCurveFloat* SpeedCurve = NewObject<UCurveFloat>(Scene.Definition);
+			SpeedCurve->FloatCurve.AddKey(0.0f, 0.0f);
+			SpeedCurve->FloatCurve.AddKey(2.0f, 1.0f);
+			Scene.Definition->DeathRetractionCurve = SpeedCurve;
+		}
+		if (Scenario == 1) Scene.Post(FVector(250, 70, 100));
+		if (Scenario == 2) Scene.Box(FVector(250, 105, 110), FVector(35, 72, 110));
+		if (Scenario == 3)
+		{
+			Scene.Post(FVector(250, 75, 100));
+			Scene.Post(FVector(250, -75, 100));
+		}
+		ACharacter* Character = Scene.World->SpawnActor<ACharacter>(
+			FVector(Scenario == 6 ? 2200.0f : 550.0f, 0, 100), FRotator::ZeroRotator);
+		UChopItTetherReceiverComponent* Receiver = NewObject<UChopItTetherReceiverComponent>(Character);
+		Character->AddInstanceComponent(Receiver);
+		Receiver->RegisterComponent();
+		APlayerController* Controller = Scene.World->SpawnActor<APlayerController>();
+		Controller->SetAsLocalPlayerController();
+		Controller->Possess(Character);
+		AChopItQuotaMachine* Machine = Scene.World->SpawnActorDeferred<AChopItQuotaMachine>(
+			AChopItQuotaMachine::StaticClass(), FTransform::Identity);
+		Machine->SetChainDefinition(Scene.Definition);
+		Machine->FinishSpawning(FTransform::Identity);
+		if (!Machine->HasActorBegunPlay()) Machine->DispatchBeginPlay();
+		UChopItRopeComponent* Rope = Machine->FindComponentByClass<UChopItRopeComponent>();
+		if (!TestTrue(*FString::Printf(TEXT("Scenario %d initializes its rope"), Scenario), Rope && Rope->IsInitialized())) continue;
+		Character->GetCharacterMovement()->DisableMovement();
+		const TArray<FVector> PositionsBeforeDeath = Rope->GetParticleLocations();
+		const int32 ContactsBeforeDeath = Rope->GetContacts().Num();
+		const float LengthBeforeDeath = Rope->GetRopeLength();
+		Machine->BeginDeathSequenceForAutomation();
+		TestTrue(*FString::Printf(TEXT("Scenario %c reuses its rope"), TCHAR('A' + Scenario)),
+			Rope == Machine->FindComponentByClass<UChopItRopeComponent>() && Rope->IsDeathRetracting());
+		TestTrue(*FString::Printf(TEXT("Scenario %c starts at current length"), TCHAR('A' + Scenario)),
+			FMath::IsNearlyEqual(LengthBeforeDeath, Machine->GetDeathDesiredRopeLengthForAutomation()));
+		TestEqual(*FString::Printf(TEXT("Scenario %c preserves contact count"), TCHAR('A' + Scenario)),
+			Rope->GetContacts().Num(), ContactsBeforeDeath);
+		bool bPositionsPreserved = Rope->GetParticleLocations().Num() == PositionsBeforeDeath.Num();
+		if (bPositionsPreserved)
+			for (int32 Index = 0; Index < PositionsBeforeDeath.Num(); ++Index)
+				bPositionsPreserved &= Rope->GetParticleLocations()[Index].Equals(PositionsBeforeDeath[Index], 0.001f);
+		TestTrue(*FString::Printf(TEXT("Scenario %c preserves every segment at transition"), TCHAR('A' + Scenario)),
+			bPositionsPreserved);
+		if (Scenario == 0)
+		{
+			Scene.Definition->DeathRetractionMinSpeed = 0.0f;
+			Scene.Definition->DeathRetractionMaxSpeed = 0.0f;
+			const float XBeforeIdle = Character->GetActorLocation().X;
+			for (int32 IdleFrame = 0; IdleFrame < 10; ++IdleFrame)
+			{
+				++GFrameCounter;
+				Scene.World->Tick(LEVELTICK_All, 1.0f / 60.0f);
+			}
+			TestTrue(TEXT("Death without chain retraction does not pull the player"),
+				FMath::Abs(Character->GetActorLocation().X - XBeforeIdle) < 1.0f);
+			Scene.Definition->DeathRetractionMinSpeed = 300.0f;
+			Scene.Definition->DeathRetractionMaxSpeed = 1800.0f;
+		}
+		if (Scenario == 4)
+		{
+			// Build a sealed pocket after deployment to exercise the delayed failsafe.
+			Scene.Box(FVector(465, 0, 110), FVector(20, 110, 110));
+			Scene.Box(FVector(635, 0, 110), FVector(20, 110, 110));
+			Scene.Box(FVector(550, 110, 110), FVector(85, 20, 110));
+			Scene.Box(FVector(550, -110, 110), FVector(85, 20, 110));
+		}
+		float MaximumAttachmentError = 0.0f;
+		float MaximumLateralTravel = 0.0f;
+		float ClearPull = 0.0f, ClearReel = 0.0f;
+		float PreviousDistance = FVector::Dist2D(Character->GetActorLocation(), Machine->GetActorLocation());
+		float PreviousLength = Rope->GetRopeLength();
+		bool bConsumed = false;
+		bool bStalled = false;
+		TArray<float> DeathUpdateTimes;
+		TArray<float> RopeUpdateTimes;
+		int64 TotalDeathQueries = 0;
+		int32 PeakDeathQueries = 0;
+		int64 TotalRopeSweeps = 0;
+		int64 PeakRopeSweeps = 0;
+		int32 PeakRopeIterations = 0;
+		float FirstRetractionSpeed = -1.0f;
+		float SpeedAfterThirtyFrames = -1.0f;
+		bool bLengthFollowsSpeed = true;
+		const float Dt = Scenario == 5 ? 0.15f : 1.0f / 60.0f;
+		for (int32 Frame = 0; Frame < 720; ++Frame)
+		{
+			const float PreviousTarget = Machine->GetDeathDesiredRopeLengthForAutomation();
+			++GFrameCounter;
+			Scene.World->Tick(LEVELTICK_All, Dt);
+			const float CurrentSpeed = Machine->GetDeathRetractionSpeedForAutomation();
+			if (Frame == 0) FirstRetractionSpeed = CurrentSpeed;
+			if (Frame == 29) SpeedAfterThirtyFrames = CurrentSpeed;
+			bLengthFollowsSpeed &= FMath::IsNearlyEqual(Machine->GetDeathDesiredRopeLengthForAutomation(),
+				FMath::Max(Scene.Definition->MinimumDeployedLength, PreviousTarget - CurrentSpeed * Dt), 0.05f);
+			DeathUpdateTimes.Add(Machine->GetDeathUpdateMillisecondsForAutomation());
+			RopeUpdateTimes.Add(Rope->GetLastSimulationMilliseconds());
+			TotalDeathQueries += Machine->GetDeathCollisionQueriesForAutomation();
+			PeakDeathQueries = FMath::Max(PeakDeathQueries, Machine->GetDeathCollisionQueriesForAutomation());
+			TotalRopeSweeps += Rope->GetSweepQueriesThisFrame();
+			PeakRopeSweeps = FMath::Max(PeakRopeSweeps, Rope->GetSweepQueriesThisFrame());
+			PeakRopeIterations = FMath::Max(PeakRopeIterations, Rope->GetIterationsThisFrame());
+			if (Machine->IsDeathPresentationReady() && Rope->IsInitialized()) { bStalled = true; break; }
+			if (!Rope->IsInitialized()) { bConsumed = !Character->GetActorEnableCollision(); break; }
+			const float Distance = FVector::Dist2D(Character->GetActorLocation(), Machine->GetActorLocation());
+			MaximumLateralTravel = FMath::Max(MaximumLateralTravel,
+				FMath::Abs(static_cast<float>(Character->GetActorLocation().Y)));
+			const float Length = Rope->GetRopeLength();
+			const float ClearSpanBoundary = Scenario == 5 ? 200.0f : 350.0f;
+			if ((Scenario == 0 || Scenario == 5) && PreviousDistance > ClearSpanBoundary && Distance > ClearSpanBoundary)
+			{
+				ClearPull += FMath::Max(0.0f, PreviousDistance - Distance);
+				ClearReel += FMath::Max(0.0f, PreviousLength - Length);
+			}
+			PreviousDistance = Distance;
+			PreviousLength = Length;
+			const FVector Anchor = Character->GetActorTransform().TransformPosition(Scene.Definition->PlayerChainAnchor);
+			MaximumAttachmentError = FMath::Max(MaximumAttachmentError,
+				static_cast<float>(FVector::Distance(Anchor, Rope->GetAcceptedEndpoint())));
+		}
+		DeathUpdateTimes.Sort();
+		RopeUpdateTimes.Sort();
+		const int32 SampleCount = DeathUpdateTimes.Num();
+		const int32 P95Index = FMath::Clamp(FMath::FloorToInt(SampleCount * 0.95f), 0, SampleCount - 1);
+		AddInfo(FString::Printf(TEXT("Death scenario %c: consumed %d stalled %d, endpoint error %.2f cm, lateral %.1f cm, clear approach %.1f cm, reel %.1f cm"),
+			TCHAR('A' + Scenario), bConsumed, bStalled, MaximumAttachmentError, MaximumLateralTravel, ClearPull, ClearReel));
+		AddInfo(FString::Printf(TEXT("Death profile %c: frames %d, death P95 %.3f ms, rope P95 %.3f ms, death queries avg %.1f peak %d, rope sweeps avg %.1f peak %lld, rope iterations peak %d"),
+			TCHAR('A' + Scenario), SampleCount, DeathUpdateTimes[P95Index], RopeUpdateTimes[P95Index],
+			SampleCount ? static_cast<double>(TotalDeathQueries) / SampleCount : 0.0, PeakDeathQueries,
+			SampleCount ? static_cast<double>(TotalRopeSweeps) / SampleCount : 0.0, PeakRopeSweeps, PeakRopeIterations));
+		TestTrue(*FString::Printf(TEXT("Scenario %c completes or reports a blocked capsule"), TCHAR('A' + Scenario)),
+			bConsumed || bStalled);
+		TestTrue(*FString::Printf(TEXT("Scenario %c integrates its current speed"), TCHAR('A' + Scenario)), bLengthFollowsSpeed);
+		if (Scenario == 6)
+			TestTrue(TEXT("Curve increases the death reel speed over time"),
+				FirstRetractionSpeed >= Scene.Definition->DeathRetractionMinSpeed
+				&& SpeedAfterThirtyFrames > FirstRetractionSpeed + 100.0f);
+		TestTrue(*FString::Printf(TEXT("Scenario %c keeps chain attached"), TCHAR('A' + Scenario)), MaximumAttachmentError < 5.0f);
+		if (Scenario == 0 || Scenario == 5)
+			TestTrue(*FString::Printf(TEXT("Scenario %c reel keeps up with approach"), TCHAR('A' + Scenario)),
+				ClearPull > 50.0f && ClearReel >= ClearPull * 0.95f);
+		if (Scenario == 0 || Scenario == 5 || Scenario == 6)
+			TestTrue(*FString::Printf(TEXT("Clear scenario %c reaches the furnace"), TCHAR('A' + Scenario)), bConsumed);
+		if (Scenario == 1)
+			TestTrue(*FString::Printf(TEXT("Scenario %c slides around collision"), TCHAR('A' + Scenario)),
+				MaximumLateralTravel > 5.0f || bStalled);
+		if (Scenario == 4)
+			TestTrue(TEXT("Trapped capsule ends in place without a recovery teleport"),
+				bStalled && Machine->GetDeathStallCountForAutomation() > 0);
+	}
+	return true;
 }

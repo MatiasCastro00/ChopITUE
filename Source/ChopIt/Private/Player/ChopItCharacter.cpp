@@ -417,7 +417,9 @@ void AChopItCharacter::HandlePlayerDeath(AActor* DeadActor, AActor* DamageSource
 		AutoAttackComponent->Deactivate();
 	}
 	DisableInput(Cast<APlayerController>(GetController()));
-	SetActorEnableCollision(false);
+	// The death machine pulls this capsule through the physical chain path. Keep
+	// its collision enabled until it reaches the intake so sweeps can keep it on
+	// the ground and out of walls.
 	if (AGameStateBase* GameState = GetWorld()->GetGameState())
 	{
 		if (UChopItCycleStateMachineComponent* Cycle = GameState->FindComponentByClass<UChopItCycleStateMachineComponent>())

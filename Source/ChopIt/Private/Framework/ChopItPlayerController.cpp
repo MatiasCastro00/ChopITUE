@@ -25,6 +25,7 @@
 #include "Engine/Texture2D.h"
 #include "InputAction.h"
 #include "EngineUtils.h"
+#include "Kismet/GameplayStatics.h"
 #include "Framework/ChopItPlayerCameraManager.h"
 #include "TimerManager.h"
 #include "UI/ChopItHUD.h"
@@ -275,6 +276,8 @@ void AChopItPlayerController::SetupInputComponent()
 	Two.bExecuteWhenPaused = true;
 	FInputKeyBinding& Three = InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AChopItPlayerController::SelectUpgradeThree);
 	Three.bExecuteWhenPaused = true;
+	FInputKeyBinding& Restart = InputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &AChopItPlayerController::RestartAfterDefeat);
+	Restart.bExecuteWhenPaused = true;
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AChopItPlayerController::CloseShop);
 
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
@@ -308,6 +311,19 @@ void AChopItPlayerController::DialoguePreviousChoice()
 void AChopItPlayerController::DialogueCancel()
 {
 	if (ULocalPlayer* LP = GetLocalPlayer()) if (UChopItDialogueSubsystem* Dialogue = LP->GetSubsystem<UChopItDialogueSubsystem>()) Dialogue->CancelDialogue();
+}
+
+void AChopItPlayerController::RestartAfterDefeat()
+{
+	const AChopItGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr;
+	if (!GameState || !GameState->GetCycleStateMachine()
+		|| GameState->GetCycleStateMachine()->GetCurrentPhase() != EChopItCyclePhase::Death) return;
+	for (TActorIterator<AChopItQuotaMachine> It(GetWorld()); It; ++It)
+	{
+		if (!It->IsDeathPresentationReady()) continue;
+		UGameplayStatics::OpenLevel(this, FName(*GetWorld()->GetMapName()), false);
+		return;
+	}
 }
 
 void AChopItPlayerController::SelectUpgradeOne()

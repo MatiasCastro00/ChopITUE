@@ -14,15 +14,11 @@ UChopItTetherReceiverComponent::UChopItTetherReceiverComponent()
 void UChopItTetherReceiverComponent::SetTetherState(
 	const FVector& InGuidePoint,
 	const float InTensionAlpha,
-	const bool bInHardLimit,
-	const float InPullAcceleration,
-	const float InPullDamping)
+	const bool bInHardLimit)
 {
 	GuidePoint = InGuidePoint;
 	TensionAlpha = FMath::Clamp(InTensionAlpha, 0.0f, 1.0f);
 	bHardLimit = bInHardLimit;
-	PullAcceleration = FMath::Max(0.0f, InPullAcceleration);
-	PullDamping = FMath::Max(0.0f, InPullDamping);
 	bHasTetherState = true;
 }
 
@@ -77,32 +73,5 @@ void UChopItTetherReceiverComponent::TickComponent(
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	if (Machine.IsValid())
-	{
-		Machine->AdvancePlayerChain(DeltaTime);
-		return;
-	}
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	UCharacterMovementComponent* Movement = Character ? Character->GetCharacterMovement() : nullptr;
-	if (!bHasTetherState || !Movement)
-	{
-		return;
-	}
-
-	const FVector Outward = GetOutwardDirection();
-	if (Outward.IsNearlyZero())
-	{
-		return;
-	}
-	const float OutwardSpeed = FVector::DotProduct(Movement->Velocity, Outward);
-	if (bHardLimit && OutwardSpeed > 0.0f)
-	{
-		Movement->Velocity -= Outward * OutwardSpeed;
-	}
-	if (TensionAlpha > 0.0f)
-	{
-		const float DampedAcceleration = PullAcceleration * TensionAlpha
-			+ FMath::Max(0.0f, OutwardSpeed) * PullDamping * TensionAlpha;
-		Movement->AddForce(-Outward * DampedAcceleration * Movement->Mass);
-	}
+	if (Machine.IsValid()) Machine->AdvancePlayerChain(DeltaTime);
 }

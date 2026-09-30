@@ -28,6 +28,7 @@ private:
 	void DrawShopOverlay(float Scale, const TArray<TObjectPtr<UChopItWeaponDefinition>>& Offers);
 	void DrawPactOverlay(float Scale, const TArray<TObjectPtr<UChopItPactDefinition>>& Offers, int32 Curse);
 	void DrawDefeatOverlay(float Scale);
+	bool IsDefeatPresentationReady() const;
 	void DrawVictoryOverlay(float Scale);
 	void RefreshPSXWidget();
 	void DrawPanel(float X, float Y, float Width, float Height, const FLinearColor& Fill, const FLinearColor& Border, float BorderSize = 3.0f);

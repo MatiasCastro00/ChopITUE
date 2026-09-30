@@ -11,6 +11,8 @@
 #include "Cycle/ChopItRunStateComponent.h"
 #include "Economy/ChopItEconomyComponent.h"
 #include "Economy/ChopItQuotaComponent.h"
+#include "Economy/ChopItQuotaMachine.h"
+#include "EngineUtils.h"
 #include "Engine/Canvas.h"
 #include "CanvasItem.h"
 #include "Engine/Engine.h"
@@ -324,12 +326,25 @@ void AChopItHUD::DrawMissionTracker(const float Scale)
 
 void AChopItHUD::DrawDefeatOverlay(const float Scale)
 {
-	ChopItHUD::DrawSolidRect(Canvas, 0.0f, 0.0f, Canvas->SizeX, Canvas->SizeY, FLinearColor(0.08f, 0.0f, 0.0f, 0.86f));
+	if (!IsDefeatPresentationReady()) return;
 	const float CenterX = Canvas->SizeX * 0.5f;
 	const float FontScale = FMath::Clamp(Scale * 1.2f, 0.95f, 1.65f);
-	DrawCenteredLabel(TEXT("DEFEAT"), CenterX, Canvas->SizeY * 0.36f, ChopItHUD::Red, 2.0f * FontScale, true);
-	DrawCenteredLabel(TEXT("Your expedition is over. Restart the game to try again."),
-		CenterX, Canvas->SizeY * 0.47f, ChopItHUD::Cream, FontScale);
+	const float PanelWidth = 520.0f * Scale;
+	const float PanelHeight = 152.0f * Scale;
+	DrawPanel(CenterX - PanelWidth * 0.5f, Canvas->SizeY * 0.5f - PanelHeight * 0.5f,
+		PanelWidth, PanelHeight, ChopItHUD::Ink, ChopItHUD::Border, 4.0f * Scale);
+	DrawCenteredLabel(TEXT("DEFEAT"), CenterX, Canvas->SizeY * 0.5f - 48.0f * Scale, ChopItHUD::Red, 1.75f * FontScale, true);
+	DrawCenteredLabel(TEXT("PRESS SPACE TO RESTART"), CenterX, Canvas->SizeY * 0.5f + 20.0f * Scale, ChopItHUD::Cream, FontScale, true);
+}
+
+bool AChopItHUD::IsDefeatPresentationReady() const
+{
+	if (!GetWorld()) return false;
+	for (TActorIterator<AChopItQuotaMachine> It(GetWorld()); It; ++It)
+	{
+		if (It->IsDeathPresentationReady()) return true;
+	}
+	return false;
 }
 
 void AChopItHUD::DrawVictoryOverlay(const float Scale)

@@ -3,6 +3,7 @@
 #include "GameFramework/Actor.h"
 #include "Interaction/ChopItInteractable.h"
 #include "Cycle/ChopItCycleStateMachineComponent.h"
+#include "Camera/ChopItCameraTypes.h"
 #include "TimerManager.h"
 #include "ChopItQuotaMachine.generated.h"
 
@@ -15,6 +16,8 @@ class UPointLightComponent;
 class USceneComponent;
 class UStaticMeshComponent;
 class UTextRenderComponent;
+class AChopItCameraAnchor;
+class UChopItCameraCue;
 
 /** Diegetic quota facade and owner of the single player tether reel. */
 UCLASS(Blueprintable)
@@ -35,8 +38,18 @@ public:
 	UInstancedStaticMeshComponent* GetWoodChipPool() const { return WoodChipPool; }
 	int32 GetWoodChipPoolSize() const { return WoodChipPoolSize; }
 	int32 GetActiveWoodChipCount() const;
+	bool IsDeathPresentationReady() const { return bDeathPresentationReady; }
 	/** Called by the receiver after CharacterMovement, before Chaos. */
 	void AdvancePlayerChain(float DeltaSeconds);
+#if WITH_DEV_AUTOMATION_TESTS
+	void BeginDeathSequenceForAutomation() { BeginDeathSequence(); }
+	int32 GetDeathStallCountForAutomation() const { return DeathStallCount; }
+	bool IsDeathSequenceActive() const { return bDeathSequenceActive; }
+	float GetDeathUpdateMillisecondsForAutomation() const { return DeathUpdateMilliseconds; }
+	int32 GetDeathCollisionQueriesForAutomation() const { return DeathCollisionQueries; }
+	float GetDeathDesiredRopeLengthForAutomation() const { return DeathDesiredRopeLength; }
+	float GetDeathRetractionSpeedForAutomation() const { return DeathCurrentRetractionSpeed; }
+#endif
 
 private:
 	UFUNCTION()
@@ -51,6 +64,13 @@ private:
 	void CreatePlayerChain(AActor* PlayerActor);
 	void DestroyPlayerChain();
 	void UpdateRetractableChain(float DeltaSeconds);
+	void ApplyTetherConstraint(const FVector& CurrentEnd, const FVector& AcceptedEnd, float DeltaSeconds);
+	void BeginDeathSequence();
+	void UpdateDeathSequence(float DeltaSeconds);
+	void ConsumeChainedPlayer();
+	void UpdateDeathCrush(float DeltaSeconds);
+	void BeginDefeatPresentation();
+	void PlayDeathShake(float Scale);
 	void UpdateChainVisuals();
 	void UpdateReleasedChainLabel();
 	void UpdateDeliveryReaction(float DeltaSeconds);
@@ -117,6 +137,27 @@ private:
 	float CurrentCableLength = 0.0f;
 	int32 LastDisplayedReleasedDecimeters = INDEX_NONE;
 	bool bHardLimited = false;
+	bool bDeathSequenceActive = false;
+	bool bChainedPlayerConsumed = false;
+	bool bDeathCrushActive = false;
+	bool bDeathPresentationReady = false;
+	bool bDeathSlowMotionApplied = false;
+	float DeathCrushElapsed = 0.0f;
+	TArray<TWeakObjectPtr<AActor>> DeathBypassedActors;
+	int32 DeathStallCount = 0;
+	float DeathDesiredRopeLength = 0.0f;
+	float DeathStartRopeLength = 0.0f;
+	float CurrentDeathRetractionTime = 0.0f;
+	float DeathCurrentRetractionSpeed = 0.0f;
+	float DeathRetractionDebt = 0.0f;
+	float DeathNoProgressTime = 0.0f;
+	float DeathBestDistance = TNumericLimits<float>::Max();
+	float DeathUpdateMilliseconds = 0.0f;
+	int32 DeathCollisionQueries = 0;
+	UPROPERTY(Transient)
+	TObjectPtr<AChopItCameraAnchor> DeathCameraAnchor;
+	UPROPERTY(Transient)
+	TObjectPtr<UChopItCameraCue> DeathCameraCue;
 	float DeliveryGlowRemaining = 0.0f;
 	FTimerHandle ChainCreationTimer;
 };

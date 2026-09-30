@@ -4,6 +4,7 @@
 #include "ChopItChainDefinition.generated.h"
 
 class UStaticMesh;
+class UCurveFloat;
 
 /**
  * Complete tuning preset for the retractable player chain.
@@ -59,6 +60,48 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "20.0", ClampMax = "8000.0", Units = "cm/s^2"))
 	float ChainFeedAcceleration = 3200.0f;
+
+	/** Motor speed and acceleration while the machine consumes the player. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "1.0", ClampMax = "10.0"))
+	float DeathReelSpeedMultiplier = 2.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "1.0", ClampMax = "10.0"))
+	float DeathReelAccelerationMultiplier = 4.0f;
+
+	/** The solid furnace body prevents the capsule reaching the chain outlet. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "50.0", Units = "cm"))
+	float DeathIntakeRadius = 160.0f;
+
+	/** Last resort for a gap that fits the chain but never the player capsule. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "0.5", Units = "s"))
+	float DeathObstacleBypassDelay = 2.25f;
+
+	/** Legacy constant death speed retained for existing assets; the curve settings below control death retraction. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|Legacy V1", meta = (ClampMin = "20.0", Units = "cm/s"))
+	float DeathRetractionSpeed = 1800.0f;
+
+	/** Curve time is seconds since death; values 0..1 blend minimum to maximum speed. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Death Retraction")
+	TObjectPtr<UCurveFloat> DeathRetractionCurve;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Death Retraction", meta = (ClampMin = "0.0", Units = "cm/s"))
+	float DeathRetractionMinSpeed = 300.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Death Retraction", meta = (ClampMin = "1.0", Units = "cm/s"))
+	float DeathRetractionMaxSpeed = 1800.0f;
+
+	/** Time for the built-in SmoothStep acceleration when no curve is assigned. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Death Retraction", meta = (ClampMin = "0.01", Units = "s"))
+	float DeathRetractionDuration = 2.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "1.0", Units = "cm"))
+	float DeathPullMinProgress = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "0.1", Units = "s"))
+	float DeathPullStuckTime = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|10 Debug")
+	bool bDebugDeathPull = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ChopIt|Chain|03 Reel", meta = (ClampMin = "0.0", Units = "cm"))
 	float ChainSlack = 200.0f;

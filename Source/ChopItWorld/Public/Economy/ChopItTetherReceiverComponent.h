@@ -21,9 +21,7 @@ public:
 	void SetTetherState(
 		const FVector& InGuidePoint,
 		float InTensionAlpha,
-		bool bInHardLimit,
-		float InPullAcceleration,
-		float InPullDamping);
+		bool bInHardLimit);
 	void ClearTetherState();
 
 	/** Removes only input that lengthens the final route span. */
@@ -43,8 +41,6 @@ private:
 
 	FVector GuidePoint = FVector::ZeroVector;
 	float TensionAlpha = 0.0f;
-	float PullAcceleration = 0.0f;
-	float PullDamping = 0.0f;
 	bool bHardLimit = false;
 	bool bHasTetherState = false;
 };
