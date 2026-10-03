@@ -50,7 +50,7 @@ bool FChopItPhase1GameplayFrameworkTest::RunTest(const FString& Parameters)
 		TestNotNull(TEXT("Character uses the lumberjack skeletal mesh"), Character->GetMesh()->GetSkeletalMeshAsset());
 		TestNotNull(TEXT("Character uses the PSX outline overlay"), Character->GetMesh()->GetOverlayMaterial());
 		TestFalse(TEXT("Character is not snapped into the ground plane"), Character->GetCharacterMovement()->bConstrainToPlane);
-		TestEqual(TEXT("Character uses normal gravity"), Character->GetCharacterMovement()->GravityScale, 1.0f);
+		TestEqual(TEXT("Character uses responsive jump gravity"), Character->GetCharacterMovement()->GravityScale, 1.5f);
 		TestEqual(TEXT("Character lands in walking mode"), Character->GetCharacterMovement()->DefaultLandMovementMode, MOVE_Walking);
 		TestTrue(TEXT("Camera host ticks independently"), Character->GetChopItCamera()->PrimaryComponentTick.bCanEverTick);
 		TestEqual(TEXT("Default pitch"), Character->GetChopItCamera()->GetGameplayView().Pitch, -32.0f);

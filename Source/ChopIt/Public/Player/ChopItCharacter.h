@@ -13,6 +13,7 @@ class UChopItInteractionComponent;
 class UChopItWoodCargoComponent;
 class UChopItWeaponLoadoutComponent;
 class UInputAction;
+class UInputMappingContext;
 class UChopItCameraComponent;
 class UStaticMeshComponent;
 class UTextRenderComponent;
@@ -31,6 +32,7 @@ class CHOPIT_API AChopItCharacter : public ACharacter
 public:
 	AChopItCharacter();
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void Jump() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	static FVector2D NormalizeMovementInput(const FVector2D& Input);
 
@@ -50,6 +52,13 @@ protected:
 
 private:
 	void HandleMove(const FInputActionValue& Value);
+	void HandleStopMove();
+	void HandleJump();
+	void HandleStopJumping();
+	void HandleCrouchOrSlidePressed();
+	void HandleCrouchOrSlideReleased();
+	void BeginSlide();
+	void EndSlide();
 	void HandleInteract(const FInputActionValue& Value);
 	void HandleCameraLook(const FInputActionValue& Value);
 	void HandleCameraZoom(const FInputActionValue& Value);
@@ -125,6 +134,37 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> MoveAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> JumpAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CrouchOrSlideAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> JumpMappingContext;
+
+	bool bCrouchOrSlideHeld = false;
+	bool bIsSliding = false;
+	FVector SlideDirection = FVector::ForwardVector;
+	FVector SlideSteeringInput = FVector::ZeroVector;
+	bool bSlideLandingPending = false;
+	UPROPERTY(EditDefaultsOnly, Category = "ChopIt|Slide", meta = (ClampMin = "0.0"))
+	float SlideMinStartSpeed = 120.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "ChopIt|Slide", meta = (ClampMin = "1.0"))
+	float SlideEntryMultiplier = 1.1f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "ChopIt|Slide", meta = (ClampMin = "0.0", ClampMax = "89.0"))
+	float SlideMinSlopeAngle = 8.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "ChopIt|Slide", meta = (ClampMin = "0.0"))
+	float SlideSteeringDegreesPerSecond = 60.0f;
+
+	FVector StandingMeshScale = FVector::OneVector;
+	float BaseGroundFriction = 8.0f;
+	float BaseBrakingDecelerationWalking = 2200.0f;
+	float BaseMaxWalkSpeed = 650.0f;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> InteractAction;
