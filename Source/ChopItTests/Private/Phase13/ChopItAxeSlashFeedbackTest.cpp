@@ -2,8 +2,8 @@
 #include "Editor.h"
 #include "Feedback/ChopItAxeSwingTrail.h"
 #include "HAL/IConsoleManager.h"
-#include "Materials/Material.h"
-#include "Materials/MaterialInstanceDynamic.h"
+
+
 #include "Misc/AutomationTest.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
@@ -27,17 +27,7 @@ bool FChopItAxeSlashFeedbackContractTest::RunTest(const FString& Parameters)
 
 	TInlineComponentArray<UStaticMeshComponent*> MeshLayers;
 	TrailCDO->GetComponents(MeshLayers);
-	TestEqual(TEXT("Slash is composed from three mesh layers"), MeshLayers.Num(), 3);
-	for (const UStaticMeshComponent* Layer : MeshLayers)
-	{
-		TestNotNull(TEXT("Each slash layer has a fallback mesh"), Layer ? Layer->GetStaticMesh().Get() : nullptr);
-		TestTrue(
-			TEXT("Slash layers never participate in collision"),
-			Layer && Layer->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
-		TestFalse(
-			TEXT("Slash layers never generate overlap events"),
-			Layer && Layer->GetGenerateOverlapEvents());
-	}
+	TestEqual(TEXT("Legacy mesh layers are replaced by Niagara"), MeshLayers.Num(), 0);
 
 	const UNiagaraComponent* NiagaraCDO = TrailCDO->FindComponentByClass<UNiagaraComponent>();
 	TestNotNull(TEXT("Slash owns a Niagara detail component"), NiagaraCDO);
@@ -100,53 +90,20 @@ bool FChopItAxeSlashFeedbackContractTest::RunTest(const FString& Parameters)
 	if (LiveTrail)
 	{
 		LiveTrail->InitializeTrail(FVector::ForwardVector, 500.0f, true, 1.0f);
-		TMap<FString, FString> ExpectedMeshes;
-		ExpectedMeshes.Add(TEXT("MainLayer"), TEXT("SM_AxeSlash_Main"));
-		ExpectedMeshes.Add(TEXT("InnerLayer"), TEXT("SM_AxeSlash_Inner"));
-		ExpectedMeshes.Add(TEXT("AfterimageLayer"), TEXT("SM_AxeSlash_Afterimage"));
-		for (const TPair<FString, FString>& Expected : ExpectedMeshes)
-		{
-			const UStaticMeshComponent* Layer =
-				FindObject<UStaticMeshComponent>(LiveTrail, *Expected.Key);
-			TestNotNull(*FString::Printf(TEXT("%s component exists"), *Expected.Key), Layer);
-			if (!Layer)
-			{
-				continue;
-			}
-			TestEqual(
-				*FString::Printf(TEXT("%s uses its distinct authored geometry"), *Expected.Key),
-				Layer->GetStaticMesh() ? Layer->GetStaticMesh()->GetName() : FString(),
-				Expected.Value);
-			const UMaterialInstanceDynamic* DynamicMaterial =
-				Cast<UMaterialInstanceDynamic>(Layer->GetMaterial(0));
-			TestNotNull(
-				*FString::Printf(TEXT("%s receives an independent dynamic material"), *Expected.Key),
-				DynamicMaterial);
-			const UMaterial* BaseMaterial =
-				DynamicMaterial ? DynamicMaterial->GetMaterial() : nullptr;
-			const FString ExpectedMaterial = Expected.Key == TEXT("AfterimageLayer")
-				? TEXT("M_AxeSlash_Afterimage")
-				: TEXT("M_AxeSlash");
-			TestEqual(
-				*FString::Printf(TEXT("%s uses the expected blend-family material"), *Expected.Key),
-				BaseMaterial ? BaseMaterial->GetName() : FString(),
-				ExpectedMaterial);
-		}
-
 		const UNiagaraComponent* Details = LiveTrail->FindComponentByClass<UNiagaraComponent>();
 		TestNotNull(TEXT("Runtime slash retains its Niagara component"), Details);
 		const UNiagaraSystem* DetailsSystem = Details ? Details->GetAsset() : nullptr;
-		TestNotNull(TEXT("Runtime slash loads NS_AxeSlash_Details"), DetailsSystem);
+		TestNotNull(TEXT("Runtime slash loads NS_AxeSlash"), DetailsSystem);
 		if (DetailsSystem)
 		{
 			TestEqual(
-				TEXT("Niagara system contains glint and brush-fragment emitters"),
+				TEXT("Niagara system contains the slash, edge and spark emitters"),
 				DetailsSystem->GetEmitterHandles().Num(),
-				2);
+				3);
 			TestEqual(
 				TEXT("Niagara system uses the authored detail asset"),
 				DetailsSystem->GetName(),
-				FString(TEXT("NS_AxeSlash_Details")));
+				FString(TEXT("NS_AxeSlash")));
 		}
 		LiveTrail->Destroy();
 	}
@@ -154,3 +111,4 @@ bool FChopItAxeSlashFeedbackContractTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
