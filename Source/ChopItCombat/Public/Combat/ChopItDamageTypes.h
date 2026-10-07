@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 #include "ChopItDamageTypes.generated.h"
 
+UENUM(BlueprintType)
+enum class EChopItDamageTargetKind : uint8 { Other, Enemy, Tree };
+
 USTRUCT(BlueprintType)
 struct CHOPITCOMBAT_API FChopItDamageSpec
 {
@@ -19,6 +22,9 @@ struct CHOPITCOMBAT_API FChopItDamageSpec
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "1.0"))
 	float CriticalMultiplier = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+	bool bExecution = false;
 
 	float CalculateFinalDamage() const
 	{

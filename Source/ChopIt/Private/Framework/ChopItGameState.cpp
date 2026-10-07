@@ -11,6 +11,7 @@
 #include "Save/ChopItProfileSubsystem.h"
 #include "Spawning/ChopItEnemyDirectorComponent.h"
 #include "Spawning/ChopItEliteEncounterComponent.h"
+#include "Rewards/ChopItBossRewardChest.h"
 
 AChopItGameState::AChopItGameState()
 {
@@ -26,6 +27,7 @@ AChopItGameState::AChopItGameState()
 void AChopItGameState::BeginPlay()
 {
 	Super::BeginPlay();
+	EliteEncounterComponent->OnEliteDefeated.AddUObject(this, &AChopItGameState::HandleEliteDefeated);
 	const UChopItDayDefinition* DayDefinition = LoadObject<UChopItDayDefinition>(
 		nullptr,
 		TEXT("/Game/ChopIt/Economy/Days/DA_Day_01.DA_Day_01"));
@@ -39,6 +41,21 @@ void AChopItGameState::BeginPlay()
 	CycleStateMachine->StartCycle();
 	RunStateComponent->OnResultChanged.AddUniqueDynamic(this,&AChopItGameState::HandleRunResult);
 	UE_LOG(LogChopIt, Display, TEXT("Economy day initialized: quota=%d."), QuotaComponent->GetTarget());
+}
+
+void AChopItGameState::HandleEliteDefeated(AActor* Elite, AActor* Killer)
+{
+	if (!GetWorld() || !IsValid(Elite)) return;
+	const FVector Location = Elite->GetActorLocation();
+	FHitResult Ground;
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(BossChestGround), false, Elite);
+	const bool bGrounded = GetWorld()->LineTraceSingleByObjectType(
+		Ground, Location + FVector::UpVector * 200.f, Location - FVector::UpVector * 500.f,
+		FCollisionObjectQueryParams(ECC_WorldStatic), Query);
+	const FVector ChestLocation(Location.X, Location.Y, bGrounded ? Ground.ImpactPoint.Z : Location.Z - 50.f);
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	GetWorld()->SpawnActor<AChopItBossRewardChest>(AChopItBossRewardChest::StaticClass(), ChestLocation, FRotator::ZeroRotator, Params);
 }
 
 int32 AChopItGameState::ResolveQuotaTarget(const int32 DayNumber, const UChopItDayDefinition* DayDefinition)

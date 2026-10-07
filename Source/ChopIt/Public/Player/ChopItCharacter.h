@@ -9,6 +9,7 @@ class AChopItCabinHub;
 class UChopItAutoAttackComponent;
 class UChopItCombatStatsComponent;
 class UChopItHealthComponent;
+class UChopItItemComponent;
 class UChopItInteractionComponent;
 class UChopItWoodCargoComponent;
 class UChopItWeaponLoadoutComponent;
@@ -31,6 +32,8 @@ class CHOPIT_API AChopItCharacter : public ACharacter
 
 public:
 	AChopItCharacter();
+	UFUNCTION(BlueprintPure, Category="ChopIt|Items")
+	UChopItItemComponent* GetItemComponent() const { return ItemComponent; }
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void Jump() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -40,6 +43,11 @@ public:
 	UChopItInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
 	UChopItAutoAttackComponent* GetAutoAttackComponent() const { return AutoAttackComponent; }
 	UChopItCombatStatsComponent* GetCombatStatsComponent() const { return CombatStatsComponent; }
+	UFUNCTION(BlueprintPure, Category="ChopIt|Items|Luck")
+	float GetLuckPercent() const;
+	/** 100 means +100% luck. Item and upgrade stat modifiers can add to it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ChopIt|Items|Luck", meta=(ClampMin="0"))
+	float BaseLuckPercent = 0.f;
 	UChopItHealthComponent* GetHealthComponent() const { return HealthComponent; }
 	UChopItWoodCargoComponent* GetWoodCargoComponent() const { return WoodCargoComponent; }
 	UChopItWeaponLoadoutComponent* GetWeaponLoadoutComponent() const { return WeaponLoadoutComponent; }
@@ -51,6 +59,8 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	UPROPERTY(VisibleAnywhere, Category="ChopIt|Items")
+	TObjectPtr<UChopItItemComponent> ItemComponent;
 	void HandleMove(const FInputActionValue& Value);
 	void HandleStopMove();
 	void HandleJump();

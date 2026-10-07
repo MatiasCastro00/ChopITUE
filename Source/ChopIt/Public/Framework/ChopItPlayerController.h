@@ -36,6 +36,13 @@ private:
 	void SelectUpgradeThree();
 	void SelectUpgrade(int32 Index);
 	void CloseShop();
+	void SpawnRewardChestAhead();
+	void ToggleDebugItemMenu();
+	void DebugItemUp();
+	void DebugItemDown();
+	void DebugItemPageUp();
+	void DebugItemPageDown();
+	void DebugItemGrant();
 
 	UPROPERTY(Transient) TObjectPtr<class UInputAction> DialogueAdvanceAction;
 	UPROPERTY(Transient) TObjectPtr<class UInputAction> DialogueNextChoiceAction;

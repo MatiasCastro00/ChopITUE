@@ -24,9 +24,11 @@ public:
 	UChopItCycleStateMachineComponent* GetCycleStateMachine() const { return CycleStateMachine; }
 	UChopItRunStateComponent* GetRunStateComponent() const { return RunStateComponent; }
 	UChopItEnemyDirectorComponent* GetEnemyDirectorComponent() const { return EnemyDirectorComponent; }
+	UChopItEliteEncounterComponent* GetEliteEncounterComponent() const { return EliteEncounterComponent; }
 	static int32 ResolveQuotaTarget(int32 DayNumber, const UChopItDayDefinition* DayDefinition);
 
 private:
+	void HandleEliteDefeated(AActor* Elite, AActor* Killer);
 	UFUNCTION() void HandleRunResult(EChopItRunResult Result, int32 DayNumber);
 	int32 ResolveInitialDay(const UChopItDayDefinition* DayDefinition) const;
 	UPROPERTY(VisibleAnywhere, Category = "ChopIt|Quota")

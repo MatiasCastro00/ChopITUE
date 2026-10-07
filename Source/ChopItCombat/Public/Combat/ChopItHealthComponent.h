@@ -20,6 +20,10 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	float ApplyDamage(const FChopItDamageSpec& DamageSpec, AActor* DamageSource, const FVector& ImpactLocation = FVector::ZeroVector);
+	UFUNCTION(BlueprintCallable, Category="ChopIt|Health")
+	float Heal(float Amount, AActor* Source = nullptr);
+	UPROPERTY(EditAnywhere, Category="ChopIt|Health")
+	EChopItDamageTargetKind TargetKind = EChopItDamageTargetKind::Other;
 	void ResetHealth();
 	void SetMaxHealth(float NewMaxHealth);
 	bool IsAlive() const { return CurrentHealth > 0.0f; }

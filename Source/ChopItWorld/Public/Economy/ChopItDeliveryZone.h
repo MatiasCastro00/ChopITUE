@@ -45,6 +45,7 @@ private:
 	struct FDeliveryFlight
 	{
 		bool bActive = false;
+		TWeakObjectPtr<UChopItWoodCargoComponent> SourceCargo;
 		FVector Start = FVector::ZeroVector;
 		FVector Target = FVector::ZeroVector;
 		FVector LateralOffset = FVector::ZeroVector;

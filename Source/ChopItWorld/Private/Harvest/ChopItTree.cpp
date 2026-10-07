@@ -89,6 +89,7 @@ AChopItTree::AChopItTree()
 	HealthLabel->SetTextRenderColor(FColor::Green);
 
 	HealthComponent = CreateDefaultSubobject<UChopItHealthComponent>(TEXT("HealthComponent"));
+	HealthComponent->TargetKind = EChopItDamageTargetKind::Tree;
 	HitFeedbackComponent = CreateDefaultSubobject<UChopItHitFeedbackComponent>(TEXT("HitFeedbackComponent"));
 	HitFeedbackComponent->SetVisualComponent(PhysicsRoot);
 	HitFeedbackComponent->SetWoodenTarget(true);

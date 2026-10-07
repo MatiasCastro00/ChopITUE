@@ -7,6 +7,10 @@ class UChopItUpgradeDefinition;
 class UChopItWeaponDefinition;
 class UChopItPactDefinition;
 class UUserWidget;
+class UChopItItemDataAsset;
+class UTexture2D;
+class USoundBase;
+class AChopItChestRevealScene;
 
 /** Screen-space presentation for run state and level-up choices. It owns no gameplay rules. */
 UCLASS()
@@ -16,10 +20,22 @@ class CHOPIT_API AChopItHUD final : public AHUD
 
 public:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void DrawHUD() override;
 
 	/** Reveals the right-side objective card. Safe to call repeatedly. */
 	void RevealMissionTracker();
+	/** Presentation only; the chest owns the luck-weighted roll and awards the result. */
+	void StartItemReveal(UChopItItemDataAsset* Result);
+	void CompleteItemReveal(UChopItItemDataAsset* Result);
+	void CancelItemReveal();
+	bool IsItemRevealActive() const { return bItemRevealActive; }
+	void DismissItemReveal();
+	void ToggleDebugItemMenu();
+	void CloseDebugItemMenu();
+	bool IsDebugItemMenuOpen() const { return bDebugItemMenuOpen; }
+	void MoveDebugItemSelection(int32 Delta);
+	void GrantSelectedDebugItem();
 
 private:
 	void DrawPersistentHUD(float Scale);
@@ -29,6 +45,14 @@ private:
 	void DrawPactOverlay(float Scale, const TArray<TObjectPtr<UChopItPactDefinition>>& Offers, int32 Curse);
 	void DrawDefeatOverlay(float Scale);
 	void DrawVictoryOverlay(float Scale);
+	void DrawItemReveal(float Scale);
+	void PauseForItemUI();
+	void ResumeFromItemUI();
+	float GetItemRevealDuration() const;
+	void DrawItemInventory(float Scale);
+	void DrawBossHealthBar(float Scale);
+	void DrawDebugItemMenu(float Scale);
+	UTexture2D* ResolveItemIcon(const UChopItItemDataAsset* Item);
 	void RefreshPSXWidget();
 	void DrawPanel(float X, float Y, float Width, float Height, const FLinearColor& Fill, const FLinearColor& Border, float BorderSize = 3.0f);
 	void DrawBar(float X, float Y, float Width, float Height, float Fraction, const FLinearColor& Fill, const FLinearColor& Back);
@@ -48,4 +72,18 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> PSXHUDWidget;
 	TMap<FName, float> PSXFillDesignWidths;
+	UPROPERTY(Transient) TObjectPtr<UChopItItemDataAsset> ItemRevealResult;
+	UPROPERTY(Transient) TObjectPtr<AChopItChestRevealScene> ChestRevealScene;
+	UPROPERTY(Transient) TObjectPtr<UTexture2D> ItemRevealIcon;
+	UPROPERTY(Transient) TObjectPtr<USoundBase> ItemRevealTickSound;
+	double ItemRevealStartedAt = 0.0;
+	int32 LastRevealStage = INDEX_NONE;
+	bool bItemRevealActive = false;
+	bool bItemRevealGranted = false;
+	bool bOwnsItemPause = false;
+	UPROPERTY(Transient) TArray<TObjectPtr<UChopItItemDataAsset>> DebugItemCatalog;
+	UPROPERTY(Transient) TMap<FName, TObjectPtr<UTexture2D>> ItemIconCache;
+	int32 DebugItemSelection = 0;
+	bool bDebugItemMenuOpen = false;
+	FString DebugItemStatus;
 };

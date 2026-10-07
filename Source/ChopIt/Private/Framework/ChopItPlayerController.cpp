@@ -28,6 +28,8 @@
 #include "Framework/ChopItPlayerCameraManager.h"
 #include "TimerManager.h"
 #include "UI/ChopItHUD.h"
+#include "Rewards/ChopItBossRewardChest.h"
+#include "Components/CapsuleComponent.h"
 
 AChopItPlayerController::AChopItPlayerController()
 {
@@ -275,7 +277,14 @@ void AChopItPlayerController::SetupInputComponent()
 	Two.bExecuteWhenPaused = true;
 	FInputKeyBinding& Three = InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AChopItPlayerController::SelectUpgradeThree);
 	Three.bExecuteWhenPaused = true;
-	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AChopItPlayerController::CloseShop);
+	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AChopItPlayerController::CloseShop).bExecuteWhenPaused = true;
+	InputComponent->BindKey(EKeys::F7, IE_Pressed, this, &AChopItPlayerController::SpawnRewardChestAhead);
+	InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AChopItPlayerController::ToggleDebugItemMenu).bExecuteWhenPaused = true;
+	InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &AChopItPlayerController::DebugItemUp).bExecuteWhenPaused = true;
+	InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &AChopItPlayerController::DebugItemDown).bExecuteWhenPaused = true;
+	InputComponent->BindKey(EKeys::PageUp, IE_Pressed, this, &AChopItPlayerController::DebugItemPageUp).bExecuteWhenPaused = true;
+	InputComponent->BindKey(EKeys::PageDown, IE_Pressed, this, &AChopItPlayerController::DebugItemPageDown).bExecuteWhenPaused = true;
+	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AChopItPlayerController::DebugItemGrant).bExecuteWhenPaused = true;
 
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
 	{
@@ -287,6 +296,70 @@ void AChopItPlayerController::SetupInputComponent()
 		if (DialogueNextChoiceAction) EnhancedInput->BindAction(DialogueNextChoiceAction, ETriggerEvent::Started, this, &AChopItPlayerController::DialogueNextChoice);
 		if (DialoguePreviousChoiceAction) EnhancedInput->BindAction(DialoguePreviousChoiceAction, ETriggerEvent::Started, this, &AChopItPlayerController::DialoguePreviousChoice);
 		if (DialogueCancelAction) EnhancedInput->BindAction(DialogueCancelAction, ETriggerEvent::Started, this, &AChopItPlayerController::DialogueCancel);
+	}
+}
+
+void AChopItPlayerController::ToggleDebugItemMenu()
+{
+	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD())) HUD->ToggleDebugItemMenu();
+}
+
+void AChopItPlayerController::DebugItemUp()
+{
+	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD())) HUD->MoveDebugItemSelection(-1);
+}
+
+void AChopItPlayerController::DebugItemDown()
+{
+	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD())) HUD->MoveDebugItemSelection(1);
+}
+
+void AChopItPlayerController::DebugItemPageUp()
+{
+	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD())) HUD->MoveDebugItemSelection(-10);
+}
+
+void AChopItPlayerController::DebugItemPageDown()
+{
+	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD())) HUD->MoveDebugItemSelection(10);
+}
+
+void AChopItPlayerController::DebugItemGrant()
+{
+	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD()))
+	{
+		if (HUD->IsItemRevealActive()) HUD->DismissItemReveal();
+		else HUD->GrantSelectedDebugItem();
+	}
+}
+
+void AChopItPlayerController::SpawnRewardChestAhead()
+{
+	APawn* PlayerPawn = GetPawn();
+	UWorld* World = GetWorld();
+	if (!PlayerPawn || !World) return;
+
+	const FVector Forward = PlayerPawn->GetActorForwardVector().GetSafeNormal2D();
+	const FVector Ahead = PlayerPawn->GetActorLocation() + Forward * 220.f;
+	float GroundZ = Ahead.Z;
+	if (const UCapsuleComponent* Capsule = PlayerPawn->FindComponentByClass<UCapsuleComponent>())
+		GroundZ -= Capsule->GetScaledCapsuleHalfHeight();
+	FHitResult Ground;
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(ManualRewardChestGround), false, PlayerPawn);
+	if (World->LineTraceSingleByObjectType(Ground, Ahead + FVector::UpVector * 300.f,
+		Ahead - FVector::UpVector * 1000.f, FCollisionObjectQueryParams(ECC_WorldStatic), Query))
+	{
+		GroundZ = Ground.ImpactPoint.Z;
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	const FVector ChestLocation(Ahead.X, Ahead.Y, GroundZ);
+	const FRotator SpawnRotation(0.f, PlayerPawn->GetActorRotation().Yaw, 0.f);
+	if (AChopItBossRewardChest* Chest = World->SpawnActor<AChopItBossRewardChest>(
+		AChopItBossRewardChest::StaticClass(), ChestLocation, SpawnRotation, Params))
+	{
+		UE_LOG(LogChopIt, Display, TEXT("Debug reward chest spawned at %s."), *ChestLocation.ToCompactString());
 	}
 }
 
@@ -362,6 +435,16 @@ void AChopItPlayerController::SelectUpgrade(const int32 Index)
 
 void AChopItPlayerController::CloseShop()
 {
+	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD()); HUD && HUD->IsItemRevealActive())
+	{
+		HUD->DismissItemReveal();
+		return;
+	}
+	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD()); HUD && HUD->IsDebugItemMenuOpen())
+	{
+		HUD->CloseDebugItemMenu();
+		return;
+	}
 	if (ULocalPlayer* LP = GetLocalPlayer()) if (const UChopItCameraDirectorSubsystem* Camera = LP->GetSubsystem<UChopItCameraDirectorSubsystem>(); Camera && Camera->IsInputLocked(EChopItCameraInputLock::Actions)) return;
 	if (const AChopItPlayerState* State = Cast<AChopItPlayerState>(PlayerState))
 	{

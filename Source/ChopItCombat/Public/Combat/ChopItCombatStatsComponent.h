@@ -10,7 +10,9 @@ enum class EChopItCombatStat : uint8
 	AttackSpeed,
 	Range,
 	CriticalChance,
-	MovementSpeed
+	MovementSpeed,
+	WoodYield,
+	Luck
 };
 
 UENUM(BlueprintType)

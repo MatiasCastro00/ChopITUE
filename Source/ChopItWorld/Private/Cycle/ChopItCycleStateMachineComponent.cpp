@@ -1,4 +1,5 @@
 #include "Cycle/ChopItCycleStateMachineComponent.h"
+#include "Items/ChopItItemEventSubsystem.h"
 
 #include "ChopItLogChannels.h"
 #include "Cycle/ChopItRunStateComponent.h"
@@ -218,6 +219,13 @@ bool UChopItCycleStateMachineComponent::TransitionTo(const EChopItCyclePhase New
 	UE_LOG(LogChopIt, Display, TEXT("Cycle phase: %d -> %d generation=%u."),
 		static_cast<int32>(PreviousPhase), static_cast<int32>(CurrentPhase), PhaseGeneration);
 	OnPhaseChanged.Broadcast(CurrentPhase, PreviousPhase, static_cast<int32>(PhaseGeneration));
+	if (CurrentPhase == EChopItCyclePhase::Day || CurrentPhase == EChopItCyclePhase::Night)
+	{
+		FChopItItemEventContext Event;
+		Event.Event = CurrentPhase == EChopItCyclePhase::Day ? EChopItItemEvent::DayStarted : EChopItItemEvent::NightStarted;
+		Event.Source = GetOwner(); Event.Generation = static_cast<int32>(PhaseGeneration);
+		UChopItItemEventSubsystem::Emit(this, Event);
+	}
 	EnterCurrentPhase();
 	return true;
 }

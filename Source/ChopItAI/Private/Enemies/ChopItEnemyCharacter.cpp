@@ -41,6 +41,7 @@ AChopItEnemyCharacter::AChopItEnemyCharacter()
 	Label->SetWorldSize(24.0f);
 	Label->SetTextRenderColor(FColor(255, 110, 55));
 	HealthComponent = CreateDefaultSubobject<UChopItHealthComponent>(TEXT("HealthComponent"));
+	HealthComponent->TargetKind = EChopItDamageTargetKind::Enemy;
 	HitFeedbackComponent = CreateDefaultSubobject<UChopItHitFeedbackComponent>(TEXT("HitFeedbackComponent"));
 	HitFeedbackComponent->SetVisualComponent(BodyMesh);
 	HitFeedbackComponent->SetWoodenTarget(true);

@@ -1,4 +1,5 @@
 #include "Economy/ChopItDeliveryZone.h"
+#include "Items/ChopItItemEventSubsystem.h"
 
 #include "ChopItCollision.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -190,6 +191,7 @@ void AChopItDeliveryZone::LaunchNextLog()
 	const FVector OwnerLocation = Cargo->GetOwner() ? Cargo->GetOwner()->GetActorLocation() : GetActorLocation();
 	FDeliveryFlight& Flight = Flights[PoolIndex];
 	Flight.bActive = true;
+	Flight.SourceCargo = Cargo;
 	Flight.Start = OwnerLocation + FVector(
 		VisualRandom.FRandRange(-22.0f, 22.0f),
 		VisualRandom.FRandRange(-22.0f, 22.0f),
@@ -261,9 +263,16 @@ void AChopItDeliveryZone::CompleteFlight(const int32 PoolIndex)
 		if (Result.Accepted > 0)
 		{
 			Quota->OnDeliveryConfirmed.Broadcast(Result.Accepted);
+			if (auto* Cargo = Flights[PoolIndex].SourceCargo.Get())
+			{
+				FChopItItemEventContext Event;
+				Event.Event = EChopItItemEvent::WoodDelivered; Event.Recipient = Cargo->GetOwner();
+				Event.Source = Cargo->GetOwner(); Event.Target = this; Event.Amount = Result.Accepted;
+				UChopItItemEventSubsystem::Emit(this, Event);
+			}
 			if (AChopItQuotaMachine* Machine = ResolveTargetMachine()) Machine->NotifyWoodConsumed(Result.Accepted);
 		}
-		else if (UChopItWoodCargoComponent* Cargo = ActiveCargo.Get())
+		else if (UChopItWoodCargoComponent* Cargo = Flights[PoolIndex].SourceCargo.Get())
 		{
 			Cargo->GrantWoodForTesting(1);
 		}

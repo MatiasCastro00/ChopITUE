@@ -6,6 +6,7 @@
 #include "ChopItLogChannels.h"
 #include "Combat/ChopItCombatStatsComponent.h"
 #include "Combat/ChopItHealthComponent.h"
+#include "Items/ChopItItemComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -40,6 +41,13 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Weapons/ChopItAutoAttackComponent.h"
 #include "Weapons/ChopItWeaponLoadoutComponent.h"
+
+float AChopItCharacter::GetLuckPercent() const
+{
+	return CombatStatsComponent
+		? CombatStatsComponent->EvaluateStat(EChopItCombatStat::Luck, BaseLuckPercent)
+		: FMath::Max(0.f, BaseLuckPercent);
+}
 
 AChopItCharacter::AChopItCharacter()
 {
@@ -134,6 +142,7 @@ AChopItCharacter::AChopItCharacter()
 	InteractionComponent = CreateDefaultSubobject<UChopItInteractionComponent>(TEXT("InteractionComponent"));
 	CombatStatsComponent = CreateDefaultSubobject<UChopItCombatStatsComponent>(TEXT("CombatStatsComponent"));
 	HealthComponent = CreateDefaultSubobject<UChopItHealthComponent>(TEXT("HealthComponent"));
+	ItemComponent = CreateDefaultSubobject<UChopItItemComponent>(TEXT("ItemComponent"));
 	HitFeedbackComponent = CreateDefaultSubobject<UChopItHitFeedbackComponent>(TEXT("HitFeedbackComponent"));
 	HitFeedbackComponent->SetVisualComponent(
 		LumberjackMesh.Succeeded()

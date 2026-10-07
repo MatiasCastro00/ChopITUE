@@ -1,4 +1,5 @@
 #include "Shop/ChopItShopComponent.h"
+#include "Items/ChopItItemEventSubsystem.h"
 
 #include "Economy/ChopItEconomyComponent.h"
 #include "Weapons/ChopItWeaponDefinition.h"
@@ -46,6 +47,11 @@ bool UChopItShopComponent::SelectOffer(const int32 Index, AActor* Purchaser, FSt
 		return Fail(TEXT("Purchase could not be charged"));
 	}
 	ActiveOffers.RemoveAt(Index);
+	FChopItItemEventContext Event;
+	Event.Event = EChopItItemEvent::ItemPurchased; Event.Recipient = Purchaser;
+	Event.Source = GetOwner(); Event.Target = Purchaser; Event.ContentId = Weapon->WeaponId;
+	Event.Amount = Weapon->ShopPrice;
+	UChopItItemEventSubsystem::Emit(this, Event);
 	OnOffersChanged.Broadcast();
 	return true;
 }

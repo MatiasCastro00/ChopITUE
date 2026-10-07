@@ -16,6 +16,10 @@ struct CHOPITWORLD_API FChopItWoodTransferResult
 
 	UPROPERTY(BlueprintReadOnly)
 	int32 Remainder = 0;
+
+	/** Extra units granted, never subtracted from the source pickup. */
+	UPROPERTY(BlueprintReadOnly)
+	int32 BonusUnits = 0;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FChopItWoodCargoChanged, int32, CurrentWood, int32, Capacity);
@@ -52,6 +56,7 @@ public:
 	FChopItWoodRejected OnPickupRejected;
 
 private:
+	double BonusFraction = 0.;
 	UPROPERTY(EditAnywhere, Category = "ChopIt|Wood", meta = (ClampMin = "0"))
 	int32 Capacity = 24;
 

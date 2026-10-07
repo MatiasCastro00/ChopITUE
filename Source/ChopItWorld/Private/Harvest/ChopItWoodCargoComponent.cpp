@@ -1,4 +1,7 @@
 #include "Harvest/ChopItWoodCargoComponent.h"
+#include "Combat/ChopItCombatStatsComponent.h"
+#include "Items/ChopItItemEventSubsystem.h"
+#include "GameFramework/Actor.h"
 
 UChopItWoodCargoComponent::UChopItWoodCargoComponent()
 {
@@ -14,8 +17,19 @@ FChopItWoodTransferResult UChopItWoodCargoComponent::TryAddWood(const int32 Requ
 	if (Result.Requested > 0 && Result.Transferred == 0) OnPickupRejected.Broadcast(Result.Requested);
 	if (Result.Transferred > 0)
 	{
-		CurrentWood += Result.Transferred;
+		float Yield = 1.f;
+		if (const auto* Stats = GetOwner() ? GetOwner()->FindComponentByClass<UChopItCombatStatsComponent>() : nullptr)
+			Yield = Stats->EvaluateStat(EChopItCombatStat::WoodYield, 1.f);
+		const double Bonus = BonusFraction + Result.Transferred * static_cast<double>(FMath::Max(0.f, Yield - 1.f));
+		const double WholeBonus = FMath::FloorToDouble(Bonus);
+		BonusFraction = Bonus - WholeBonus;
+		Result.BonusUnits = static_cast<int32>(FMath::Min(WholeBonus, static_cast<double>(GetAvailableCapacity() - Result.Transferred)));
+		CurrentWood += Result.Transferred + Result.BonusUnits;
 		OnCargoChanged.Broadcast(CurrentWood, Capacity);
+		FChopItItemEventContext Event;
+		Event.Event = EChopItItemEvent::WoodCollected; Event.Recipient = GetOwner(); Event.Target = GetOwner();
+		Event.Amount = Result.Transferred + Result.BonusUnits;
+		UChopItItemEventSubsystem::Emit(this, Event);
 	}
 	return Result;
 }

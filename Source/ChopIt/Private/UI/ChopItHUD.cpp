@@ -14,6 +14,7 @@
 #include "Engine/Canvas.h"
 #include "CanvasItem.h"
 #include "Engine/Engine.h"
+#include "Engine/AssetManager.h"
 #include "Framework/ChopItGameState.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
@@ -27,6 +28,16 @@
 #include "Weapons/ChopItWeaponDefinition.h"
 #include "Pacts/ChopItPactComponent.h"
 #include "Pacts/ChopItPactDefinition.h"
+#include "Items/ChopItItemDataAsset.h"
+#include "Items/ChopItItemComponent.h"
+#include "Engine/Texture2D.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+#include "Rewards/ChopItChestRevealScene.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Spawning/ChopItEliteEncounterComponent.h"
+#include "Enemies/ChopItEnemyCharacter.h"
+#include "Enemies/ChopItEnemyDefinition.h"
 
 namespace ChopItHUD
 {
@@ -77,6 +88,13 @@ void AChopItHUD::BeginPlay()
 	}
 }
 
+void AChopItHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (IsValid(ChestRevealScene)) ChestRevealScene->Destroy();
+	ResumeFromItemUI();
+	Super::EndPlay(EndPlayReason);
+}
+
 void AChopItHUD::RevealMissionTracker()
 {
 	if (bMissionTrackerRequested && !bMissionTrackerDismissed) return;
@@ -98,10 +116,22 @@ void AChopItHUD::DrawHUD()
 	// still scales up with the viewport, but it never shrinks into debug-text size.
 	const float Scale = FMath::Clamp(FMath::Min(Canvas->SizeX / 1920.0f, Canvas->SizeY / 1080.0f), 0.80f, 1.5f);
 	RefreshPSXWidget();
+	if (bItemRevealActive)
+	{
+		DrawItemReveal(Scale);
+		return;
+	}
 	if (!PSXHUDWidget)
 	{
 		DrawPersistentHUD(Scale);
 		DrawMissionTracker(Scale);
+	}
+	DrawItemInventory(Scale);
+	DrawBossHealthBar(Scale);
+	if (bDebugItemMenuOpen)
+	{
+		DrawDebugItemMenu(Scale);
+		return;
 	}
 
 	const APlayerState* State = PlayerOwner->PlayerState;
@@ -132,6 +162,426 @@ void AChopItHUD::DrawHUD()
 	{
 		DrawShopOverlay(Scale, Shop->GetActiveOffers());
 	}
+}
+
+void AChopItHUD::DrawBossHealthBar(float Scale)
+{
+	const AChopItGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr;
+	const UChopItEliteEncounterComponent* Encounter = GameState ? GameState->GetEliteEncounterComponent() : nullptr;
+	const AChopItEnemyCharacter* Boss = Encounter ? Encounter->GetActiveElite() : nullptr;
+	const UChopItHealthComponent* Health = IsValid(Boss) ? Boss->GetHealthComponent() : nullptr;
+	if (!Health || !Health->IsAlive()) return;
+	const float Width = FMath::Min(Canvas->SizeX * .62f, 850.f * Scale);
+	const float X = (Canvas->SizeX - Width) * .5f;
+	const float Y = Canvas->SizeY - 155.f * Scale;
+	const FLinearColor Accent(.92f,.21f,.10f);
+	DrawPanel(X,Y,Width,77.f*Scale,ChopItHUD::Ink,Accent,3.f*Scale);
+	const UChopItEnemyDefinition* Definition = Boss->GetDefinition();
+	DrawCenteredLabel(Definition ? Definition->DisplayName.ToString() : TEXT("BOSS"),
+		Canvas->SizeX*.5f,Y+5.f*Scale,ChopItHUD::Cream,.88f*Scale,true);
+	DrawBar(X+19.f*Scale,Y+38.f*Scale,Width-38.f*Scale,20.f*Scale,
+		Health->GetCurrentHealth()/FMath::Max(1.f,Health->GetMaxHealth()),Accent,FLinearColor(.12f,.04f,.04f));
+	DrawCenteredLabel(FString::Printf(TEXT("%.0f / %.0f"),Health->GetCurrentHealth(),Health->GetMaxHealth()),
+		Canvas->SizeX*.5f,Y+38.f*Scale,FLinearColor::White,.7f*Scale);
+}
+
+UTexture2D* AChopItHUD::ResolveItemIcon(const UChopItItemDataAsset* Item)
+{
+	if (!Item) return nullptr;
+	if (TObjectPtr<UTexture2D>* Cached = ItemIconCache.Find(Item->ItemId)) return Cached->Get();
+	// The Data Asset is authoritative so designers can change its photo in Details.
+	UTexture2D* Icon = Item->Icon.LoadSynchronous();
+	if (!Icon)
+	{
+		const FString Stem = Item->ItemId == TEXT("GenerousLog") ? TEXT("HollowLog") : Item->ItemId.ToString();
+		const FString Name = FString(TEXT("T_Stick_")) + Stem;
+		const FString Path = FString::Printf(TEXT("/Game/ChopIt/Art/Sticks/%s.%s"), *Name, *Name);
+		Icon = LoadObject<UTexture2D>(nullptr, *Path);
+	}
+	ItemIconCache.Add(Item->ItemId, Icon);
+	return Icon;
+}
+
+void AChopItHUD::ToggleDebugItemMenu()
+{
+	if (bDebugItemMenuOpen) { CloseDebugItemMenu(); return; }
+	if (bItemRevealActive) return;
+	DebugItemCatalog.Reset();
+	UAssetManager& Manager = UAssetManager::Get();
+	TArray<FPrimaryAssetId> Ids;
+	Manager.GetPrimaryAssetIdList(TEXT("ChopItItem"), Ids);
+	for (const FPrimaryAssetId& Id : Ids)
+	{
+		if (UChopItItemDataAsset* Item = Cast<UChopItItemDataAsset>(Manager.GetPrimaryAssetPath(Id).TryLoad()))
+			DebugItemCatalog.Add(Item);
+	}
+	DebugItemCatalog.Sort([](const UChopItItemDataAsset& A, const UChopItItemDataAsset& B)
+	{
+		return A.DisplayName.ToString() < B.DisplayName.ToString();
+	});
+	DebugItemSelection = 0;
+	DebugItemStatus = DebugItemCatalog.IsEmpty() ? TEXT("NO SE ENCONTRARON DATA ASSETS") : FString();
+	bDebugItemMenuOpen = true;
+	if (PSXHUDWidget) PSXHUDWidget->SetVisibility(ESlateVisibility::Hidden);
+	PauseForItemUI();
+}
+
+void AChopItHUD::CloseDebugItemMenu()
+{
+	bDebugItemMenuOpen = false;
+	if (PSXHUDWidget) PSXHUDWidget->SetVisibility(ESlateVisibility::Visible);
+	ResumeFromItemUI();
+}
+
+void AChopItHUD::PauseForItemUI()
+{
+	if (PlayerOwner && !PlayerOwner->IsPaused()) bOwnsItemPause = PlayerOwner->SetPause(true);
+}
+
+void AChopItHUD::ResumeFromItemUI()
+{
+	if (bOwnsItemPause && IsValid(PlayerOwner)) PlayerOwner->SetPause(false);
+	bOwnsItemPause = false;
+}
+
+void AChopItHUD::MoveDebugItemSelection(const int32 Delta)
+{
+	if (bDebugItemMenuOpen && !DebugItemCatalog.IsEmpty())
+		DebugItemSelection = FMath::Clamp(DebugItemSelection + Delta, 0, DebugItemCatalog.Num() - 1);
+}
+
+void AChopItHUD::GrantSelectedDebugItem()
+{
+	if (!bDebugItemMenuOpen || !DebugItemCatalog.IsValidIndex(DebugItemSelection)) return;
+	UChopItItemComponent* Inventory = PlayerOwner && PlayerOwner->GetPawn()
+		? PlayerOwner->GetPawn()->FindComponentByClass<UChopItItemComponent>() : nullptr;
+	UChopItItemDataAsset* Item = DebugItemCatalog[DebugItemSelection];
+	if (!Inventory || !Inventory->AddItem(Item))
+	{
+		DebugItemStatus = TEXT("NO SE PUDO AGREGAR EL ITEM");
+		return;
+	}
+	DebugItemStatus = FString::Printf(TEXT("+1 %s  |  STACKS: %d"), *Item->DisplayName.ToString(),
+		Inventory->GetStackCount(Item->ItemId));
+}
+
+void AChopItHUD::DrawItemInventory(const float Scale)
+{
+	const UChopItItemComponent* Inventory = PlayerOwner && PlayerOwner->GetPawn()
+		? PlayerOwner->GetPawn()->FindComponentByClass<UChopItItemComponent>() : nullptr;
+	if (!Inventory) return;
+	TArray<FChopItOwnedItem> Owned = Inventory->GetItems();
+	Owned.RemoveAll([](const FChopItOwnedItem& Entry) { return !Entry.Item || Entry.Stacks <= 0; });
+	Owned.Sort([](const FChopItOwnedItem& A, const FChopItOwnedItem& B)
+	{
+		return A.Item->DisplayName.ToString() < B.Item->DisplayName.ToString();
+	});
+	const float Width = FMath::Min(440.f * Scale, Canvas->SizeX * 0.46f);
+	const float X = Canvas->SizeX - Width - 22.f * Scale;
+	const float Y = 265.f * Scale;
+	const int32 Rows = FMath::Max(1, FMath::DivideAndRoundUp(Owned.Num(), 2));
+	const float Height = (49.f + Rows * 34.f) * Scale;
+	DrawPanel(X, Y, Width, Height, ChopItHUD::Ink, ChopItHUD::Border, 3.f * Scale);
+	DrawLabel(FString::Printf(TEXT("ITEMS  %d  |  F6: PROBAR"), Owned.Num()),
+		X + 12.f * Scale, Y + 9.f * Scale, ChopItHUD::Cream, 0.82f * Scale, true);
+	if (Owned.IsEmpty())
+	{
+		DrawLabel(TEXT("SIN ITEMS"), X + 14.f * Scale, Y + 42.f * Scale,
+			ChopItHUD::Cream, 0.72f * Scale);
+		return;
+	}
+	const float CellWidth = (Width - 28.f * Scale) * 0.5f;
+	for (int32 Index = 0; Index < Owned.Num(); ++Index)
+	{
+		const UChopItItemDataAsset* Item = Owned[Index].Item;
+		const float CellX = X + 14.f * Scale + (Index % 2) * CellWidth;
+		const float CellY = Y + (43.f + (Index / 2) * 34.f) * Scale;
+		if (UTexture2D* Icon = ResolveItemIcon(Item); Icon && Icon->GetResource())
+		{
+			FCanvasTileItem Tile(FVector2D(CellX, CellY), Icon->GetResource(), FVector2D(26.f * Scale), FLinearColor::White);
+			Tile.BlendMode = SE_BLEND_Translucent;
+			Canvas->DrawItem(Tile);
+		}
+		DrawLabel(Item->DisplayName.ToString().Left(15), CellX + 31.f * Scale, CellY + 2.f * Scale,
+			ChopItHUD::Cream, 0.68f * Scale);
+		DrawLabel(FString::Printf(TEXT("x%d"), Owned[Index].Stacks), CellX + CellWidth - 37.f * Scale,
+			CellY + 2.f * Scale, ChopItHUD::Green, 0.68f * Scale);
+	}
+}
+
+void AChopItHUD::DrawDebugItemMenu(const float Scale)
+{
+	ChopItHUD::DrawSolidRect(Canvas, 0.f, 0.f, Canvas->SizeX, Canvas->SizeY, FLinearColor(0.f, 0.f, 0.f, 0.70f));
+	const float Width = FMath::Min(960.f * Scale, Canvas->SizeX * 0.92f);
+	const float Height = FMath::Min(620.f * Scale, Canvas->SizeY * 0.88f);
+	const float X = (Canvas->SizeX - Width) * 0.5f;
+	const float Y = (Canvas->SizeY - Height) * 0.5f;
+	DrawPanel(X, Y, Width, Height, ChopItHUD::Ink, ChopItHUD::Orange, 5.f * Scale);
+	DrawCenteredLabel(TEXT("PROBAR ITEMS  [F6 / ESC CERRAR]"), Canvas->SizeX * 0.5f,
+		Y + 18.f * Scale, ChopItHUD::Cream, 1.0f * Scale, true);
+	if (DebugItemCatalog.IsEmpty())
+	{
+		DrawCenteredLabel(DebugItemStatus, Canvas->SizeX * 0.5f, Y + Height * 0.5f,
+			ChopItHUD::Red, 0.9f * Scale);
+		return;
+	}
+	constexpr int32 PageSize = 10;
+	const int32 Page = DebugItemSelection / PageSize;
+	const int32 Start = Page * PageSize;
+	const float RowHeight = (Height - 145.f * Scale) / PageSize;
+	const float ListWidth = Width * 0.58f;
+	for (int32 Index = Start; Index < FMath::Min(Start + PageSize, DebugItemCatalog.Num()); ++Index)
+	{
+		UChopItItemDataAsset* Item = DebugItemCatalog[Index];
+		const float RowY = Y + 70.f * Scale + (Index - Start) * RowHeight;
+		if (Index == DebugItemSelection)
+			ChopItHUD::DrawSolidRect(Canvas, X + 15.f * Scale, RowY - 3.f * Scale,
+				ListWidth - 25.f * Scale, RowHeight - 2.f * Scale, ChopItHUD::Orange.CopyWithNewOpacity(0.25f));
+		if (UTexture2D* Icon = ResolveItemIcon(Item); Icon && Icon->GetResource())
+		{
+			FCanvasTileItem Tile(FVector2D(X + 25.f * Scale, RowY), Icon->GetResource(), FVector2D(31.f * Scale), FLinearColor::White);
+			Tile.BlendMode = SE_BLEND_Translucent;
+			Canvas->DrawItem(Tile);
+		}
+		DrawLabel(Item->DisplayName.ToString().Left(28), X + 67.f * Scale, RowY + 5.f * Scale,
+			ChopItHUD::Cream, 0.76f * Scale);
+	}
+	UChopItItemDataAsset* Selected = DebugItemCatalog[DebugItemSelection];
+	const float DetailX = X + ListWidth + 10.f * Scale;
+	DrawPanel(DetailX, Y + 72.f * Scale, Width - ListWidth - 25.f * Scale,
+		Height - 155.f * Scale, FLinearColor(0.11f, 0.09f, 0.09f, 0.96f), ChopItHUD::Border, 2.f * Scale);
+	if (UTexture2D* Icon = ResolveItemIcon(Selected); Icon && Icon->GetResource())
+	{
+		const float IconSize = 106.f * Scale;
+		FCanvasTileItem Tile(FVector2D(DetailX + (Width - ListWidth - 25.f * Scale - IconSize) * 0.5f,
+			Y + 92.f * Scale), Icon->GetResource(), FVector2D(IconSize), FLinearColor::White);
+		Tile.BlendMode = SE_BLEND_Translucent;
+		Canvas->DrawItem(Tile);
+	}
+	DrawCenteredLabel(Selected->DisplayName.ToString(), DetailX + (Width - ListWidth - 25.f * Scale) * 0.5f,
+		Y + 210.f * Scale, ChopItHUD::Cream, 0.82f * Scale, true);
+	const UChopItItemComponent* Inventory = PlayerOwner && PlayerOwner->GetPawn()
+		? PlayerOwner->GetPawn()->FindComponentByClass<UChopItItemComponent>() : nullptr;
+	DrawLabel(FString::Printf(TEXT("STACKS: %d"), Inventory ? Inventory->GetStackCount(Selected->ItemId) : 0),
+		DetailX + 15.f * Scale, Y + 259.f * Scale, ChopItHUD::Green, 0.78f * Scale);
+	if (Selected->Effects.IsEmpty())
+		DrawLabel(TEXT("EFECTO SIN CONFIGURAR"), DetailX + 15.f * Scale, Y + 289.f * Scale,
+			ChopItHUD::Orange, 0.68f * Scale);
+	TArray<FString> Words;
+	Selected->Description.ToString().ParseIntoArrayWS(Words);
+	FString Line;
+	float TextY = Y + 325.f * Scale;
+	for (const FString& Word : Words)
+	{
+		const FString Candidate = Line.IsEmpty() ? Word : Line + TEXT(" ") + Word;
+		float TextWidth = 0.f, TextHeight = 0.f;
+		Canvas->StrLen(GEngine->GetMediumFont(), Candidate, TextWidth, TextHeight);
+		if (!Line.IsEmpty() && TextWidth * 0.68f * Scale > Width - ListWidth - 55.f * Scale)
+		{
+			DrawLabel(Line, DetailX + 15.f * Scale, TextY, ChopItHUD::Cream, 0.68f * Scale);
+			TextY += 23.f * Scale;
+			Line = Word;
+		}
+		else Line = Candidate;
+	}
+	if (!Line.IsEmpty()) DrawLabel(Line, DetailX + 15.f * Scale, TextY, ChopItHUD::Cream, 0.68f * Scale);
+	DrawCenteredLabel(FString::Printf(TEXT("%d / %d   |   PAGINA %d / %d"), DebugItemSelection + 1,
+		DebugItemCatalog.Num(), Page + 1, FMath::DivideAndRoundUp(DebugItemCatalog.Num(), PageSize)),
+		X + ListWidth * 0.5f, Y + Height - 60.f * Scale, ChopItHUD::Cream, 0.76f * Scale);
+	DrawCenteredLabel(TEXT("↑ ↓ ELEGIR   |   RE PÁG / AV PÁG   |   ENTER +1 STACK"),
+		Canvas->SizeX * 0.5f, Y + Height - 32.f * Scale, ChopItHUD::Orange, 0.76f * Scale);
+	if (!DebugItemStatus.IsEmpty())
+		DrawCenteredLabel(DebugItemStatus, Canvas->SizeX * 0.5f, Y + Height - 92.f * Scale,
+			ChopItHUD::Green, 0.73f * Scale);
+}
+
+float AChopItHUD::GetItemRevealDuration() const
+{
+	const int32 Tier = ItemRevealResult ? FMath::Clamp(static_cast<int32>(ItemRevealResult->Rarity), 0, 3) : 0;
+	return 0.45f + 0.82f * (Tier + 1) + 0.55f;
+}
+
+void AChopItHUD::StartItemReveal(UChopItItemDataAsset* Result)
+{
+	if (!Result) return;
+	if (bDebugItemMenuOpen) CloseDebugItemMenu();
+	if (bItemRevealActive) CancelItemReveal();
+	ItemRevealResult = Result;
+	FActorSpawnParameters PreviewParams;
+	PreviewParams.ObjectFlags |= RF_Transient;
+	PreviewParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ChestRevealScene = GetWorld()->SpawnActor<AChopItChestRevealScene>(AChopItChestRevealScene::StaticClass(), FVector(0,0,100000), FRotator::ZeroRotator, PreviewParams);
+	if (ChestRevealScene) ChestRevealScene->InitializeScene();
+	ItemRevealIcon = ResolveItemIcon(Result);
+	ItemRevealTickSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/ChopIt/UI/Audio/UI_Tick.UI_Tick"));
+	ItemRevealStartedAt = FPlatformTime::Seconds();
+	LastRevealStage = INDEX_NONE;
+	bItemRevealGranted = false;
+	bItemRevealActive = true;
+	if (PSXHUDWidget) PSXHUDWidget->SetVisibility(ESlateVisibility::Hidden);
+	PauseForItemUI();
+}
+
+void AChopItHUD::CompleteItemReveal(UChopItItemDataAsset* Result)
+{
+	if (bItemRevealActive && Result == ItemRevealResult) bItemRevealGranted = true;
+}
+
+void AChopItHUD::CancelItemReveal()
+{
+	if (IsValid(ChestRevealScene)) ChestRevealScene->Destroy();
+	ChestRevealScene = nullptr;
+	bItemRevealActive = false;
+	bItemRevealGranted = false;
+	ItemRevealResult = nullptr;
+	ItemRevealIcon = nullptr;
+	ItemRevealTickSound = nullptr;
+	if (PSXHUDWidget) PSXHUDWidget->SetVisibility(ESlateVisibility::Visible);
+	ResumeFromItemUI();
+}
+
+void AChopItHUD::DismissItemReveal()
+{
+	if (bItemRevealActive && bItemRevealGranted
+		&& FPlatformTime::Seconds() - ItemRevealStartedAt >= GetItemRevealDuration() + 0.65)
+	{
+		CancelItemReveal();
+	}
+}
+
+void AChopItHUD::DrawItemReveal(const float Scale)
+{
+	if (!Canvas || !ItemRevealResult) { CancelItemReveal(); return; }
+	const float Elapsed = static_cast<float>(FPlatformTime::Seconds() - ItemRevealStartedAt);
+	const float Duration = GetItemRevealDuration();
+	const int32 Tier = FMath::Clamp(static_cast<int32>(ItemRevealResult->Rarity), 0, 3);
+	const FLinearColor Colors[4] = {
+		FLinearColor(0.69f, 0.70f, 0.73f),
+		FLinearColor(0.25f, 0.88f, 0.43f),
+		FLinearColor(0.25f, 0.55f, 1.0f),
+		FLinearColor(1.0f, 0.69f, 0.15f)
+	};
+	const TCHAR* RarityNames[4] = {TEXT("COMÚN"), TEXT("POCO COMÚN"), TEXT("RARO"), TEXT("LEGENDARIO")};
+	const float CX = Canvas->SizeX * 0.5f;
+	const float CY = Canvas->SizeY * 0.5f;
+	ChopItHUD::DrawSolidRect(Canvas, 0.f, 0.f, Canvas->SizeX, Canvas->SizeY,
+		FLinearColor(0.015f, 0.012f, 0.025f, 0.88f));
+
+	if (IsValid(ChestRevealScene) && Elapsed < Duration + 0.65f)
+	{
+		ChestRevealScene->UpdatePresentation(Elapsed, Duration, Tier);
+		if (UTextureRenderTarget2D* Texture = ChestRevealScene->GetTexture())
+		{
+			const float Size = FMath::Min(Canvas->SizeY * 0.9f, 820.f * Scale);
+			FCanvasTileItem Portrait(FVector2D(CX-Size*.5f,CY-Size*.5f), Texture->GetResource(), FVector2D(Size), FLinearColor::White);
+			Portrait.BlendMode = SE_BLEND_Opaque;
+			Canvas->DrawItem(Portrait);
+		}
+	}
+
+	if (Elapsed >= Duration && bItemRevealGranted)
+	{
+		const float Reveal = FMath::Clamp((Elapsed - Duration) / 0.65f, 0.f, 1.f);
+		const float CardReveal = FMath::Clamp((Reveal - 0.4f) / 0.6f, 0.f, 1.f);
+		const float Zoom = ChopItHUD::EaseOutBack(CardReveal);
+		const FLinearColor Color = Colors[Tier];
+		const float Pulse = 0.5f + 0.5f * FMath::Sin(Elapsed * 4.f);
+		for (int32 Ray = 0; Ray < 16; ++Ray)
+		{
+			const float Angle = Ray * (2.f * PI / 16.f) + Elapsed * 0.16f;
+			const FVector2D Direction(FMath::Cos(Angle), FMath::Sin(Angle));
+			FCanvasLineItem Beam(FVector2D(CX, CY) + Direction * (105.f * Scale),
+				FVector2D(CX, CY) + Direction * ((260.f + 35.f * Pulse) * Scale));
+			Beam.SetColor(Color.CopyWithNewOpacity(0.13f + 0.12f * Pulse));
+			Beam.LineThickness = (6.f + 4.f * Pulse) * Scale;
+			Canvas->DrawItem(Beam);
+		}
+		if (Reveal < 0.4f)
+		{
+			const float Rise = Reveal / 0.4f;
+			const float RisingSize = FMath::Lerp(68.f, 148.f, Rise) * Scale;
+			if (ItemRevealIcon && ItemRevealIcon->GetResource())
+			{
+				FCanvasTileItem RisingIcon(FVector2D(CX - RisingSize * 0.5f,
+					CY + FMath::Lerp(96.f, -106.f, Rise) * Scale - RisingSize * 0.5f),
+					ItemRevealIcon->GetResource(), FVector2D(RisingSize), FLinearColor::White);
+				RisingIcon.BlendMode = SE_BLEND_Translucent;
+				Canvas->DrawItem(RisingIcon);
+			}
+			return;
+		}
+		const float Width = FMath::Min(FMath::Lerp(260.f, 540.f, Zoom) * Scale, Canvas->SizeX * 0.9f);
+		const float Height = FMath::Min(FMath::Lerp(260.f, 500.f, Zoom) * Scale, Canvas->SizeY * 0.88f);
+		const float X = CX - Width * 0.5f;
+		const float Y = CY - Height * 0.5f;
+		DrawPanel(X - 7.f * Scale, Y - 7.f * Scale, Width + 14.f * Scale, Height + 14.f * Scale,
+			Color.CopyWithNewOpacity(0.16f), Color.CopyWithNewOpacity(0.5f), 3.f * Scale);
+		DrawPanel(X, Y, Width, Height, FLinearColor(0.045f, 0.034f, 0.052f, 0.98f), Color, 5.f * Scale);
+		const float Alpha = CardReveal;
+		const float IconSize = 148.f * Scale;
+		if (ItemRevealIcon && ItemRevealIcon->GetResource())
+		{
+			FCanvasTileItem Icon(FVector2D(CX - IconSize * 0.5f, Y + 38.f * Scale),
+				ItemRevealIcon->GetResource(), FVector2D(IconSize), FLinearColor(1.f, 1.f, 1.f, Alpha));
+			Icon.BlendMode = SE_BLEND_Translucent;
+			Canvas->DrawItem(Icon);
+		}
+		DrawCenteredLabel(TEXT("RECOMPENSA OBTENIDA"), CX, Y + 14.f * Scale,
+			ChopItHUD::WithAlpha(Color, Alpha), 0.78f * Scale);
+		DrawCenteredLabel(ItemRevealResult->DisplayName.ToString().ToUpper(), CX, Y + 195.f * Scale,
+			ChopItHUD::WithAlpha(ChopItHUD::Cream, Alpha), 1.12f * Scale, true);
+		DrawCenteredLabel(RarityNames[Tier], CX, Y + 239.f * Scale,
+			ChopItHUD::WithAlpha(Color, Alpha), 0.77f * Scale);
+		TArray<FString> Words;
+		ItemRevealResult->Description.ToString().ParseIntoArrayWS(Words);
+		FString Line;
+		float TextY = Y + 287.f * Scale;
+		for (const FString& Word : Words)
+		{
+			const FString Candidate = Line.IsEmpty() ? Word : Line + TEXT(" ") + Word;
+			float TextWidth = 0.f, TextHeight = 0.f;
+			Canvas->StrLen(GEngine->GetMediumFont(), Candidate, TextWidth, TextHeight);
+			if (!Line.IsEmpty() && TextWidth * 0.70f * Scale > Width - 45.f * Scale)
+			{
+				DrawCenteredLabel(Line, CX, TextY, ChopItHUD::WithAlpha(ChopItHUD::Cream, Alpha), 0.70f * Scale);
+				TextY += 25.f * Scale;
+				Line = Word;
+			}
+			else Line = Candidate;
+		}
+		if (!Line.IsEmpty()) DrawCenteredLabel(Line, CX, TextY, ChopItHUD::WithAlpha(ChopItHUD::Cream, Alpha), 0.70f * Scale);
+		const UChopItItemComponent* Inventory = PlayerOwner && PlayerOwner->GetPawn()
+			? PlayerOwner->GetPawn()->FindComponentByClass<UChopItItemComponent>() : nullptr;
+		DrawCenteredLabel(FString::Printf(TEXT("STACKS: %d"), Inventory ? Inventory->GetStackCount(ItemRevealResult->ItemId) : 1),
+			CX, Y + Height - 75.f * Scale, ChopItHUD::WithAlpha(Color, Alpha), 0.79f * Scale);
+		DrawCenteredLabel(TEXT("ENTER / ESC PARA CONTINUAR"), CX, Y + Height - 37.f * Scale,
+			ChopItHUD::WithAlpha(ChopItHUD::Cream, Alpha), 0.72f * Scale);
+		return;
+	}
+
+	const int32 Stage = FMath::Clamp(FMath::FloorToInt((Elapsed - 0.45f) / 0.82f), 0, Tier);
+	const float StageTime = FMath::Max(0.f, Elapsed - 0.45f - Stage * 0.82f);
+	const float StagePulse = 0.5f + 0.5f * FMath::Sin(StageTime * 10.f);
+	const FLinearColor Color = Colors[Stage];
+	if (Stage != LastRevealStage && Elapsed >= 0.45f)
+	{
+		LastRevealStage = Stage;
+		if (ItemRevealTickSound) UGameplayStatics::PlaySound2D(this, ItemRevealTickSound, 0.5f + Stage * 0.13f);
+	}
+	DrawCenteredLabel(TEXT("BOTÍN DEL BOSS"), CX, CY - 265.f * Scale,
+		ChopItHUD::Cream, 1.45f * Scale, true);
+	const AChopItCharacter* Character = PlayerOwner ? Cast<AChopItCharacter>(PlayerOwner->GetPawn()) : nullptr;
+	DrawCenteredLabel(FString::Printf(TEXT("SUERTE: %.0f%%"), Character ? Character->GetLuckPercent() : 0.f),
+		CX, CY - 236.f * Scale, ChopItHUD::Cream, 0.68f * Scale);
+	for (int32 Pip = 0; Pip < 4; ++Pip)
+	{
+		const float PX = CX + (Pip - 1.5f) * 72.f * Scale;
+		const FLinearColor PipColor = Pip <= Stage ? Colors[Pip] : FLinearColor(0.16f, 0.16f, 0.18f);
+		DrawPanel(PX - 18.f * Scale, CY - 210.f * Scale, 36.f * Scale, 20.f * Scale,
+			PipColor.CopyWithNewOpacity(Pip <= Stage ? 0.7f : 0.5f), PipColor, 2.f * Scale);
+	}
+	DrawCenteredLabel(FString::Printf(TEXT("LUZ %s"), RarityNames[Stage]), CX,
+		CY + 230.f * Scale, Color, 1.0f * Scale, true);
 }
 
 void AChopItHUD::RefreshPSXWidget()

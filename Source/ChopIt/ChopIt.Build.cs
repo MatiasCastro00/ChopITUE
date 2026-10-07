@@ -18,7 +18,8 @@ public class ChopIt : ModuleRules
 			"ChopItCombat",
 			"ChopItWorld",
 			"ChopItAI",
-			"ChopItPresentation"
+			"ChopItPresentation",
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

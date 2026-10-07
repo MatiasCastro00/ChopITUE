@@ -76,6 +76,13 @@
 			"Enabled": true
 		},
 		{
+			"Name": "CascadeToNiagaraConverter",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
 			"Name": "AudioModulation",
 			"Enabled": true
 		},
