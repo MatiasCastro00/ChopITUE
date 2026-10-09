@@ -53,11 +53,17 @@
 #include "Materials/MaterialExpressionConstant.h"
 #include "Materials/MaterialExpressionConstant3Vector.h"
 #include "Materials/MaterialExpressionMultiply.h"
+#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
+#include "Materials/MaterialExpressionComponentMask.h"
+#include "Materials/MaterialExpressionOneMinus.h"
+#include "Materials/MaterialExpressionDivide.h"
 #include "Materials/MaterialExpressionNoise.h"
 #include "Materials/MaterialExpressionScalarParameter.h"
 #include "Materials/MaterialExpressionSubtract.h"
 #include "Materials/MaterialExpressionWorldPosition.h"
 #include "MaterialEditingLibrary.h"
+#include "ShaderCompiler.h"
+#include "MaterialShared.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
@@ -429,6 +435,8 @@ int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 {
 	if (FParse::Param(*Params, TEXT("EnglishPSXHUD")))
 		return ChopItBootstrap::LocalizePSXHUDToEnglish() ? 0 : 1;
+	if (FParse::Param(*Params, TEXT("ChestRevealUI")))
+		return CreateChestRevealUIMaterial() ? 0 : 1;
 	// Targeted repair must not run asset generation or touch the user's HUD.
 	if (FParse::Param(*Params, TEXT("RepairPSXNavigation")))
 		return RebuildNavigationData(TEXT("/Game/ChopIt/World/Maps/L_PSX_test")) ? 0 : 1;
@@ -2187,6 +2195,74 @@ bool UChopItBootstrapCommandlet::CreateDamageTextMaterial() const
 	DamageTextMaterial->PostEditChange();
 	const bool bSaved = ChopItBootstrap::SaveAsset(DamageTextMaterial);
 	UE_LOG(LogChopIt, Display, TEXT("Always-on-top damage text material: %s"), bSaved ? TEXT("OK") : TEXT("FAILED"));
+	return bSaved;
+}
+
+bool UChopItBootstrapCommandlet::CreateChestRevealUIMaterial() const
+{
+	constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/Items/Chest/M_ChestReveal_UI");
+	UMaterial* Material = ChopItBootstrap::LoadOrCreateAsset<UMaterial>(PackageName, TEXT("M_ChestReveal_UI"));
+	if (!Material) return false;
+
+	for (UMaterialExpression* Expression : Material->GetExpressionCollection().Expressions)
+	{
+		if (Expression) Expression->MarkAsGarbage();
+	}
+	Material->GetExpressionCollection().Expressions.Empty();
+	// HUD uses FCanvasTileItem (mesh shaders), not a Slate/UMG material brush.
+	Material->MaterialDomain = MD_Surface;
+	Material->SetShadingModel(MSM_Unlit);
+	Material->BlendMode = BLEND_AlphaComposite;
+	Material->bDisableDepthTest = true;
+
+	UMaterialExpressionTextureSampleParameter2D* Capture = CastChecked<UMaterialExpressionTextureSampleParameter2D>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionTextureSampleParameter2D::StaticClass(), -400, 0));
+	Capture->ParameterName = TEXT("CaptureTexture");
+	Capture->Texture = LoadObject<UTexture2D>(nullptr, TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"));
+	Capture->AutoSetSampleType();
+	UMaterialExpressionOneMinus* ForegroundOpacity = CastChecked<UMaterialExpressionOneMinus>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionOneMinus::StaticClass(), 40, 180));
+	// Texture output 0 is RGB only; output 4 is the capture's inverse opacity.
+	ForegroundOpacity->Input.Connect(4, Capture);
+	UMaterialExpressionConstant* Exposure = CastChecked<UMaterialExpressionConstant>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionConstant::StaticClass(), -160, -100));
+	Exposure->R = 8.f;
+	UMaterialExpressionMultiply* ExposedColor = CastChecked<UMaterialExpressionMultiply>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionMultiply::StaticClass(), 40, -100));
+	ExposedColor->A.Connect(0, Capture);
+	ExposedColor->B.Connect(0, Exposure);
+	UMaterialExpressionConstant* One = CastChecked<UMaterialExpressionConstant>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionConstant::StaticClass(), 40, 80));
+	One->R = 1.f;
+	UMaterialExpressionAdd* ToneMapDenominator = CastChecked<UMaterialExpressionAdd>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionAdd::StaticClass(), 240, -40));
+	ToneMapDenominator->A.Connect(0, ExposedColor);
+	ToneMapDenominator->B.Connect(0, One);
+	UMaterialExpressionDivide* ToneMappedColor = CastChecked<UMaterialExpressionDivide>(
+		UMaterialEditingLibrary::CreateMaterialExpression(Material, UMaterialExpressionDivide::StaticClass(), 440, -100));
+	ToneMappedColor->A.Connect(0, ExposedColor);
+	ToneMappedColor->B.Connect(0, ToneMapDenominator);
+
+	// The raw HDR capture is linear and pre-exposed. Apply a small exposure lift
+	// and a Reinhard curve so the isolated portrait remains readable in the HUD.
+	Material->GetEditorOnlyData()->EmissiveColor.Connect(0, ToneMappedColor);
+	Material->GetEditorOnlyData()->Opacity.Connect(0, ForegroundOpacity);
+	Material->PostEditChange();
+	if (GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
+	if (const FMaterialResource* Resource = Material->GetMaterialResource(GMaxRHIShaderPlatform))
+	{
+		for (const FString& Error : Resource->GetCompileErrors())
+			UE_LOG(LogChopIt, Error, TEXT("Chest composite shader: %s"), *Error);
+		if (!Resource->GetCompileErrors().IsEmpty()) return false;
+	}
+	const bool bSaved = ChopItBootstrap::SaveAsset(Material);
+	if (UMaterial* Light = LoadObject<UMaterial>(nullptr,TEXT("/Game/ChopIt/Items/Chest/M_ChestReveal_Light.M_ChestReveal_Light")))
+	{
+		Light->SetMaterialUsage(MATUSAGE_InstancedStaticMeshes);
+		Light->PostEditChange();
+		if (!ChopItBootstrap::SaveAsset(Light)) return false;
+	}
+	UE_LOG(LogChopIt, Display, TEXT("Chest reveal alpha-composite UI material: %s"), bSaved ? TEXT("OK") : TEXT("FAILED"));
 	return bSaved;
 }
 

@@ -5,11 +5,15 @@
 #include "Combat/ChopItHealthComponent.h"
 #include "Targeting/ChopItTargetingSubsystem.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
 #include "EngineUtils.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
 #include "Misc/AutomationTest.h"
 #include "TimerManager.h"
+#include "Items/ChopItScreamDebuffComponent.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChopItMandrakeTest, "ChopIt.Items.MandrakeScream",
@@ -29,6 +33,7 @@ bool FChopItMandrakeTest::RunTest(const FString& Parameters)
 	const UWorld::InitializationValues Values = UWorld::InitializationValues()
 		.AllowAudioPlayback(false).CreatePhysicsScene(false).CreateNavigation(false).CreateAISystem(false);
 	UWorld* World = UWorld::CreateWorld(EWorldType::Game,false,NAME_None,nullptr,true,ERHIFeatureLevel::Num,&Values);
+	GEngine->CreateNewWorldContext(EWorldType::Game).SetCurrentWorld(World);
 	auto Spawn = [World](const FVector& Location)
 	{
 		AActor* Actor = World->SpawnActor<AActor>();
@@ -81,7 +86,7 @@ bool FChopItMandrakeTest::RunTest(const FString& Parameters)
 	int32 SpawnCount = 0;
 	for (TActorIterator<AChopItMandrakeScream> It(World); It; ++It) { Mandrake=*It; ++SpawnCount; }
 	TestEqual(TEXT("One mandrake spawns at the kill location"),SpawnCount,1);
-	if (!Mandrake) { World->DestroyWorld(false); return false; }
+	if (!Mandrake) { World->DestroyWorld(false); GEngine->DestroyWorldContext(World); return false; }
 	TestTrue(TEXT("Mandrake starts at victim"),Mandrake->GetActorLocation().Equals(Victim->GetActorLocation()));
 	++GFrameCounter;
 	World->GetTimerManager().Tick(.26f);
@@ -94,7 +99,26 @@ bool FChopItMandrakeTest::RunTest(const FString& Parameters)
 		for (const UChopItItemEffect* Active : Owned.Effects)
 			if (const auto* Found = Cast<UChopItInfestationEffect>(Active)) Infection = Found;
 	TestTrue(TEXT("Scream also builds infection on boss"),Infection && Infection->GetInfestation(BossHealth)>0.f);
+	TestNotNull(TEXT("Scream applies confusion to boss"),Boss->FindComponentByClass<UChopItScreamDebuffComponent>());
+	ACharacter* SlowTarget = World->SpawnActor<ACharacter>();
+	SlowTarget->GetCharacterMovement()->MaxWalkSpeed = 400.f;
+	auto* SlowHealth = HealthOn(SlowTarget,EChopItDamageTargetKind::Enemy);
+	if (!SlowTarget->HasActorBegunPlay()) SlowTarget->DispatchBeginPlay();
+	auto* Slow = NewObject<UChopItScreamDebuffComponent>(SlowTarget);
+	SlowTarget->AddInstanceComponent(Slow);Slow->RegisterComponent();
+	Slow->Refresh(.65f,1.f);
+	TestEqual(TEXT("Scream slows movement 35 percent"),SlowTarget->GetCharacterMovement()->MaxWalkSpeed,260.f);
+	Slow->Refresh(.65f,1.f);
+	TestEqual(TEXT("Repeated pulses do not multiply slow"),SlowTarget->GetCharacterMovement()->MaxWalkSpeed,260.f);
+	Mandrake->Destroy();
+	++GFrameCounter;World->GetTimerManager().Tick(1.1f);
+	TestEqual(TEXT("Movement recovers after leaving scream"),SlowTarget->GetCharacterMovement()->MaxWalkSpeed,400.f);
+	TestFalse(TEXT("Confusion expires"),Slow->IsSlowed());
+	Slow->Refresh(.65f,1.f);
+	SlowHealth->ApplyDamage(KillingBlow,Player);
+	TestFalse(TEXT("Death clears confusion"),Slow->IsSlowed());
 	World->DestroyWorld(false);
+	GEngine->DestroyWorldContext(World);
 	return true;
 }
 #endif

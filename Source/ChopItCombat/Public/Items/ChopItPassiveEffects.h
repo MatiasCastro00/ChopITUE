@@ -14,6 +14,8 @@ public:
 	UPROPERTY(EditAnywhere, Category="Mandrake", meta=(ClampMin="0.1")) float Duration = 6.f;
 	UPROPERTY(EditAnywhere, Category="Mandrake", meta=(ClampMin="1")) float Radius = 350.f;
 	UPROPERTY(EditAnywhere, Category="Mandrake", meta=(ClampMin="0")) float DamagePerSecond = 8.f;
+	UPROPERTY(EditAnywhere, Category="Mandrake", meta=(ClampMin="0.1", ClampMax="1")) float SlowMultiplier = .65f;
+	UPROPERTY(EditAnywhere, Category="Mandrake", meta=(ClampMin="0.05")) float SlowDuration = 1.f;
 	virtual void HandleEvent_Implementation(const FChopItItemEventContext& Context) override;
 };
 

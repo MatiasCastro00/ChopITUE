@@ -6,6 +6,6 @@ public class ChopItCombat : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "GameplayTags" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "ChopItCore" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "ChopItCore", "Niagara" });
 	}
 }

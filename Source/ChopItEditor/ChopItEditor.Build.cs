@@ -26,6 +26,7 @@ public class ChopItEditor : ModuleRules
 			"InputCore",
 			"KismetCompiler",
 			"MaterialEditor",
+			"RHI",
 			"NavigationSystem",
 			"UnrealEd",
 			"UMG",

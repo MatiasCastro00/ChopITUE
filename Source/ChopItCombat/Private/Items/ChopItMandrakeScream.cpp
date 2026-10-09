@@ -1,13 +1,14 @@
 #include "Items/ChopItMandrakeScream.h"
-
+#include "Items/ChopItScreamDebuffComponent.h"
 #include "Combat/ChopItHealthComponent.h"
 #include "Targeting/ChopItTargetingSubsystem.h"
 #include "Components/AudioComponent.h"
-#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
-#include "Materials/MaterialInterface.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
 #include "Sound/SoundWave.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
@@ -18,39 +19,41 @@ AChopItMandrakeScream::AChopItMandrakeScream()
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MandrakeRoot"));
 	Body->SetupAttachment(RootComponent);
-	Body->SetRelativeLocation(FVector(0,0,30));
-	Body->SetRelativeScale3D(FVector(.32f,.27f,.43f));
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	Leaves = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Leaves"));
-	Leaves->SetupAttachment(RootComponent);
-	Leaves->SetRelativeLocation(FVector(0,0,71));
-	Leaves->SetRelativeScale3D(FVector(.34f,.34f,.35f));
-	Leaves->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	LeftEye = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftEye"));
-	RightEye = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RightEye"));
-	Mouth = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ScreamingMouth"));
-	for (UStaticMeshComponent* FacePart : {LeftEye.Get(),RightEye.Get(),Mouth.Get()})
+	Body->SetRelativeRotation(FRotator(0,-90,0));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> Model(TEXT("/Game/ChopIt/Items/Mandrake/SM_Mandrake.SM_Mandrake"));
+	if (Model.Succeeded())
 	{
-		FacePart->SetupAttachment(RootComponent);
-		FacePart->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		FacePart->SetCastShadow(false);
+		Body->SetStaticMesh(Model.Object);
+		ModelScale = 105.f/FMath::Max(.001f,Model.Object->GetBounds().BoxExtent.Z*2.f);
+		Body->SetRelativeScale3D(FVector(ModelScale));
+		Body->SetRelativeLocation(FVector(0,0,-(Model.Object->GetBounds().Origin.Z-Model.Object->GetBounds().BoxExtent.Z)*ModelScale));
 	}
-	LeftEye->SetRelativeLocation(FVector(29,-12,43));
-	RightEye->SetRelativeLocation(FVector(29,12,43));
-	LeftEye->SetRelativeScale3D(FVector(.045f));
-	RightEye->SetRelativeScale3D(FVector(.045f));
-	Mouth->SetRelativeLocation(FVector(31,0,24));
-	Mouth->SetRelativeScale3D(FVector(.035f,.095f,.11f));
-	SoundRings = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("ScreamWaves"));
-	SoundRings->SetupAttachment(RootComponent);
-	SoundRings->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	SoundRings->SetCastShadow(false);
+	SoundWaves = CreateDefaultSubobject<UNiagaraComponent>(TEXT("SonicWaves"));
+	LeftSplash = CreateDefaultSubobject<UNiagaraComponent>(TEXT("LeftTearSplash"));
+	RightSplash = CreateDefaultSubobject<UNiagaraComponent>(TEXT("RightTearSplash"));
+	Emergence = CreateDefaultSubobject<UNiagaraComponent>(TEXT("EmergenceMotes"));
+	for (UNiagaraComponent* FX : {SoundWaves.Get(),LeftSplash.Get(),RightSplash.Get(),Emergence.Get()})
+	{
+		FX->SetupAttachment(RootComponent);
+		FX->SetAutoActivate(false);
+	}
+	SoundWaves->SetRelativeLocation(FVector(18,0,43));
+	LeftSplash->SetRelativeLocation(FVector(23,21,3));
+	RightSplash->SetRelativeLocation(FVector(23,-30,3));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Waves(TEXT("/Game/ChopIt/Items/Mandrake/NS_Mandrake_SonicWaves.NS_Mandrake_SonicWaves"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Splash(TEXT("/Game/ChopIt/Items/Mandrake/NS_Mandrake_TearSplash.NS_Mandrake_TearSplash"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Emerge(TEXT("/Game/ChopIt/Items/Mandrake/NS_Mandrake_Emerge.NS_Mandrake_Emerge"));
+	SoundWaves->SetAsset(Waves.Object);
+	LeftSplash->SetAsset(Splash.Object);RightSplash->SetAsset(Splash.Object);
+	Emergence->SetAsset(Emerge.Object);
 	Glow = CreateDefaultSubobject<UPointLightComponent>(TEXT("ScreamLight"));
 	Glow->SetupAttachment(RootComponent);
-	Glow->SetRelativeLocation(FVector(0,0,55));
-	Glow->SetLightColor(FLinearColor(.4f,1.f,.25f));
-	Glow->SetIntensity(1700.f);
-	Glow->SetAttenuationRadius(280.f);
+	Glow->SetRelativeLocation(FVector(30,0,55));
+	Glow->SetLightColor(FLinearColor(.25f,.65f,1.f));
+	Glow->SetIntensity(250.f);
+	Glow->SetCastShadows(false);
+	Glow->SetAttenuationRadius(180.f);
 	Scream = CreateDefaultSubobject<UAudioComponent>(TEXT("ScreamAudio"));
 	Scream->SetupAttachment(RootComponent);
 	Scream->bAutoActivate = false;
@@ -58,40 +61,36 @@ AChopItMandrakeScream::AChopItMandrakeScream()
 	Scream->AttenuationOverrides.bSpatialize = true;
 	Scream->AttenuationOverrides.bAttenuate = true;
 	Scream->AttenuationOverrides.FalloffDistance = 850.f;
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cone(TEXT("/Engine/BasicShapes/Cone.Cone"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> RootMaterial(TEXT("/Game/ChopIt/Items/Mandrake/M_Mandrake_Root.M_Mandrake_Root"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LeafMaterial(TEXT("/Game/ChopIt/Items/Mandrake/M_Mandrake_Leaf.M_Mandrake_Leaf"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WaveMaterial(TEXT("/Game/ChopIt/Items/Mandrake/M_Mandrake_Wave.M_Mandrake_Wave"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> FaceMaterial(TEXT("/Game/ChopIt/Items/Mandrake/M_Mandrake_Face.M_Mandrake_Face"));
-	static ConstructorHelpers::FObjectFinder<USoundWave> ScreamSound(TEXT("/Game/ChopIt/Items/Mandrake/S_Mandrake_Scream.S_Mandrake_Scream"));
-	if (Sphere.Succeeded())
-	{
-		Body->SetStaticMesh(Sphere.Object); SoundRings->SetStaticMesh(Sphere.Object);
-		LeftEye->SetStaticMesh(Sphere.Object); RightEye->SetStaticMesh(Sphere.Object); Mouth->SetStaticMesh(Sphere.Object);
-	}
-	if (Cone.Succeeded()) Leaves->SetStaticMesh(Cone.Object);
-	if (RootMaterial.Succeeded()) Body->SetMaterial(0,RootMaterial.Object);
-	if (LeafMaterial.Succeeded()) Leaves->SetMaterial(0,LeafMaterial.Object);
-	if (WaveMaterial.Succeeded()) SoundRings->SetMaterial(0,WaveMaterial.Object);
-	if (FaceMaterial.Succeeded())
-	{
-		LeftEye->SetMaterial(0,FaceMaterial.Object);
-		RightEye->SetMaterial(0,FaceMaterial.Object);
-		Mouth->SetMaterial(0,FaceMaterial.Object);
-	}
-	if (ScreamSound.Succeeded()) Scream->SetSound(ScreamSound.Object);
+	static ConstructorHelpers::FObjectFinder<USoundWave> Sound(TEXT("/Game/ChopIt/Items/Mandrake/S_Mandrake_Scream.S_Mandrake_Scream"));
+	Scream->SetSound(Sound.Object);
 }
 
-void AChopItMandrakeScream::Initialize(AActor* InOwner, float InRadius, float InDamagePerSecond, float InDuration)
+void AChopItMandrakeScream::Initialize(AActor* InOwner,float InRadius,float InDPS,float InDuration,float InSlowMultiplier,float InSlowDuration)
 {
 	DamageOwner = InOwner;
-	Radius = FMath::Max(1.f, InRadius);
-	DamagePerSecond = FMath::Max(0.f, InDamagePerSecond);
-	SetLifeSpan(FMath::Max(.1f, InDuration));
-	for (int32 I=0; I<36; ++I) SoundRings->AddInstance(FTransform(FQuat::Identity,FVector::ZeroVector,FVector::ZeroVector));
+	Radius = FMath::Max(1.f,InRadius);
+	DamagePerSecond = FMath::Max(0.f,InDPS);
+	Lifetime = FMath::Max(.1f,InDuration);
+	SlowMultiplier = FMath::Clamp(InSlowMultiplier,.1f,1.f);
+	SlowDuration = FMath::Max(.05f,InSlowDuration);
+	SetLifeSpan(Lifetime);
+	Body->PrestreamTextures(Lifetime,true);
+	SoundWaves->SetRelativeScale3D(FVector(Radius/350.f,Radius/350.f,1));
+	for (UNiagaraComponent* FX : {SoundWaves.Get(),LeftSplash.Get(),RightSplash.Get(),Emergence.Get()}) FX->Activate(true);
 	Scream->Play();
 	GetWorldTimerManager().SetTimer(DamageTimer,this,&ThisClass::DamagePulse,.25f,true,.25f);
+}
+
+void AChopItMandrakeScream::StartVisualPreview(float PreviewDuration)
+{
+	DamageOwner.Reset();
+	DamagePerSecond = 0.f;
+	Age = 0.f;
+	Lifetime = FMath::Max(.1f,PreviewDuration);
+	Body->PrestreamTextures(Lifetime,true);
+	SoundWaves->SetRelativeScale3D(FVector(1.f,1.f,1.f));
+	for (UNiagaraComponent* FX : {SoundWaves.Get(),LeftSplash.Get(),RightSplash.Get(),Emergence.Get()}) FX->Activate(true);
+	Scream->Play();
 }
 
 void AChopItMandrakeScream::DamagePulse()
@@ -102,30 +101,28 @@ void AChopItMandrakeScream::DamagePulse()
 	for (UChopItHealthComponent* Health : Targets->FindTargetsInRadius(GetActorLocation(),Radius,MAX_int32,DamageOwner.Get()))
 	{
 		if (!IsValid(Health) || Health->TargetKind != EChopItDamageTargetKind::Enemy) continue;
-		FChopItDamageSpec Damage;
-		Damage.BaseDamage = DamagePerSecond*.25f;
-		Health->ApplyDamage(Damage,DamageOwner.Get(),Health->GetOwner()->GetActorLocation());
+		FChopItDamageSpec Damage;Damage.BaseDamage = DamagePerSecond*.25f;
+		const float Applied = Health->ApplyDamage(Damage,DamageOwner.Get(),Health->GetOwner()->GetActorLocation());
+		if (Applied>0.f && IsValid(Health->GetOwner()) && Health->IsAlive())
+		{
+			AActor* Target = Health->GetOwner();
+			UChopItScreamDebuffComponent* Debuff = Target->FindComponentByClass<UChopItScreamDebuffComponent>();
+			if (!Debuff)
+			{
+				Debuff = NewObject<UChopItScreamDebuffComponent>(Target);
+				Target->AddInstanceComponent(Debuff);Debuff->RegisterComponent();
+			}
+			Debuff->Refresh(SlowMultiplier,SlowDuration);
+		}
 	}
 }
 
-void AChopItMandrakeScream::Tick(float DeltaSeconds)
+void AChopItMandrakeScream::Tick(float Dt)
 {
-	Super::Tick(DeltaSeconds);
-	Age += DeltaSeconds;
+	Super::Tick(Dt);
+	Age += Dt;
 	const float Beat = .5f+.5f*FMath::Sin(Age*PI*8.f);
-	Body->SetRelativeScale3D(FVector(.32f,.27f,.43f)*(1.f+Beat*.14f));
-	Leaves->SetRelativeRotation(FRotator(0,Age*42.f,FMath::Sin(Age*8.f)*12.f));
-	Mouth->SetRelativeScale3D(FVector(.035f,.095f,.11f)*(1.f+Beat*.28f));
-	Glow->SetIntensity(800.f+Beat*2200.f);
-	for (int32 I=0; I<36; ++I)
-	{
-		const int32 Ring = I/12;
-		const float Phase = FMath::Frac(Age*1.7f+Ring/3.f);
-		const float Angle = (I%12)*(2.f*PI/12.f);
-		const float Distance = Phase*Radius;
-		const FVector Position(FMath::Cos(Angle)*Distance,FMath::Sin(Angle)*Distance,55.f+Phase*28.f);
-		const float Size = .12f*(1.f-Phase);
-		SoundRings->UpdateInstanceTransform(I,FTransform(FRotator::ZeroRotator,Position,FVector(Size)),false,false,true);
-	}
-	SoundRings->MarkRenderStateDirty();
+	const float Envelope = FMath::Clamp(FMath::Min(Age/.2f,(Lifetime-Age)/.3f),.01f,1.f);
+	Body->SetRelativeScale3D(FVector(1.f+Beat*.025f,1.f+Beat*.025f,1.f-Beat*.018f)*ModelScale*Envelope);
+	Glow->SetIntensity((160.f+Beat*230.f)*Envelope);
 }

@@ -20,6 +20,7 @@ public:
 	void InitializeScene();
 	void UpdatePresentation(float Time, float Duration, int32 Tier);
 	UTextureRenderTarget2D* GetTexture() const { return Target; }
+	UMaterialInstanceDynamic* GetCaptureCompositeMaterial() const { return CaptureCompositeMaterial; }
 private:
 	UPROPERTY() TObjectPtr<USceneComponent> Model;
 	UPROPERTY() TObjectPtr<USceneComponent> Hinge;
@@ -28,6 +29,7 @@ private:
 	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> Sparks;
 	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> Rays;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> Glow;
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> CaptureCompositeMaterial;
 	UPROPERTY() TObjectPtr<UMaterialInterface> LightMaterialAsset;
 	UPROPERTY() TObjectPtr<UPointLightComponent> InnerLight;
 	UPROPERTY() TObjectPtr<UNiagaraComponent> Finale;

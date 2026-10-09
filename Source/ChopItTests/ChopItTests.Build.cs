@@ -24,7 +24,8 @@ public class ChopItTests : ModuleRules
 			"SlateCore",
 			"UMG",
 			"UnrealEd",
-			"RenderCore"
+			"RenderCore",
+			"RHI"
 		});
 	}
 }

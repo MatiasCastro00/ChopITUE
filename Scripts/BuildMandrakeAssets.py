@@ -75,7 +75,7 @@ item = unreal.EditorAssetLibrary.load_asset(item_path)
 if not item:
     raise RuntimeError('Missing ' + item_path)
 item.set_editor_property('display_name', 'Palo Mandrágora')
-item.set_editor_property('description', 'Al matar a un enemigo, 10% de probabilidad de invocar una mandrágora durante 6 s. Su grito causa 8 de daño por segundo a los enemigos cercanos. Los stacks aumentan la probabilidad con rendimiento decreciente.')
+item.set_editor_property('description', 'Al matar a un enemigo, 10% de probabilidad de invocar una mandrágora durante 6 s. Su grito causa 8 de daño por segundo y ralentiza un 35% a los enemigos cercanos. La confusión dura hasta 1 s después del último impacto. Los stacks aumentan la probabilidad con rendimiento decreciente.')
 item.set_editor_property('rarity', unreal.ChopItItemRarity.UNCOMMON)
 item.set_editor_property('spawn_weight', 1.0)
 if not item.get_editor_property('effects'):

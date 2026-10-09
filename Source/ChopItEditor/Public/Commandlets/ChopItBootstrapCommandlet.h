@@ -45,6 +45,7 @@ private:
 	bool CreateDayDefinition() const;
 	bool CreateBlockoutMaterials() const;
 	bool CreateDamageTextMaterial() const;
+	bool CreateChestRevealUIMaterial() const;
 	bool RebuildNavigationData(const FString& LongPackageName) const;
 	bool RebuildPhase1Map(
 		const FString& LongPackageName,

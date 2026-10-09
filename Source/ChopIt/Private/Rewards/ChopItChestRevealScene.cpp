@@ -26,21 +26,14 @@ AChopItChestRevealScene::AChopItChestRevealScene()
 	Capture->bCaptureOnMovement = false;
 	Capture->bAlwaysPersistRenderingState = true;
 	Capture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
-	Capture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+	// SceneColorHDR carries the scene's inverted translucency alpha. The UI
+	// material inverts it back to foreground opacity before compositing.
+	Capture->CaptureSource = ESceneCaptureSource::SCS_SceneColorHDR;
+	Capture->ShowFlags.SetPostProcessing(false);
 	Capture->FOVAngle = 42.f;
 	Capture->ShowFlags.SetAtmosphere(false);
 	Capture->ShowFlags.SetFog(false);
 	Capture->ShowFlags.SetMotionBlur(false);
-	Capture->ShowFlags.SetBloom(true);
-	Capture->PostProcessSettings.bOverride_AutoExposureMethod = true;
-	Capture->PostProcessSettings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
-	Capture->PostProcessSettings.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
-	Capture->PostProcessSettings.AutoExposureApplyPhysicalCameraExposure = false;
-	Capture->PostProcessSettings.bOverride_AutoExposureBias = true;
-	Capture->PostProcessSettings.AutoExposureBias = 1.f;
-	Capture->PostProcessSettings.bOverride_BloomIntensity = true;
-	Capture->PostProcessSettings.BloomIntensity = 1.3f;
-	Capture->PostProcessBlendWeight = 1.f;
 	InnerLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("LightInsideChest"));
 	InnerLight->SetupAttachment(Model);
 	InnerLight->SetRelativeLocation(FVector(0, 0, 65));
@@ -129,9 +122,16 @@ void AChopItChestRevealScene::InitializeScene()
 	Finale->SetComponentTickEnabled(false);
 	Finale->SetSystemFixedBounds(FBox(FVector(-400), FVector(400)));
 	Target = NewObject<UTextureRenderTarget2D>(this);
-	Target->ClearColor = FLinearColor::Black;
+	Target->ClearColor = FLinearColor(0.f, 0.f, 0.f, 0.f);
+	Target->RenderTargetFormat = RTF_RGBA16f;
 	Target->InitAutoFormat(1024,1024);
 	Target->UpdateResourceImmediate(true);
+	if (UMaterialInterface* CompositeMaterial = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Game/ChopIt/Items/Chest/M_ChestReveal_UI.M_ChestReveal_UI")))
+	{
+		CaptureCompositeMaterial = UMaterialInstanceDynamic::Create(CompositeMaterial, this);
+		CaptureCompositeMaterial->SetTextureParameterValue(TEXT("CaptureTexture"), Target);
+	}
 	Capture->TextureTarget = Target;
 	Capture->ShowOnlyActorComponents(this);
 	UpdatePresentation(0.f, 3.f, 0);

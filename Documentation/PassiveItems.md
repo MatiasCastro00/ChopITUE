@@ -236,6 +236,40 @@ enemigos. Se excluyen el jugador, los árboles y los objetivos no enemigos.
 `Duration`, `Radius` y `DamagePerSecond` se pueden ajustar en el efecto del DA.
 `Scripts/BuildMandrakeAssets.py` crea los materiales y el sonido editables.
 
+La versión con FBX usa `SM_Mandrake` y `T_Mandrake_Albedo` en
+`/Game/ChopIt/Items/Mandrake`. Los slots `Palmera` y `Lagrimas` tienen materiales
+separados: cuerpo con atlas original y agua translúcida con UV animadas,
+franjas descendentes, normales animadas y refracción suave. `NS_Mandrake_SonicWaves`
+emite ondas expansivas; `NS_Mandrake_TearSplash` salpica en ambas bases;
+`NS_Mandrake_Emerge` añade motas al aparecer. Los enemigos alcanzados reciben
+`NS_Mandrake_Confusion` y una reducción de velocidad del 35%. Los pulsos renuevan
+el estado sin multiplicar la penalización; expira un segundo después del último
+impacto y se limpia al morir. `SlowMultiplier` y `SlowDuration` son editables
+en el efecto del DA. La confusión es visual: no cambia las decisiones de la IA.
+
+Los originales están en `SourceArt/Mandrake`. El FBX binario proporcionado fue
+rechazado por el importador de Unreal; `Scripts/InspectMandrakeFbx.py` recupera
+sus nodos y arrays a `Mandrake_Recovered.fbx` ASCII, conservando geometría, UV y
+los dos materiales. `Scripts/ImportMandrakeModel.py` importa la versión recuperada
+y normaliza su escala de construcción a centímetros, con normales recalculadas.
+`Scripts/BuildMandrakeVFX.py` crea los materiales/Niagara faltantes y actualiza
+la descripción del DA; ejecutar ambos scripts con `-ExecutePythonScript` en
+editor completo, no con el commandlet `-run=pythonscript` (requieren subsistemas
+del editor y Niagara requiere Slate). Los assets
+generados quedan editables y no se reconstruyen si ya existen.
+`ChopIt.Items.MandrakeVisual` comprueba la compilación de Niagara y guarda
+`Saved/MandrakePreview.png` usando un RHI de renderizado.
+La captura precarga los shaders de estos materiales y verifica que no se esté
+usando el material de respaldo; también comprueba partículas vivas en los cuatro
+sistemas Niagara. El halo de estrellas sobre la mandrágora en esta captura es
+una muestra del efecto que se coloca sobre los enemigos durante la partida.
+
+`BP_MandrakeFXPreview` es un actor de muestra inofensivo: buscá “Mandrake FX
+Preview” en Place Actors, arrastralo al nivel y ejecutá Play para ver el modelo,
+el grito, las ondas, las lágrimas, las salpicaduras y las motas. No inflige daño
+ni aplica ralentización. `Scripts/CreateMandrakePreview.py` crea el Blueprint a
+partir de la clase nativa `AChopItMandrakePreview`.
+
 Durante el encuentro Elite, el HUD muestra abajo, centrados, el nombre y la
 vida actual/máxima del boss. Lee el componente de salud del Elite activo y
 oculta la barra cuando este muere o sale del encuentro.
@@ -247,3 +281,9 @@ un objetivo con tipo Enemy. También comprueba que el Data Asset real conserva
 el icono, tiene el efecto asignado y participa en el loot. Pasó en el proyecto
 principal, junto con las otras cinco pruebas `ChopIt.Items` ejecutables con
 `-NullRHI`; `ChopItEditor` compiló y enlazó correctamente.
+
+Validación del FBX/Niagara: `ChopItEditor Win64 Development` compiló correctamente
+y las ocho pruebas `ChopIt.Items` pasaron con `-RenderOffscreen`, incluidas
+`MandrakeScream` (ralentización, renovación, expiración y limpieza al morir) y
+`MandrakeVisual` (shaders reales y partículas vivas). Log:
+`Saved/Logs/MandrakeFinalItems.log`.

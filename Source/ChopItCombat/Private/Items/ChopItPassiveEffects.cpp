@@ -24,9 +24,9 @@ void UChopItMandrakeEffect::HandleEvent_Implementation(const FChopItItemEventCon
 		Location.Z -= Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	const FRotator Facing = (Inventory->GetOwner()->GetActorLocation()-Location).Rotation();
+	const FRotator Facing(0,(Inventory->GetOwner()->GetActorLocation()-Location).Rotation().Yaw,0);
 	if (AChopItMandrakeScream* Mandrake = GetWorld()->SpawnActor<AChopItMandrakeScream>(AChopItMandrakeScream::StaticClass(), Location, Facing, Params))
-		Mandrake->Initialize(Inventory->GetOwner(), Radius, DamagePerSecond, Duration);
+		Mandrake->Initialize(Inventory->GetOwner(), Radius, DamagePerSecond, Duration, SlowMultiplier, SlowDuration);
 }
 
 UChopItRegenerationEffect::UChopItRegenerationEffect() { BaseValue = 1.f; }

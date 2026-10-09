@@ -470,12 +470,16 @@ void AChopItHUD::DrawItemReveal(const float Scale)
 	if (IsValid(ChestRevealScene) && Elapsed < Duration + 0.65f)
 	{
 		ChestRevealScene->UpdatePresentation(Elapsed, Duration, Tier);
-		if (UTextureRenderTarget2D* Texture = ChestRevealScene->GetTexture())
+		if (ChestRevealScene->GetTexture())
 		{
 			const float Size = FMath::Min(Canvas->SizeY * 0.9f, 820.f * Scale);
-			FCanvasTileItem Portrait(FVector2D(CX-Size*.5f,CY-Size*.5f), Texture->GetResource(), FVector2D(Size), FLinearColor::White);
-			Portrait.BlendMode = SE_BLEND_Opaque;
-			Canvas->DrawItem(Portrait);
+			if (UMaterialInstanceDynamic* Composite = ChestRevealScene->GetCaptureCompositeMaterial())
+			{
+				FCanvasTileItem Portrait(FVector2D(CX-Size*.5f,CY-Size*.5f), Composite->GetRenderProxy(), FVector2D(Size));
+				Portrait.SetColor(FLinearColor::White);
+				Portrait.BlendMode = SE_BLEND_AlphaComposite;
+				Canvas->DrawItem(Portrait);
+			}
 		}
 	}
 
