@@ -14,6 +14,7 @@ public class ChopIt : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"UMG", "SlateCore",
+			"ModelViewViewModel",
 			"InputCore",
 			"ChopItCombat",
 			"ChopItWorld",

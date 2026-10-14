@@ -11,6 +11,7 @@ class UChopItCameraCue;
 class UChopItCameraEffectPreset;
 class USoundBase;
 class UTexture2D;
+class UChopItDialogueWidget;
 
 UENUM(BlueprintType)
 enum class EChopItDialogueCameraActionKind : uint8
@@ -87,6 +88,7 @@ struct CHOPITPRESENTATION_API FChopItDialogueChoice
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Choice") FName ChoiceId;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Choice") FText Text;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Choice", meta=(MultiLine="true")) FText Description;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Choice") FName NextLineId;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Choice") FGameplayTag EventTag;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Choice") FGameplayTagContainer RequiredTags;
@@ -124,6 +126,8 @@ class CHOPITPRESENTATION_API UChopItDialogueSequence : public UPrimaryDataAsset
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Dialogue") FName DialogueId;
+	/** Optional authored view; empty keeps the standard dialogue presentation. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Dialogue") TSubclassOf<UChopItDialogueWidget> WidgetClass;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Dialogue") TObjectPtr<UChopItDialogueTheme> Theme;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Dialogue") FName EntryLineId;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Dialogue") TArray<FChopItDialogueLine> Lines;

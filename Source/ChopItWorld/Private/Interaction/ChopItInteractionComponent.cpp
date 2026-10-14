@@ -7,6 +7,37 @@
 #include "Interaction/ChopItInteractable.h"
 #include "ChopItCollision.h"
 
+namespace
+{
+bool HasBlueprintEventOverride(const AActor* Actor, const FName FunctionName)
+{
+	const UFunction* Function = Actor ? Actor->FindFunction(FunctionName) : nullptr;
+	return Function && Function->GetOuter() != UChopItInteractable::StaticClass();
+}
+
+bool CanInteract(AActor* Candidate, AActor* Interactor)
+{
+	// UE 5.8 may resolve the inherited interface UFunction without dispatching its
+	// native _Implementation. Preserve ProcessEvent for actual Blueprint overrides.
+	if (!HasBlueprintEventOverride(Candidate, TEXT("CanInteract")))
+	{
+		if (const IChopItInteractable* Native = Cast<IChopItInteractable>(Candidate))
+			return Native->CanInteract_Implementation(Interactor);
+	}
+	return IChopItInteractable::Execute_CanInteract(Candidate, Interactor);
+}
+
+bool Interact(AActor* Candidate, AActor* Interactor)
+{
+	if (!HasBlueprintEventOverride(Candidate, TEXT("Interact")))
+	{
+		if (IChopItInteractable* Native = Cast<IChopItInteractable>(Candidate))
+			return Native->Interact_Implementation(Interactor);
+	}
+	return IChopItInteractable::Execute_Interact(Candidate, Interactor);
+}
+}
+
 UChopItInteractionComponent::UChopItInteractionComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -45,7 +76,7 @@ bool UChopItInteractionComponent::TryInteract()
 			continue;
 		}
 		const double DistanceSquared = FVector::DistSquared(Owner->GetActorLocation(), Candidate->GetActorLocation());
-		if (DistanceSquared <= BestDistanceSquared && IChopItInteractable::Execute_CanInteract(Candidate, Owner))
+		if (DistanceSquared <= BestDistanceSquared && CanInteract(Candidate, Owner))
 		{
 			BestActor = Candidate;
 			BestDistanceSquared = DistanceSquared;
@@ -57,5 +88,5 @@ bool UChopItInteractionComponent::TryInteract()
 		UE_LOG(LogChopIt, Display, TEXT("No valid interactable within %.0f cm."), InteractionRange);
 		return false;
 	}
-	return IChopItInteractable::Execute_Interact(BestActor, Owner);
+	return Interact(BestActor, Owner);
 }

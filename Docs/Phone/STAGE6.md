@@ -1,0 +1,9 @@
+# Teléfono misterioso — Etapa 6: presentación y diálogo
+
+Al terminar la revelación, el estado pasa a `Dialogue`. `UChopItPhoneDialogueBinding`, creado por el HUD para cada teléfono local, espera a que el subsistema de diálogos esté libre y abre la secuencia asignada en el Data Asset de la variante. El subsistema existente gestiona escritura progresiva, navegación de opciones, pausa, bloqueo de movimiento, cancelación y retorno al gameplay. Al cerrar la conversación, el teléfono pasa a `Completed` y se destruyen los recursos de presentación.
+
+`AChopItPhoneDialogueScene` clona los meshes y materiales ya seleccionados en el teléfono y los captura en un render target aislado. Usa el material de composición de la presentación del cofre. `UChopItPhonePresentationViewModel` expone nombre, color y material a `UChopItPhonePresentationWidget`; la vista del diálogo existente queda delante de la captura. La escena se actualiza con el ticker en tiempo real solo mientras el diálogo está activo, porque el mundo está pausado.
+
+Los assets `DA_PhoneDialogueDevil` y `DA_PhoneDialogueAngel` están referenciados por `DA_PhoneDevil` y `DA_PhoneAngel`. Cada conversación incluye cuatro opciones editables: aceptar, rechazar, mostrar beneficios y mostrar consecuencias. Los textos son provisionales y las elecciones no conceden recompensas. Para agregar otra variante, asignar una secuencia de diálogo válida en su Data Asset.
+
+`Scripts/BuildMysteryPhoneStage6.py` crea los assets iniciales sin reemplazar líneas ya editadas. La prueba `ChopIt.Phone.Stage6.DialoguePresentation` valida ambos diálogos, sus opciones, la ausencia de eventos de recompensa y la captura 3D. Queda pendiente comprobar el aspecto final en PIE con los modelos definitivos del teléfono; los cubos provisionales siguen siendo visibles.

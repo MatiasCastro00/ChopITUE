@@ -88,7 +88,8 @@ void UChopItDialogueSubsystem::BeginRequest(const FChopItPendingDialogueRequest&
 		return;
 	}
 
-	Widget = CreateWidget<UChopItDialogueWidget>(PC, UChopItDialogueWidget::StaticClass());
+	Widget = CreateWidget<UChopItDialogueWidget>(PC, CurrentSequence->WidgetClass
+		? CurrentSequence->WidgetClass.Get() : UChopItDialogueWidget::StaticClass());
 	if (!Widget)
 	{
 		FinishActive(EChopItDialogueEndReason::InvalidData);
@@ -250,9 +251,10 @@ void UChopItDialogueSubsystem::RefreshChoices()
 	TArray<FChopItDialogueChoiceView> Views;
 	if (CurrentLine)
 	{
-		for (int32 Index = 0; Index < CurrentLine->Choices.Num(); ++Index)
+		const TArray<FChopItDialogueChoice>& Choices = CurrentLine->LineId == ChoiceOverrideLineId ? ChoiceOverrides : CurrentLine->Choices;
+		for (int32 Index = 0; Index < Choices.Num(); ++Index)
 		{
-			const FChopItDialogueChoice& Choice = CurrentLine->Choices[Index];
+			const FChopItDialogueChoice& Choice = Choices[Index];
 			if (!Choice.IsAvailable(CurrentContext.Tags)) continue;
 			AvailableChoiceIndices.Add(Index);
 			FFormatNamedArguments Arguments;
@@ -260,11 +262,21 @@ void UChopItDialogueSubsystem::RefreshChoices()
 			{
 				Arguments.Add(Argument.Name.ToString(), Argument.Value);
 			}
-			Views.Add({Choice.ChoiceId, Arguments.IsEmpty() ? Choice.Text : FText::Format(Choice.Text, Arguments)});
+			Views.Add({Choice.ChoiceId, Arguments.IsEmpty() ? Choice.Text : FText::Format(Choice.Text, Arguments),
+				Arguments.IsEmpty() ? Choice.Description : FText::Format(Choice.Description, Arguments)});
 		}
 	}
 	SelectedChoice = FMath::Clamp(SelectedChoice, 0, FMath::Max(0, Views.Num() - 1));
 	Widget->SetChoices(Views, SelectedChoice);
+}
+
+bool UChopItDialogueSubsystem::SetChoiceOverrides(const FChopItDialogueHandle Handle, const FName LineId, const TArray<FChopItDialogueChoice>& Choices)
+{
+	if (!Handle.IsValid() || !(Handle == CurrentHandle) || !CurrentLine || CurrentLine->LineId != LineId || Choices.IsEmpty()) return false;
+	ChoiceOverrideLineId = LineId;
+	ChoiceOverrides = Choices;
+	if (State == EChopItDialogueState::ShowingChoices) RefreshChoices();
+	return true;
 }
 
 void UChopItDialogueSubsystem::MoveChoice(const int32 Direction)
@@ -274,12 +286,21 @@ void UChopItDialogueSubsystem::MoveChoice(const int32 Direction)
 	Widget->SetSelectedChoice(SelectedChoice);
 }
 
+void UChopItDialogueSubsystem::SetChoiceSelection(const int32 VisibleChoiceIndex)
+{
+	if (State != EChopItDialogueState::ShowingChoices || !AvailableChoiceIndices.IsValidIndex(VisibleChoiceIndex)) return;
+	if (SelectedChoice == VisibleChoiceIndex) return;
+	SelectedChoice = VisibleChoiceIndex;
+	if (Widget) Widget->SetSelectedChoice(SelectedChoice);
+}
+
 bool UChopItDialogueSubsystem::SelectChoice(const int32 VisibleChoiceIndex)
 {
 	if (State != EChopItDialogueState::ShowingChoices || !CurrentLine || AvailableChoiceIndices.IsEmpty()) return false;
 	const int32 Visible = VisibleChoiceIndex == INDEX_NONE ? SelectedChoice : VisibleChoiceIndex;
 	if (!AvailableChoiceIndices.IsValidIndex(Visible)) return false;
-	const FChopItDialogueChoice& Choice = CurrentLine->Choices[AvailableChoiceIndices[Visible]];
+	const TArray<FChopItDialogueChoice>& Choices = CurrentLine->LineId == ChoiceOverrideLineId ? ChoiceOverrides : CurrentLine->Choices;
+	const FChopItDialogueChoice& Choice = Choices[AvailableChoiceIndices[Visible]];
 	OnChoiceSelected.Broadcast(CurrentHandle, CurrentLine->LineId, Choice.ChoiceId);
 	BroadcastEvent(Choice.EventTag, NAME_None, Choice.ChoiceId);
 	BeginAdvance(Choice.NextLineId);
@@ -540,6 +561,8 @@ void UChopItDialogueSubsystem::FinishActive(const EChopItDialogueEndReason Reaso
 	bOwnedPause = false;
 	if (Widget) { Widget->RemoveFromParent(); Widget = nullptr; }
 	CurrentLine = nullptr;
+	ChoiceOverrides.Reset();
+	ChoiceOverrideLineId = NAME_None;
 	CurrentSequence = nullptr;
 	CurrentContext = {};
 	CurrentDocument = {};

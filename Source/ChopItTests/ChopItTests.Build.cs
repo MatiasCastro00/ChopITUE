@@ -13,6 +13,9 @@ public class ChopItTests : ModuleRules
 			"ChopItCombat",
 			"ChopItAI",
 			"ChopItWorld",
+			"ChopItEditor",
+			"GeometryCore",
+			"GeometryFramework",
 			"ChopItPresentation",
 			"EnhancedInput",
 			"GameplayTags",
@@ -23,6 +26,7 @@ public class ChopItTests : ModuleRules
 			"Slate",
 			"SlateCore",
 			"UMG",
+			"ModelViewViewModel",
 			"UnrealEd",
 			"RenderCore",
 			"RHI"

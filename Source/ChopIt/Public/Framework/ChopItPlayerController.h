@@ -12,9 +12,12 @@ class CHOPIT_API AChopItPlayerController final : public APlayerController
 
 public:
 	AChopItPlayerController();
+	virtual void GetAudioListenerPosition(FVector& OutLocation, FVector& OutFrontDir, FVector& OutRightDir) const override;
+	virtual bool GetAudioListenerAttenuationOverridePosition(FVector& OutLocation) const override;
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void PlayerTick(float DeltaTime) override;
 	virtual void SetupInputComponent() override;
 
 private:
@@ -34,7 +37,13 @@ private:
 	void SelectUpgradeOne();
 	void SelectUpgradeTwo();
 	void SelectUpgradeThree();
+	void RerollPhoneOffer();
 	void SelectUpgrade(int32 Index);
+	void SelectChoiceWithMouse();
+	void MoveChoiceLeft();
+	void MoveChoiceRight();
+	void ConfirmChoice();
+	void HandleChoiceStick(float Value);
 	void CloseShop();
 	void SpawnRewardChestAhead();
 	void ToggleDebugItemMenu();
@@ -53,4 +62,7 @@ private:
 	UPROPERTY(Transient) TArray<TObjectPtr<AActor>> IntroCameraAnchors;
 	FTimerHandle MatchIntroTimer;
 	bool bMatchIntroAttempted = false;
+	bool bChoiceCursorOwned = false;
+	bool bPreviousChoiceCursor = false;
+	bool bChoiceStickHeld = false;
 };

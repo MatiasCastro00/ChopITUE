@@ -21,6 +21,9 @@ public:
 
 	bool SelectOffer(int32 OfferIndex);
 	bool ApplyUpgrade(UChopItUpgradeDefinition* Upgrade, UChopItCombatStatsComponent* Stats);
+	/** Phone bargains apply their benefit and price without consuming a level-up. */
+	bool ApplyPhoneBargain(class UChopItPhoneBargainDefinition* Bargain, UChopItCombatStatsComponent* Stats, class UChopItHealthComponent* Health);
+	int32 GetPhoneBargainStackCount(FName BargainId) const { return PhoneBargainStacks.FindRef(BargainId); }
 	bool RemoveLastStack(FName UpgradeId, UChopItCombatStatsComponent* Stats);
 	bool HasActiveOffer() const { return ActiveOffers.Num() > 0; }
 	const TArray<TObjectPtr<UChopItUpgradeDefinition>>& GetActiveOffers() const { return ActiveOffers; }
@@ -57,6 +60,7 @@ private:
 	TArray<TObjectPtr<UChopItUpgradeDefinition>> ActiveOffers;
 
 	TMap<FName, int32> StackCounts;
+	TMap<FName, int32> PhoneBargainStacks;
 	TMap<FName, TArray<FGuid>> AppliedHandles;
 	int32 OfferSequence = 0;
 	bool bSelectionLocked = false;

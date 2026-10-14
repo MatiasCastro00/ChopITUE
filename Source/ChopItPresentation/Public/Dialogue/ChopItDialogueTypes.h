@@ -117,5 +117,6 @@ struct CHOPITPRESENTATION_API FChopItDialogueChoiceView
 
 	UPROPERTY(BlueprintReadOnly, Category="Dialogue") FName ChoiceId;
 	UPROPERTY(BlueprintReadOnly, Category="Dialogue") FText Text;
+	UPROPERTY(BlueprintReadOnly, Category="Dialogue") FText Description;
 };
 

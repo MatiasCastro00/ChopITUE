@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameFramework/HUD.h"
+#include "Components/SlateWrapperTypes.h"
 #include "ChopItHUD.generated.h"
 
 class UChopItUpgradeDefinition;
@@ -11,6 +12,12 @@ class UChopItItemDataAsset;
 class UTexture2D;
 class USoundBase;
 class AChopItChestRevealScene;
+class AChopItMysteryPhone;
+class UChopItPhoneIndicatorBinding;
+class UChopItPhoneIndicatorConfig;
+class UChopItPhonePromptBinding;
+class UChopItPhonePromptConfig;
+class UChopItPhoneDialogueBinding;
 
 /** Screen-space presentation for run state and level-up choices. It owns no gameplay rules. */
 UCLASS()
@@ -34,6 +41,14 @@ public:
 	void ToggleDebugItemMenu();
 	void CloseDebugItemMenu();
 	bool IsDebugItemMenuOpen() const { return bDebugItemMenuOpen; }
+	bool IsModalOverlayActive() const;
+	bool IsChoiceOverlayActive() const;
+	int32 GetChoiceAtScreenPosition(const FVector2D& ScreenPosition) const;
+	void MoveChoiceSelection(int32 Delta);
+	int32 GetChoiceSelection() const { return SelectedChoiceIndex; }
+	void SetPhoneDialogueActive(bool bActive);
+	bool IsPhoneDialogueActive() const { return bPhoneDialogueActive; }
+	bool RerollPhoneOffer();
 	void MoveDebugItemSelection(int32 Delta);
 	void GrantSelectedDebugItem();
 
@@ -54,11 +69,22 @@ private:
 	void DrawDebugItemMenu(float Scale);
 	UTexture2D* ResolveItemIcon(const UChopItItemDataAsset* Item);
 	void RefreshPSXWidget();
+	void AttachPhoneIndicator(AChopItMysteryPhone* Phone);
+	void HandleActorSpawned(AActor* Actor);
 	void DrawPanel(float X, float Y, float Width, float Height, const FLinearColor& Fill, const FLinearColor& Border, float BorderSize = 3.0f);
 	void DrawBar(float X, float Y, float Width, float Height, float Fraction, const FLinearColor& Fill, const FLinearColor& Back);
 	void DrawLabel(const FString& Text, float X, float Y, const FLinearColor& Color, float TextScale = 1.0f, bool bLarge = false);
 	void DrawCenteredLabel(const FString& Text, float CenterX, float Y, const FLinearColor& Color, float TextScale = 1.0f, bool bLarge = false);
 
+	bool bPhoneDialogueActive = false;
+	int32 SelectedChoiceIndex = 0;
+	int32 HoveredChoiceIndex = INDEX_NONE;
+	FVector2D LastChoiceMousePosition = FVector2D::ZeroVector;
+	bool bHasChoiceMousePosition = false;
+	bool bChoiceHUDMousePassThrough = false;
+	bool bChoiceOverlayWasActive = false;
+	ESlateVisibility PreChoiceHUDVisibility = ESlateVisibility::Visible;
+	ESlateVisibility PrePhoneHUDVisibility = ESlateVisibility::Visible;
 	bool bMissionTrackerRequested = false;
 	bool bMissionTrackerDismissed = false;
 	bool bMissionCompletionStarted = false;
@@ -71,6 +97,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> PSXHUDWidget;
+	UPROPERTY(Transient) TObjectPtr<UChopItPhoneIndicatorConfig> PhoneIndicatorConfig;
+	UPROPERTY(Transient) TArray<TObjectPtr<UChopItPhoneIndicatorBinding>> PhoneIndicators;
+	UPROPERTY(Transient) TObjectPtr<UChopItPhonePromptConfig> PhonePromptConfig;
+	UPROPERTY(Transient) TArray<TObjectPtr<UChopItPhonePromptBinding>> PhonePrompts;
+	UPROPERTY(Transient) TArray<TObjectPtr<UChopItPhoneDialogueBinding>> PhoneDialogues;
+	FDelegateHandle PhoneActorSpawnedHandle;
 	TMap<FName, float> PSXFillDesignWidths;
 	UPROPERTY(Transient) TObjectPtr<UChopItItemDataAsset> ItemRevealResult;
 	UPROPERTY(Transient) TObjectPtr<AChopItChestRevealScene> ChestRevealScene;

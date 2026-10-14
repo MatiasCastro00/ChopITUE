@@ -101,3 +101,12 @@ void UChopItHealthComponent::SetMaxHealth(const float NewMaxHealth)
 	MaxHealth = FMath::Max(1.0f, NewMaxHealth);
 	ResetHealth();
 }
+
+void UChopItHealthComponent::ScaleMaxHealthPreservingRatio(const float Multiplier)
+{
+	if (!FMath::IsFinite(Multiplier) || Multiplier <= 0.0f) return;
+	const float Ratio = CurrentHealth / FMath::Max(1.0f, MaxHealth);
+	MaxHealth = FMath::Max(1.0f, MaxHealth * Multiplier);
+	CurrentHealth = FMath::Clamp(Ratio * MaxHealth, 0.0f, MaxHealth);
+	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, nullptr);
+}

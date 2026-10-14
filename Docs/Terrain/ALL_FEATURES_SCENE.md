@@ -1,0 +1,9 @@
+# Escena integral con terreno generado
+
+Abre `/Game/ChopIt/World/Maps/L_Test_AllFeaturesTerrain` y pulsa **Play**. El mapa usa `ChopItAllFeaturesGameMode`, que carga el Data Asset seleccionado como terreno predeterminado en **Project Settings → Game → ChopIt Terrain**. En cada partida genera una nueva seed, crea un único actor de terreno y coloca los actores jugables sobre su superficie antes de iniciar el juego. Alrededor del Player Start crea una zona completamente plana de al menos 10 metros de radio y una transición suave al relieve. El radio efectivo considera el tamaño de los triángulos para que la colisión también sea horizontal. El DA conserva todos sus parámetros y no guarda la seed.
+
+La escena reúne el personaje y HUD habituales, cosecha de 20 árboles, cabaña y contrato de cuota, entrega y venta de madera, tienda, ciclo día/noche, aparición nocturna de enemigos, encuentro élite y recompensa de jefe mediante el GameState, progresión y mejoras del personaje, cuatro blancos de combate, diálogo interactivo, demostración de cámara y estación de cadenas. La navegación usa generación dinámica sobre el terreno. La escena conserva la iluminación y el posprocesado de la escena de progresión.
+
+El nivel editado no contiene un suelo fijo ni un terreno guardado: el paisaje aparece al entrar en Play. El Output Log muestra `Full feature world generated`, la ruta del DA, la seed usada y cuántos actores se alinearon. Para cambiar la configuración, edita y guarda el DA predeterminado. Para elegir otro, abre ese DA y pulsa **Set as Default Terrain**. El script `Scripts/BuildAllFeaturesTerrainWorld.py` documenta la construcción de la escena y evita sobrescribirla si ya existe.
+
+Esta escena es una integración jugable de los sistemas existentes. Algunas funciones se activan al avanzar el ciclo o al interactuar con sus estaciones; no todas ocurren al inicio de la partida.

@@ -20,19 +20,19 @@ class UVerticalBox;
 
 /** Passive, native dialogue view. Runtime rules remain in UChopItDialogueSubsystem. */
 UCLASS()
-class CHOPITPRESENTATION_API UChopItDialogueWidget final : public UUserWidget
+class CHOPITPRESENTATION_API UChopItDialogueWidget : public UUserWidget
 {
 	GENERATED_BODY()
 public:
-	void ConfigureTheme(const UChopItDialogueTheme* InTheme, bool bInReduceMotion, float InUIScale = 1.0f);
-	void ShowLine(const FChopItDialogueLine& Line, const FChopItDialogueMarkupDocument& Document);
-	void SetRevealCount(int32 Count);
-	void SetChoices(const TArray<FChopItDialogueChoiceView>& Choices, int32 SelectedIndex);
-	void SetSelectedChoice(int32 SelectedIndex);
-	void SetPortraitExpression(const UChopItDialogueSpeakerDefinition* Speaker, FName Expression, bool bReact = true);
-	void SetAwaitingAdvance(bool bAwaiting);
-	void SetTransitionProgress(float Alpha, bool bExiting, bool bWholePanel);
-	void ResetTransition();
+	virtual void ConfigureTheme(const UChopItDialogueTheme* InTheme, bool bInReduceMotion, float InUIScale = 1.0f);
+	virtual void ShowLine(const FChopItDialogueLine& Line, const FChopItDialogueMarkupDocument& Document);
+	virtual void SetRevealCount(int32 Count);
+	virtual void SetChoices(const TArray<FChopItDialogueChoiceView>& Choices, int32 SelectedIndex);
+	virtual void SetSelectedChoice(int32 SelectedIndex);
+	virtual void SetPortraitExpression(const UChopItDialogueSpeakerDefinition* Speaker, FName Expression, bool bReact = true);
+	virtual void SetAwaitingAdvance(bool bAwaiting);
+	virtual void SetTransitionProgress(float Alpha, bool bExiting, bool bWholePanel);
+	virtual void ResetTransition();
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

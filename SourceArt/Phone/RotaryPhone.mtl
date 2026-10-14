@@ -1,0 +1,11 @@
+newmtl Shell
+Kd 0.62 0.05 0.04
+
+newmtl Dark
+Kd 0.025 0.018 0.016
+
+newmtl Metal
+Kd 0.64 0.43 0.16
+
+newmtl Ivory
+Kd 0.87 0.78 0.62

@@ -41,12 +41,15 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Dialogue") void AdvanceOrComplete();
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Dialogue") void MoveChoice(int32 Direction);
+	UFUNCTION(BlueprintCallable, Category="ChopIt|Dialogue") void SetChoiceSelection(int32 VisibleChoiceIndex);
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Dialogue") bool SelectChoice(int32 VisibleChoiceIndex = -1);
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Dialogue") bool CancelDialogue();
 	UFUNCTION(BlueprintCallable, Category="ChopIt|Dialogue") bool StopDialogue(FChopItDialogueHandle Handle);
 	UFUNCTION(BlueprintPure, Category="ChopIt|Dialogue") bool IsDialogueActive() const { return State != EChopItDialogueState::Closed; }
 	UFUNCTION(BlueprintPure, Category="ChopIt|Dialogue") EChopItDialogueState GetState() const { return State; }
 	UFUNCTION(BlueprintPure, Category="ChopIt|Dialogue") UChopItDialogueSequence* GetActiveSequence() const { return CurrentSequence; }
+	UChopItDialogueWidget* GetWidget() const { return Widget; }
+	bool SetChoiceOverrides(FChopItDialogueHandle Handle, FName LineId, const TArray<FChopItDialogueChoice>& Choices);
 
 	UPROPERTY(BlueprintAssignable, Category="ChopIt|Dialogue") FChopItDialogueStartedSignature OnDialogueStarted;
 	UPROPERTY(BlueprintAssignable, Category="ChopIt|Dialogue") FChopItDialogueEndedSignature OnDialogueEnded;
@@ -89,6 +92,8 @@ private:
 	FChopItDialogueMarkupDocument CurrentDocument;
 	const FChopItDialogueLine* CurrentLine = nullptr;
 	TArray<int32> AvailableChoiceIndices;
+	TArray<FChopItDialogueChoice> ChoiceOverrides;
+	FName ChoiceOverrideLineId;
 	FChopItCameraHandle InputLockHandle;
 	FChopItCameraHandle SustainedCameraShakeHandle;
 	FTSTicker::FDelegateHandle TickerHandle;

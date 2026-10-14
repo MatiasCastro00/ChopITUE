@@ -6,6 +6,8 @@
 #include "GameFramework/PlayerState.h"
 #include "Progression/ChopItExperienceComponent.h"
 #include "Progression/ChopItUpgradeDefinition.h"
+#include "Phone/ChopItPhoneBargainDefinition.h"
+#include "Combat/ChopItHealthComponent.h"
 
 UChopItUpgradeOfferComponent::UChopItUpgradeOfferComponent()
 {
@@ -137,6 +139,18 @@ bool UChopItUpgradeOfferComponent::ApplyUpgrade(
 		Handles.Add(Stats->AddModifier(Modifier));
 	}
 	StackCounts.FindOrAdd(Upgrade->UpgradeId)++;
+	return true;
+}
+
+bool UChopItUpgradeOfferComponent::ApplyPhoneBargain(UChopItPhoneBargainDefinition* Bargain,
+	UChopItCombatStatsComponent* Stats, UChopItHealthComponent* Health)
+{
+	if (!IsValid(Bargain) || !IsValid(Stats) || Bargain->BargainId.IsNone() || Bargain->Modifiers.IsEmpty()
+		|| !FMath::IsFinite(Bargain->MaxHealthMultiplier) || Bargain->MaxHealthMultiplier <= 0.0f
+		|| (Bargain->MaxHealthMultiplier != 1.0f && !IsValid(Health))) return false;
+	for (const FChopItStatModifier& Modifier : Bargain->Modifiers) Stats->AddModifier(Modifier);
+	if (Bargain->MaxHealthMultiplier != 1.0f) Health->ScaleMaxHealthPreservingRatio(Bargain->MaxHealthMultiplier);
+	PhoneBargainStacks.FindOrAdd(Bargain->BargainId)++;
 	return true;
 }
 

@@ -40,6 +40,24 @@ AChopItPlayerController::AChopItPlayerController()
 	bShouldPerformFullTickWhenPaused = true;
 }
 
+void AChopItPlayerController::GetAudioListenerPosition(
+	FVector& OutLocation, FVector& OutFrontDir, FVector& OutRightDir) const
+{
+	Super::GetAudioListenerPosition(OutLocation, OutFrontDir, OutRightDir);
+	if (const APawn* ListenerPawn = GetPawn())
+		OutLocation = ListenerPawn->GetActorLocation() + FVector(0.0f, 0.0f, 55.0f);
+}
+
+bool AChopItPlayerController::GetAudioListenerAttenuationOverridePosition(FVector& OutLocation) const
+{
+	if (const APawn* ListenerPawn = GetPawn())
+	{
+		OutLocation = ListenerPawn->GetActorLocation() + FVector(0.0f, 0.0f, 55.0f);
+		return true;
+	}
+	return Super::GetAudioListenerAttenuationOverridePosition(OutLocation);
+}
+
 void AChopItPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -68,6 +86,30 @@ void AChopItPlayerController::BeginPlay()
 	{
 		GetWorld()->GetTimerManager().SetTimer(MatchIntroTimer, this, &AChopItPlayerController::TryStartMatchIntro, 0.25f, true);
 	}
+}
+
+void AChopItPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+	const AChopItHUD* HUD = GetHUD<AChopItHUD>();
+	if (HUD && HUD->IsPhoneDialogueActive()) return;
+	const bool bChoiceVisible = HUD && HUD->IsChoiceOverlayActive();
+	if (bChoiceVisible == bChoiceCursorOwned) return;
+	if (bChoiceVisible)
+	{
+		bPreviousChoiceCursor = bShowMouseCursor;
+		bShowMouseCursor = true;
+		FInputModeGameAndUI Mode;
+		Mode.SetHideCursorDuringCapture(false);
+		SetInputMode(Mode);
+	}
+	else
+	{
+		bShowMouseCursor = bPreviousChoiceCursor;
+		SetInputMode(FInputModeGameOnly());
+		bChoiceStickHeld = false;
+	}
+	bChoiceCursorOwned = bChoiceVisible;
 }
 
 AChopItCameraAnchor* AChopItPlayerController::SpawnIntroCameraAnchor(
@@ -277,6 +319,7 @@ void AChopItPlayerController::SetupInputComponent()
 	Two.bExecuteWhenPaused = true;
 	FInputKeyBinding& Three = InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AChopItPlayerController::SelectUpgradeThree);
 	Three.bExecuteWhenPaused = true;
+	InputComponent->BindKey(EKeys::R, IE_Pressed, this, &AChopItPlayerController::RerollPhoneOffer).bExecuteWhenPaused = true;
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AChopItPlayerController::CloseShop).bExecuteWhenPaused = true;
 	InputComponent->BindKey(EKeys::F7, IE_Pressed, this, &AChopItPlayerController::SpawnRewardChestAhead);
 	InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AChopItPlayerController::ToggleDebugItemMenu).bExecuteWhenPaused = true;
@@ -285,6 +328,20 @@ void AChopItPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::PageUp, IE_Pressed, this, &AChopItPlayerController::DebugItemPageUp).bExecuteWhenPaused = true;
 	InputComponent->BindKey(EKeys::PageDown, IE_Pressed, this, &AChopItPlayerController::DebugItemPageDown).bExecuteWhenPaused = true;
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AChopItPlayerController::DebugItemGrant).bExecuteWhenPaused = true;
+	const auto BindChoiceKey = [this](const FKey& Key, void (AChopItPlayerController::*Handler)())
+	{
+		FInputKeyBinding& Binding = InputComponent->BindKey(Key, IE_Pressed, this, Handler);
+		Binding.bExecuteWhenPaused = true;
+		Binding.bConsumeInput = false;
+	};
+	BindChoiceKey(EKeys::LeftMouseButton, &AChopItPlayerController::SelectChoiceWithMouse);
+	BindChoiceKey(EKeys::Gamepad_DPad_Left, &AChopItPlayerController::MoveChoiceLeft);
+	BindChoiceKey(EKeys::Gamepad_DPad_Right, &AChopItPlayerController::MoveChoiceRight);
+	BindChoiceKey(EKeys::Gamepad_FaceButton_Bottom, &AChopItPlayerController::ConfirmChoice);
+	BindChoiceKey(EKeys::Gamepad_FaceButton_Top, &AChopItPlayerController::RerollPhoneOffer);
+	FInputAxisKeyBinding& Stick = InputComponent->BindAxisKey(EKeys::Gamepad_LeftX, this, &AChopItPlayerController::HandleChoiceStick);
+	Stick.bExecuteWhenPaused = true;
+	Stick.bConsumeInput = false;
 
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
 	{
@@ -301,6 +358,7 @@ void AChopItPlayerController::SetupInputComponent()
 
 void AChopItPlayerController::ToggleDebugItemMenu()
 {
+	if (const AChopItHUD* HUD = GetHUD<AChopItHUD>(); HUD && HUD->IsPhoneDialogueActive()) return;
 	if (AChopItHUD* HUD = Cast<AChopItHUD>(GetHUD())) HUD->ToggleDebugItemMenu();
 }
 
@@ -398,8 +456,52 @@ void AChopItPlayerController::SelectUpgradeThree()
 	SelectUpgrade(2);
 }
 
+void AChopItPlayerController::SelectChoiceWithMouse()
+{
+	AChopItHUD* HUD = GetHUD<AChopItHUD>();
+	if (!HUD || !HUD->IsChoiceOverlayActive()) return;
+	float X = 0.f, Y = 0.f;
+	if (!GetMousePosition(X, Y)) return;
+	const int32 Index = HUD->GetChoiceAtScreenPosition(FVector2D(X, Y));
+	if (Index != INDEX_NONE) SelectUpgrade(Index);
+}
+
+void AChopItPlayerController::MoveChoiceLeft()
+{
+	if (AChopItHUD* HUD = GetHUD<AChopItHUD>(); HUD && HUD->IsChoiceOverlayActive()) HUD->MoveChoiceSelection(-1);
+	else if (AChopItHUD* PhoneHUD = GetHUD<AChopItHUD>(); PhoneHUD && PhoneHUD->IsPhoneDialogueActive()) DialoguePreviousChoice();
+}
+
+void AChopItPlayerController::MoveChoiceRight()
+{
+	if (AChopItHUD* HUD = GetHUD<AChopItHUD>(); HUD && HUD->IsChoiceOverlayActive()) HUD->MoveChoiceSelection(1);
+	else if (AChopItHUD* PhoneHUD = GetHUD<AChopItHUD>(); PhoneHUD && PhoneHUD->IsPhoneDialogueActive()) DialogueNextChoice();
+}
+
+void AChopItPlayerController::ConfirmChoice()
+{
+	if (AChopItHUD* HUD = GetHUD<AChopItHUD>(); HUD && HUD->IsChoiceOverlayActive()) SelectUpgrade(HUD->GetChoiceSelection());
+}
+
+void AChopItPlayerController::HandleChoiceStick(float Value)
+{
+	const bool bHeld = FMath::Abs(Value) > .6f;
+	if (bHeld && !bChoiceStickHeld)
+	{
+		if (Value < 0) MoveChoiceLeft();
+		else MoveChoiceRight();
+	}
+	bChoiceStickHeld = bHeld;
+}
+
 void AChopItPlayerController::SelectUpgrade(const int32 Index)
 {
+	if (ULocalPlayer* LP = GetLocalPlayer())
+		if (UChopItDialogueSubsystem* Dialogue = LP->GetSubsystem<UChopItDialogueSubsystem>(); Dialogue && Dialogue->IsDialogueActive())
+		{
+			Dialogue->SelectChoice(Index);
+			return;
+		}
 	if (ULocalPlayer* LP = GetLocalPlayer()) if (const UChopItCameraDirectorSubsystem* Camera = LP->GetSubsystem<UChopItCameraDirectorSubsystem>(); Camera && Camera->IsInputLocked(EChopItCameraInputLock::Actions)) return;
 	if (const AChopItGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr)
 	{
@@ -431,6 +533,11 @@ void AChopItPlayerController::SelectUpgrade(const int32 Index)
 			Shop->SelectOffer(Index, GetPawn());
 		}
 	}
+}
+
+void AChopItPlayerController::RerollPhoneOffer()
+{
+	if (AChopItHUD* HUD = GetHUD<AChopItHUD>()) HUD->RerollPhoneOffer();
 }
 
 void AChopItPlayerController::CloseShop()

@@ -1,0 +1,17 @@
+# Controles del editor y Data Asset de terreno
+
+En **Tools → ChopIt Terrain Generator**, cada control muestra un círculo con signo de exclamación a la derecha del nombre. Al pasar el cursor, aparece una descripción. Cuando cambia un valor, aparece una flecha curva junto al campo para restaurar solo ese control a su valor inicial. Los controles de terreno y malla bloqueados mantienen su bloqueo durante la restauración. Si la combinación resultante es inválida, el editor conserva el valor actual y muestra el motivo.
+
+**Save As Data Asset** abre el diálogo de assets de Unreal. Elige nombre y carpeta; la herramienta guarda un `ChopItTerrainDataAsset` y lo selecciona en el Content Browser. Toma los valores actuales del panel, incluso si todavía no se ha pulsado **Generate**. Contiene el perfil de terreno y la configuración de malla, sin propiedad Seed. No contiene heightmap, máscaras pintadas ni chunks; esos datos corresponden al actor y a la exportación completa del terreno.
+
+Durante la partida, carga una referencia al Data Asset y llama a **Spawn Terrain** con un World Context, transform y `RuntimeSeed`. Esto crea un actor una sola vez con esa Seed. Para reutilizar un actor existente, llama a **Generate On Actor** con la nueva Seed. En C++, `MakeSettings(RuntimeSeed)` devuelve `FChopItTerrainSettings` con todos los valores guardados y la Seed suministrada. La misma Seed y el mismo Data Asset producen el mismo campo para una versión dada del generador.
+
+El editor guarda el asset en disco al confirmar el diálogo. Si el guardado falla, muestra un mensaje y deja el asset abierto en Unreal para que pueda guardarse desde el Content Browser. La prueba automatizada `ChopIt.Terrain.Data.SeedlessAssetRuntime` comprueba que el perfil no tiene una propiedad Seed, que los demás controles se copian exactamente y que dos Seeds producen alturas diferentes sobre un actor generado.
+
+## Terreno predeterminado y mundo de prueba
+
+Abre un `ChopItTerrainDataAsset` y pulsa **Set as Default Terrain** en **Project Default**. El botón cambia a **Current Default Terrain** cuando ese asset está seleccionado. La referencia se guarda en `Config/DefaultGame.ini`; también puede cambiarse en **Project Settings → Game → ChopIt Terrain**. Guarda los cambios del asset antes de jugar. Esta selección se aplica a los mundos que usan el generador predeterminado.
+
+El mapa **/Game/ChopIt/World/Maps/L_Test_TerrainDefault** utiliza `ChopItTerrainTestGameMode`. Al pulsar **Play**, carga el asset predeterminado (inicialmente `/Game/ChopIt/World/DA_Terrain`), genera el terreno antes de crear al jugador y sitúa una cámara libre por encima. En edición solo contiene iluminación y un Player Start; la geometría aparece al iniciar la partida. Controles: **WASD** para moverse, **ratón** para mirar y **Q/E** para bajar/subir. Cada Play genera el terreno en ese momento con una nueva seed, conservando todos los valores del DA. Este mapa ignora opciones de seed fija heredadas de partidas anteriores. La seed utilizada y la ruta del asset aparecen en el Output Log buscando `Terrain test generated`.
+
+`Scripts/BuildTerrainDefaultTestWorld.py` crea el mapa mediante Unreal Python y evita sobrescribir un mapa existente. La prueba `ChopIt.Terrain.Data.DefaultWorld` comprueba que el GameMode toma la receta seleccionada y usa la seed de la partida para generar geometría. Los Data Assets de terreno bajo `/Game` se registran en Asset Manager para incluirlos en el cocinado.

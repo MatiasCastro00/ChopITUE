@@ -26,6 +26,7 @@ public:
 	EChopItDamageTargetKind TargetKind = EChopItDamageTargetKind::Other;
 	void ResetHealth();
 	void SetMaxHealth(float NewMaxHealth);
+	void ScaleMaxHealthPreservingRatio(float Multiplier);
 	bool IsAlive() const { return CurrentHealth > 0.0f; }
 	float GetCurrentHealth() const { return CurrentHealth; }
 	float GetMaxHealth() const { return MaxHealth; }

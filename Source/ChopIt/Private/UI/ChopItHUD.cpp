@@ -1,5 +1,11 @@
 #include "UI/ChopItHUD.h"
 #include "UI/ChopItJuiceWidget.h"
+#include "UI/Phone/ChopItPhoneIndicatorBinding.h"
+#include "UI/Phone/ChopItPhoneIndicatorConfig.h"
+#include "UI/Phone/ChopItPhonePromptBinding.h"
+#include "UI/Phone/ChopItPhonePromptConfig.h"
+#include "UI/Phone/ChopItPhoneDialogueBinding.h"
+#include "Phone/ChopItMysteryPhone.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/ProgressBar.h"
@@ -14,6 +20,7 @@
 #include "Engine/Canvas.h"
 #include "CanvasItem.h"
 #include "Engine/Engine.h"
+#include "EngineUtils.h"
 #include "Engine/AssetManager.h"
 #include "Framework/ChopItGameState.h"
 #include "GameFramework/PlayerController.h"
@@ -74,6 +81,18 @@ namespace ChopItHUD
 void AChopItHUD::BeginPlay()
 {
 	Super::BeginPlay();
+	PhoneIndicatorConfig = LoadObject<UChopItPhoneIndicatorConfig>(nullptr,
+		TEXT("/Game/ChopIt/Phone/DA_PhoneIndicator.DA_PhoneIndicator"));
+	PhonePromptConfig = LoadObject<UChopItPhonePromptConfig>(nullptr,
+		TEXT("/Game/ChopIt/Phone/DA_PhonePrompt.DA_PhonePrompt"));
+	if (GetWorld())
+	{
+		for (TActorIterator<AChopItMysteryPhone> It(GetWorld()); It; ++It) AttachPhoneIndicator(*It);
+		PhoneActorSpawnedHandle = GetWorld()->AddOnActorSpawnedHandler(
+			FOnActorSpawned::FDelegate::CreateUObject(this, &AChopItHUD::HandleActorSpawned));
+	}
+	UE_LOG(LogTemp, Display, TEXT("Phone HUD ready: indicators=%d indicatorConfig=%s."),
+		PhoneIndicators.Num(), *GetNameSafe(PhoneIndicatorConfig));
 	static const TCHAR* WidgetPath = TEXT("/Game/ChopIt/UI/WBP_PSX_HUD.WBP_PSX_HUD_C");
 	if (const TSubclassOf<UUserWidget> WidgetClass = LoadClass<UUserWidget>(nullptr, WidgetPath))
 	{
@@ -90,9 +109,59 @@ void AChopItHUD::BeginPlay()
 
 void AChopItHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (GetWorld() && PhoneActorSpawnedHandle.IsValid()) GetWorld()->RemoveOnActorSpawnedHandler(PhoneActorSpawnedHandle);
+	for (UChopItPhoneIndicatorBinding* Indicator : PhoneIndicators) if (Indicator) Indicator->Shutdown();
+	PhoneIndicators.Reset();
+	for (UChopItPhonePromptBinding* Prompt : PhonePrompts) if (Prompt) Prompt->Shutdown();
+	PhonePrompts.Reset();
+	for (UChopItPhoneDialogueBinding* Binding : PhoneDialogues) if (Binding) Binding->Shutdown();
+	PhoneDialogues.Reset();
 	if (IsValid(ChestRevealScene)) ChestRevealScene->Destroy();
 	ResumeFromItemUI();
 	Super::EndPlay(EndPlayReason);
+}
+
+void AChopItHUD::HandleActorSpawned(AActor* Actor)
+{
+	if (AChopItMysteryPhone* Phone = Cast<AChopItMysteryPhone>(Actor)) AttachPhoneIndicator(Phone);
+}
+
+void AChopItHUD::AttachPhoneIndicator(AChopItMysteryPhone* Phone)
+{
+	if (!Phone || !PlayerOwner) return;
+	if (PhoneIndicatorConfig && PhoneIndicatorConfig->IsValidConfig())
+	{
+		bool bExists = false;
+		for (const UChopItPhoneIndicatorBinding* Existing : PhoneIndicators)
+			bExists |= Existing && Existing->GetPhone() == Phone;
+		if (!bExists)
+		{
+			UChopItPhoneIndicatorBinding* Binding = NewObject<UChopItPhoneIndicatorBinding>(this);
+			Binding->Initialize(PlayerOwner, Phone, PhoneIndicatorConfig);
+			PhoneIndicators.Add(Binding);
+		}
+	}
+	if (PhonePromptConfig && PhonePromptConfig->IsValidConfig())
+	{
+		bool bExists = false;
+		for (const UChopItPhonePromptBinding* Existing : PhonePrompts)
+			bExists |= Existing && Existing->GetPhone() == Phone;
+		if (!bExists)
+		{
+			UChopItPhonePromptBinding* Binding = NewObject<UChopItPhonePromptBinding>(this);
+			Binding->Initialize(PlayerOwner, Phone, PhonePromptConfig);
+			PhonePrompts.Add(Binding);
+		}
+	}
+	bool bDialogueExists = false;
+	for (const UChopItPhoneDialogueBinding* Existing : PhoneDialogues)
+		bDialogueExists |= Existing && Existing->GetPhone() == Phone;
+	if (!bDialogueExists)
+	{
+		UChopItPhoneDialogueBinding* Binding = NewObject<UChopItPhoneDialogueBinding>(this);
+		Binding->Initialize(PlayerOwner, Phone);
+		PhoneDialogues.Add(Binding);
+	}
 }
 
 void AChopItHUD::RevealMissionTracker()
@@ -105,8 +174,114 @@ void AChopItHUD::RevealMissionTracker()
 	if (auto* Juice = Cast<UChopItJuiceWidget>(PSXHUDWidget)) Juice->RevealMission();
 }
 
+bool AChopItHUD::RerollPhoneOffer()
+{
+	for (UChopItPhoneDialogueBinding* Binding : PhoneDialogues)
+		if (Binding && Binding->IsPresentationActive()) return Binding->RerollOffers();
+	return false;
+}
+
+void AChopItHUD::SetPhoneDialogueActive(bool bActive)
+{
+	if (bPhoneDialogueActive == bActive) return;
+	bPhoneDialogueActive = bActive;
+	if (bActive) bChoiceOverlayWasActive = false;
+	if (PSXHUDWidget)
+	{
+		if (bActive) PrePhoneHUDVisibility = PSXHUDWidget->GetVisibility();
+		PSXHUDWidget->SetVisibility(bActive ? ESlateVisibility::Hidden : PrePhoneHUDVisibility);
+	}
+	// Refresh before dialogue pauses world timers, including notices for other phones.
+	for (UChopItPhoneIndicatorBinding* Indicator : PhoneIndicators) if (Indicator) Indicator->RefreshPresentation();
+	for (UChopItPhonePromptBinding* Prompt : PhonePrompts) if (Prompt) Prompt->RefreshPresentation();
+}
+
+bool AChopItHUD::IsModalOverlayActive() const
+{
+	if (bPhoneDialogueActive || bItemRevealActive || bDebugItemMenuOpen) return true;
+	const AChopItGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr;
+	if (GameState && GameState->GetCycleStateMachine())
+	{
+		const EChopItCyclePhase Phase = GameState->GetCycleStateMachine()->GetCurrentPhase();
+		if (Phase == EChopItCyclePhase::Death || Phase == EChopItCyclePhase::Victory) return true;
+	}
+	const APlayerState* State = PlayerOwner ? PlayerOwner->PlayerState : nullptr;
+	if (!State) return false;
+	const UChopItUpgradeOfferComponent* Offers = State->FindComponentByClass<UChopItUpgradeOfferComponent>();
+	const UChopItPactComponent* Pacts = State->FindComponentByClass<UChopItPactComponent>();
+	const UChopItShopComponent* Shop = State->FindComponentByClass<UChopItShopComponent>();
+	return (Offers && Offers->HasActiveOffer()) || (Pacts && Pacts->HasActiveOffer()) ||
+		(Shop && Shop->HasActiveShop());
+}
+
+bool AChopItHUD::IsChoiceOverlayActive() const
+{
+	if (bPhoneDialogueActive || bItemRevealActive || bDebugItemMenuOpen || !PlayerOwner) return false;
+	if (const AChopItGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AChopItGameState>() : nullptr)
+		if (const UChopItCycleStateMachineComponent* Cycle = GameState->GetCycleStateMachine())
+			if (Cycle->GetCurrentPhase() == EChopItCyclePhase::Death || Cycle->GetCurrentPhase() == EChopItCyclePhase::Victory) return false;
+	const APlayerState* State = PlayerOwner->PlayerState;
+	if (!State) return false;
+	const UChopItUpgradeOfferComponent* Upgrades = State->FindComponentByClass<UChopItUpgradeOfferComponent>();
+	const UChopItPactComponent* Pacts = State->FindComponentByClass<UChopItPactComponent>();
+	const UChopItShopComponent* Shop = State->FindComponentByClass<UChopItShopComponent>();
+	return (Upgrades && Upgrades->HasActiveOffer()) || (Pacts && Pacts->HasActiveOffer()) ||
+		(Shop && Shop->HasActiveShop());
+}
+
+int32 AChopItHUD::GetChoiceAtScreenPosition(const FVector2D& ScreenPosition) const
+{
+	if (!IsChoiceOverlayActive() || !PlayerOwner) return INDEX_NONE;
+	int32 SizeX = 0, SizeY = 0;
+	PlayerOwner->GetViewportSize(SizeX, SizeY);
+	if (SizeX <= 0 || SizeY <= 0) return INDEX_NONE;
+	const float Scale = FMath::Clamp(FMath::Min(SizeX / 1920.0f, SizeY / 1080.0f), 0.80f, 1.5f);
+	const APlayerState* State = PlayerOwner->PlayerState;
+	const UChopItUpgradeOfferComponent* Upgrades = State->FindComponentByClass<UChopItUpgradeOfferComponent>();
+	const UChopItPactComponent* Pacts = State->FindComponentByClass<UChopItPactComponent>();
+	const UChopItShopComponent* Shop = State->FindComponentByClass<UChopItShopComponent>();
+	const bool bUpgrade = Upgrades && Upgrades->HasActiveOffer();
+	const bool bPact = !bUpgrade && Pacts && Pacts->HasActiveOffer();
+	const int32 Count = bUpgrade ? Upgrades->GetActiveOffers().Num() :
+		bPact ? Pacts->GetActiveOffers().Num() : Shop ? Shop->GetActiveOffers().Num() : 0;
+	const float Width = (bPact ? 280.f : 300.f) * Scale;
+	const float Height = (bPact ? 280.f : bUpgrade ? 360.f : 330.f) * Scale;
+	const float Y = (bPact ? 240.f : 250.f) * Scale;
+	const float Gap = (bPact ? 50.f : 28.f) * Scale;
+	const float StartX = bPact ? SizeX * .5f - 140.f * Scale - 330.f * Scale :
+		SizeX * .5f - (Width * (bUpgrade ? 3 : Count) + Gap * FMath::Max(0, (bUpgrade ? 3 : Count) - 1)) * .5f;
+	for (int32 Index = 0; Index < FMath::Min(Count, 3); ++Index)
+	{
+		const float X = StartX + Index * (Width + Gap);
+		if (ScreenPosition.X >= X && ScreenPosition.X <= X + Width &&
+			ScreenPosition.Y >= Y && ScreenPosition.Y <= Y + Height) return Index;
+	}
+	return INDEX_NONE;
+}
+
+void AChopItHUD::MoveChoiceSelection(int32 Delta)
+{
+	if (!IsChoiceOverlayActive()) return;
+	const APlayerState* State = PlayerOwner->PlayerState;
+	const UChopItUpgradeOfferComponent* Upgrades = State->FindComponentByClass<UChopItUpgradeOfferComponent>();
+	const UChopItPactComponent* Pacts = State->FindComponentByClass<UChopItPactComponent>();
+	const UChopItShopComponent* Shop = State->FindComponentByClass<UChopItShopComponent>();
+	const int32 Count = Upgrades && Upgrades->HasActiveOffer() ? Upgrades->GetActiveOffers().Num() :
+		Pacts && Pacts->HasActiveOffer() ? Pacts->GetActiveOffers().Num() : Shop ? Shop->GetActiveOffers().Num() : 0;
+	if (Count > 0)
+	{
+		SelectedChoiceIndex = (SelectedChoiceIndex + Delta + Count) % Count;
+		HoveredChoiceIndex = INDEX_NONE;
+	}
+}
+
 void AChopItHUD::DrawHUD()
 {
+	if (bPhoneDialogueActive)
+	{
+		if (PSXHUDWidget) PSXHUDWidget->SetVisibility(ESlateVisibility::Hidden);
+		return;
+	}
 	Super::DrawHUD();
 	if (!Canvas || !PlayerOwner)
 	{
@@ -116,6 +291,25 @@ void AChopItHUD::DrawHUD()
 	// still scales up with the viewport, but it never shrinks into debug-text size.
 	const float Scale = FMath::Clamp(FMath::Min(Canvas->SizeX / 1920.0f, Canvas->SizeY / 1080.0f), 0.80f, 1.5f);
 	RefreshPSXWidget();
+	const bool bOfferVisible = IsChoiceOverlayActive();
+	if (bOfferVisible && !bChoiceOverlayWasActive)
+	{
+		SelectedChoiceIndex = 0;
+		HoveredChoiceIndex = INDEX_NONE;
+		bHasChoiceMousePosition = false;
+	}
+	bChoiceOverlayWasActive = bOfferVisible;
+	if (PSXHUDWidget && bOfferVisible && !bChoiceHUDMousePassThrough)
+	{
+		PreChoiceHUDVisibility = PSXHUDWidget->GetVisibility();
+		PSXHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		bChoiceHUDMousePassThrough = true;
+	}
+	else if (PSXHUDWidget && !bOfferVisible && bChoiceHUDMousePassThrough)
+	{
+		PSXHUDWidget->SetVisibility(PreChoiceHUDVisibility);
+		bChoiceHUDMousePassThrough = false;
+	}
 	if (bItemRevealActive)
 	{
 		DrawItemReveal(Scale);
@@ -150,6 +344,22 @@ void AChopItHUD::DrawHUD()
 	}
 	const UChopItUpgradeOfferComponent* Offers = State
 		? State->FindComponentByClass<UChopItUpgradeOfferComponent>() : nullptr;
+	if (IsChoiceOverlayActive())
+	{
+		float MouseX = 0.f, MouseY = 0.f;
+		if (PlayerOwner->GetMousePosition(MouseX, MouseY))
+		{
+			const FVector2D MousePosition(MouseX, MouseY);
+			if (!bHasChoiceMousePosition || !MousePosition.Equals(LastChoiceMousePosition, 1.f))
+			{
+				HoveredChoiceIndex = GetChoiceAtScreenPosition(MousePosition);
+				if (HoveredChoiceIndex != INDEX_NONE) SelectedChoiceIndex = HoveredChoiceIndex;
+				LastChoiceMousePosition = MousePosition;
+				bHasChoiceMousePosition = true;
+			}
+		}
+	}
+	else { bHasChoiceMousePosition = false; HoveredChoiceIndex = INDEX_NONE; }
 	if (Offers && Offers->HasActiveOffer())
 	{
 		DrawUpgradeOverlay(Scale, Offers->GetActiveOffers());
@@ -802,8 +1012,8 @@ void AChopItHUD::DrawPactOverlay(float Scale, const TArray<TObjectPtr<UChopItPac
 	ChopItHUD::DrawSolidRect(Canvas,0,0,Canvas->SizeX,Canvas->SizeY,FLinearColor(0,0,0,0.78f));
 	const float CX=Canvas->SizeX*0.5f; const float F=FMath::Clamp(Scale*1.15f,0.95f,1.65f);
 	DrawCenteredLabel(TEXT("THE REAPER OFFERS A PACT"),CX,120*Scale,ChopItHUD::Red,1.4f*F,true);
-	DrawCenteredLabel(FString::Printf(TEXT("CURSE %d  |  Choose with 1, 2 or 3"),Curse),CX,175*Scale,ChopItHUD::Cream,F);
-	for(int32 I=0;I<Offers.Num()&&I<3;++I) if(const UChopItPactDefinition* P=Offers[I]) { float X=CX+(I-1)*330*Scale; DrawPanel(X-140*Scale,240*Scale,280*Scale,280*Scale,ChopItHUD::Ink,ChopItHUD::Red,5*Scale); DrawCenteredLabel(P->DisplayName.ToString(),X,285*Scale,ChopItHUD::Cream,F,true); DrawCenteredLabel(P->Description.ToString(),X,365*Scale,FLinearColor::White,F); DrawCenteredLabel(FString::Printf(TEXT("[%d] +%d curse"),I+1,P->CurseIncrease),X,450*Scale,ChopItHUD::Orange,F); }
+	DrawCenteredLabel(FString::Printf(TEXT("CURSE %d  |  Click, 1-3 or controller + A"),Curse),CX,175*Scale,ChopItHUD::Cream,F);
+	for(int32 I=0;I<Offers.Num()&&I<3;++I) if(const UChopItPactDefinition* P=Offers[I]) { float X=CX+(I-1)*330*Scale; if (I == HoveredChoiceIndex) DrawPanel(X-145*Scale,235*Scale,290*Scale,290*Scale,ChopItHUD::Orange,ChopItHUD::Cream,3*Scale); DrawPanel(X-140*Scale,240*Scale,280*Scale,280*Scale,ChopItHUD::Ink,I == SelectedChoiceIndex ? ChopItHUD::Cream : ChopItHUD::Red,5*Scale); DrawCenteredLabel(P->DisplayName.ToString(),X,285*Scale,ChopItHUD::Cream,F,true); DrawCenteredLabel(P->Description.ToString(),X,365*Scale,FLinearColor::White,F); DrawCenteredLabel(FString::Printf(TEXT("[%d] +%d curse"),I+1,P->CurseIncrease),X,450*Scale,ChopItHUD::Orange,F); }
 }
 
 void AChopItHUD::DrawPersistentHUD(const float Scale)
@@ -890,7 +1100,7 @@ void AChopItHUD::DrawUpgradeOverlay(
 	ChopItHUD::DrawSolidRect(Canvas, 0.0f, 0.0f, Canvas->SizeX, Canvas->SizeY, FLinearColor(0.0f, 0.0f, 0.0f, 0.80f));
 	const float CenterX = Canvas->SizeX * 0.5f;
 	DrawCenteredLabel(TEXT("LEVEL UP"), CenterX, 135.0f * Scale, ChopItHUD::Cream, 1.55f * FontScale, true);
-	DrawCenteredLabel(TEXT("Choose an upgrade with 1, 2 or 3"), CenterX, 190.0f * Scale, FLinearColor::White, FontScale);
+	DrawCenteredLabel(TEXT("Click, press 1-3, or select with controller + A"), CenterX, 190.0f * Scale, FLinearColor::White, FontScale);
 
 	const float CardWidth = 300.0f * Scale;
 	const float CardHeight = 360.0f * Scale;
@@ -909,7 +1119,9 @@ void AChopItHUD::DrawUpgradeOverlay(
 		if (Upgrade->Rarity == EChopItUpgradeRarity::Uncommon) { RarityColor = FLinearColor(0.12f, 0.58f, 0.86f, 1.0f); }
 		if (Upgrade->Rarity == EChopItUpgradeRarity::Rare) { RarityColor = FLinearColor(1.0f, 0.38f, 0.02f, 1.0f); }
 		const float CardX = StartX + Index * (CardWidth + Gap);
-		DrawPanel(CardX, CardY, CardWidth, CardHeight, ChopItHUD::Ink, RarityColor, 6.0f * Scale);
+		if (Index == HoveredChoiceIndex) DrawPanel(CardX - 5.f * Scale, CardY - 5.f * Scale,
+			CardWidth + 10.f * Scale, CardHeight + 10.f * Scale, ChopItHUD::Orange, ChopItHUD::Cream, 3.f * Scale);
+		DrawPanel(CardX, CardY, CardWidth, CardHeight, ChopItHUD::Ink, Index == SelectedChoiceIndex ? ChopItHUD::Cream : RarityColor, 6.0f * Scale);
 		DrawPanel(CardX + 22.0f * Scale, CardY + 22.0f * Scale, CardWidth - 44.0f * Scale, 52.0f * Scale,
 			FLinearColor(RarityColor.R * 0.25f, RarityColor.G * 0.25f, RarityColor.B * 0.25f, 1.0f), RarityColor, 2.0f * Scale);
 		DrawCenteredLabel(FString::Printf(TEXT("OPTION %d"), Index + 1), CardX + CardWidth * 0.5f, CardY + 33.0f * Scale, ChopItHUD::Cream, FontScale, true);
@@ -928,7 +1140,7 @@ void AChopItHUD::DrawShopOverlay(
 	ChopItHUD::DrawSolidRect(Canvas, 0.0f, 0.0f, Canvas->SizeX, Canvas->SizeY, FLinearColor(0.0f, 0.0f, 0.0f, 0.72f));
 	const float CenterX = Canvas->SizeX * 0.5f;
 	DrawCenteredLabel(TEXT("TOOL SHOP"), CenterX, 135.0f * Scale, ChopItHUD::Cream, 1.35f * FontScale, true);
-	DrawCenteredLabel(TEXT("Choose a weapon with 1, 2 or 3  |  ESC to close"), CenterX, 190.0f * Scale, FLinearColor::White, FontScale);
+	DrawCenteredLabel(TEXT("Click, press 1-3, or select with controller + A  |  ESC to close"), CenterX, 190.0f * Scale, FLinearColor::White, FontScale);
 
 	const float CardWidth = 300.0f * Scale;
 	const float CardHeight = 330.0f * Scale;
@@ -943,7 +1155,9 @@ void AChopItHUD::DrawShopOverlay(
 		const FLinearColor Accent = Weapon->AttackPattern == EChopItWeaponAttackPattern::RadialMelee
 			? FLinearColor(0.10f, 0.65f, 0.90f, 1.0f) : ChopItHUD::Orange;
 		const float CardX = StartX + Index * (CardWidth + Gap);
-		DrawPanel(CardX, CardY, CardWidth, CardHeight, ChopItHUD::Ink, Accent, 6.0f * Scale);
+		if (Index == HoveredChoiceIndex) DrawPanel(CardX - 5.f * Scale, CardY - 5.f * Scale,
+			CardWidth + 10.f * Scale, CardHeight + 10.f * Scale, ChopItHUD::Orange, ChopItHUD::Cream, 3.f * Scale);
+		DrawPanel(CardX, CardY, CardWidth, CardHeight, ChopItHUD::Ink, Index == SelectedChoiceIndex ? ChopItHUD::Cream : Accent, 6.0f * Scale);
 		DrawPanel(CardX + 22.0f * Scale, CardY + 22.0f * Scale, CardWidth - 44.0f * Scale, 52.0f * Scale,
 			FLinearColor(Accent.R * 0.25f, Accent.G * 0.25f, Accent.B * 0.25f, 1.0f), Accent, 2.0f * Scale);
 		DrawCenteredLabel(FString::Printf(TEXT("OPTION %d"), Index + 1), CardX + CardWidth * 0.5f, CardY + 33.0f * Scale, ChopItHUD::Cream, FontScale, true);

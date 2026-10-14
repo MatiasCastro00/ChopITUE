@@ -5,7 +5,7 @@
 
 /** Composition root for a local ChopIt run. */
 UCLASS()
-class CHOPIT_API AChopItGameMode final : public AGameModeBase
+class CHOPIT_API AChopItGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 
