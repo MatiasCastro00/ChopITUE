@@ -124,12 +124,14 @@ void UChopItAutoAttackComponent::PerformAttack()
 		? StatsComponent->EvaluateStat(EChopItCombatStat::Range, WeaponDefinition->Range)
 		: WeaponDefinition->Range;
 	const FVector AttackForward = Owner->GetActorForwardVector();
-	if (CVarChopItDrawAttackDebug.GetValueOnGameThread() != 0
+	const IConsoleVariable* DrawAttackDebug = IConsoleManager::Get().FindConsoleVariable(TEXT("ChopIt.Combat.DrawAttackDebug"));
+	const bool bDrawAttackDebug = DrawAttackDebug && DrawAttackDebug->GetInt() != 0;
+	if (bDrawAttackDebug
 		&& WeaponDefinition->AttackPattern == EChopItWeaponAttackPattern::ArcMelee)
 	{
 		DrawAttackArc(World, Owner->GetActorLocation(), AttackForward, Range, WeaponDefinition->ArcHalfAngleDegrees);
 	}
-	else if (CVarChopItDrawAttackDebug.GetValueOnGameThread() != 0)
+	else if (bDrawAttackDebug)
 	{
 		DrawDebugCircle(World, Owner->GetActorLocation() + FVector(0.0f, 0.0f, 55.0f), Range, 20, FColor::Cyan, false, 0.25f, 0, 7.0f, FVector::ForwardVector, FVector::RightVector, false);
 	}

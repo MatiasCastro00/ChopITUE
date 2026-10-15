@@ -42,6 +42,8 @@ private:
 		int32 OtherBodyIndex);
 
 	void UpdateMagnetism();
+	void CheckInitialMagnetOverlap();
+	void StartMagnetism(UChopItWoodCargoComponent* Cargo);
 	void UpdateGroundSafety();
 	void UpdateLabel();
 	void UpdateLabelFacingCamera();

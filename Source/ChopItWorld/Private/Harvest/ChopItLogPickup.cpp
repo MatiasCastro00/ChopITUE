@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/ChopItCameraFacingTextComponent.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "Harvest/ChopItForestRegistrySubsystem.h"
 #include "Harvest/ChopItWoodCargoComponent.h"
@@ -73,6 +74,7 @@ void AChopItLogPickup::BeginPlay()
 	PreviousPhysicsLocation = PhysicsBody->GetComponentLocation();
 	MagnetSphere->OnComponentBeginOverlap.AddDynamic(this, &AChopItLogPickup::HandleMagnetBeginOverlap);
 	MagnetSphere->OnComponentEndOverlap.AddDynamic(this, &AChopItLogPickup::HandleMagnetEndOverlap);
+	GetWorldTimerManager().SetTimerForNextTick(this, &AChopItLogPickup::CheckInitialMagnetOverlap);
 	GetWorldTimerManager().SetTimer(
 		GroundSafetyTimerHandle,
 		this,
@@ -126,6 +128,7 @@ void AChopItLogPickup::LaunchFromImpact(
 	PhysicsBody->SetPhysicsLinearVelocity(LinearVelocity, false);
 	PhysicsBody->SetPhysicsAngularVelocityInDegrees(AngularVelocityDegrees, false);
 	PhysicsBody->WakeAllRigidBodies();
+	GetWorldTimerManager().SetTimerForNextTick(this, &AChopItLogPickup::CheckInitialMagnetOverlap);
 }
 
 void AChopItLogPickup::HandleMagnetBeginOverlap(
@@ -138,6 +141,52 @@ void AChopItLogPickup::HandleMagnetBeginOverlap(
 {
 	UChopItWoodCargoComponent* Cargo = OtherActor ? OtherActor->FindComponentByClass<UChopItWoodCargoComponent>() : nullptr;
 	if (!Cargo)
+	{
+		return;
+	}
+	StartMagnetism(Cargo);
+}
+
+void AChopItLogPickup::CheckInitialMagnetOverlap()
+{
+	if (CandidateCargo.IsValid() || !MagnetSphere || !GetWorld())
+	{
+		return;
+	}
+
+	FCollisionObjectQueryParams ObjectQuery;
+	ObjectQuery.AddObjectTypesToQuery(ECC_Pawn);
+	FCollisionQueryParams QueryParams(FName(TEXT("LogPickupInitialOverlap")), false, this);
+	TArray<FOverlapResult> Overlaps;
+	GetWorld()->OverlapMultiByObjectType(
+		Overlaps,
+		MagnetSphere->GetComponentLocation(),
+		FQuat::Identity,
+		ObjectQuery,
+		FCollisionShape::MakeSphere(MagnetSphere->GetScaledSphereRadius()),
+		QueryParams);
+
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		UPrimitiveComponent* Component = Overlap.Component.Get();
+		AActor* Actor = Overlap.GetActor();
+		if (!Component || !Component->GetGenerateOverlapEvents()
+			|| Component->GetCollisionResponseToChannel(ChopItCollisionChannels::Pickup) != ECR_Overlap
+			|| !Actor)
+		{
+			continue;
+		}
+		if (UChopItWoodCargoComponent* Cargo = Actor->FindComponentByClass<UChopItWoodCargoComponent>())
+		{
+			StartMagnetism(Cargo);
+			break;
+		}
+	}
+}
+
+void AChopItLogPickup::StartMagnetism(UChopItWoodCargoComponent* Cargo)
+{
+	if (!Cargo || CandidateCargo.IsValid())
 	{
 		return;
 	}
