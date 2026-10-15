@@ -22,7 +22,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChopItPhoneStage4Test, "ChopIt.Phone.Stage4.Pr
 bool FChopItPhoneStage4Test::RunTest(const FString& Parameters)
 {
 	const UChopItPhonePromptConfig* Config = LoadObject<UChopItPhonePromptConfig>(nullptr,
-		TEXT("/Game/ChopIt/Phone/DA_PhonePrompt.DA_PhonePrompt"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhonePrompt.DA_PhonePrompt"));
 	if (!TestNotNull(TEXT("Prompt Data Asset"), Config)) return false;
 	TestTrue(TEXT("Prompt config valid"), Config->IsValidConfig());
 	TestNotNull(TEXT("Editable prompt widget Blueprint"), Config->WidgetClass.Get());
@@ -37,7 +37,7 @@ bool FChopItPhoneStage4Test::RunTest(const FString& Parameters)
 		TestNotNull(*FString::Printf(TEXT("Prompt sprite texture %s"), Name), Image->GetBrush().GetResourceObject());
 	}
 	const UClass* PhoneClass = LoadClass<AChopItMysteryPhone>(nullptr,
-		TEXT("/Game/ChopIt/Phone/BP_MysteryPhone.BP_MysteryPhone_C"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/BP_MysteryPhone.BP_MysteryPhone_C"));
 	if (!TestNotNull(TEXT("Authored phone Blueprint"), PhoneClass)) return false;
 	const AChopItMysteryPhone* PhoneDefaults = PhoneClass->GetDefaultObject<AChopItMysteryPhone>();
 	TestTrue(TEXT("Phone Blueprint references the authored UMG prompt"),

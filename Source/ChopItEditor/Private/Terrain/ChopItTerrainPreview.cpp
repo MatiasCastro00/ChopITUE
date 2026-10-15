@@ -185,7 +185,7 @@ FLinearColor FChopItTerrainPreview::SampleVisualizationColor(const FChopItHeight
 void FChopItTerrainPreview::ApplyVisualization(UDynamicMeshComponent* Component)
 {
 	const bool bSurface = Visualization == EChopItTerrainPreviewMode::Surface;
-	const TCHAR* Path = bSurface ? TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Ground.MI_Ground")
+	const TCHAR* Path = bSurface ? TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Ground.MI_Ground")
 		: TEXT("/Engine/EngineDebugMaterials/VertexColorViewMode_ColorOnly.VertexColorViewMode_ColorOnly");
 	UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, Path);
 	Component->SetMaterial(0, Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface));

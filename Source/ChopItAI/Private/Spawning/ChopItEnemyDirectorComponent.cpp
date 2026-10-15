@@ -15,7 +15,7 @@
 UChopItEnemyDirectorComponent::UChopItEnemyDirectorComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-	DirectorDefinition = TSoftObjectPtr<UChopItEnemyDirectorDefinition>(FSoftObjectPath(TEXT("/Game/ChopIt/AI/Directors/DA_Director_Day01.DA_Director_Day01")));
+	DirectorDefinition = TSoftObjectPtr<UChopItEnemyDirectorDefinition>(FSoftObjectPath(TEXT("/Game/NewChopIt/Data/AI/Directors/DA_Director_Day01.DA_Director_Day01")));
 }
 
 void UChopItEnemyDirectorComponent::BeginPlay()

@@ -4,11 +4,11 @@ import unreal
 SOURCE = unreal.Paths.convert_relative_path_to_full(
     unreal.Paths.project_dir() + "SourceArt/UI/UI_PSX_Atlas_Transparente.png"
 )
-ASSET = "/Game/ChopIt/Art/UI/UI_PSX_Atlas_Transparente"
+ASSET = "/Game/NewChopIt/Art/Textures/UI/UI_PSX_Atlas_Transparente"
 
 task = unreal.AssetImportTask()
 task.filename = SOURCE
-task.destination_path = "/Game/ChopIt/Art/UI"
+task.destination_path = "/Game/NewChopIt/Art/Textures/UI"
 task.destination_name = "UI_PSX_Atlas_Transparente"
 task.automated = True
 task.replace_existing = True

@@ -14,7 +14,7 @@ AChopItFeedbackBurst::AChopItFeedbackBurst()
 	BarkFragments->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> BarkMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WoodMaterial(TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Wood.MI_Wood"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> WoodMaterial(TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Wood.MI_Wood"));
 	if (BarkMesh.Succeeded()) { BarkFragments->SetStaticMesh(BarkMesh.Object); }
 	if (WoodMaterial.Succeeded()) { BarkFragments->SetMaterial(0, WoodMaterial.Object); }
 }

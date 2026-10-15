@@ -82,9 +82,9 @@ void AChopItHUD::BeginPlay()
 {
 	Super::BeginPlay();
 	PhoneIndicatorConfig = LoadObject<UChopItPhoneIndicatorConfig>(nullptr,
-		TEXT("/Game/ChopIt/Phone/DA_PhoneIndicator.DA_PhoneIndicator"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneIndicator.DA_PhoneIndicator"));
 	PhonePromptConfig = LoadObject<UChopItPhonePromptConfig>(nullptr,
-		TEXT("/Game/ChopIt/Phone/DA_PhonePrompt.DA_PhonePrompt"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhonePrompt.DA_PhonePrompt"));
 	if (GetWorld())
 	{
 		for (TActorIterator<AChopItMysteryPhone> It(GetWorld()); It; ++It) AttachPhoneIndicator(*It);
@@ -93,7 +93,7 @@ void AChopItHUD::BeginPlay()
 	}
 	UE_LOG(LogTemp, Display, TEXT("Phone HUD ready: indicators=%d indicatorConfig=%s."),
 		PhoneIndicators.Num(), *GetNameSafe(PhoneIndicatorConfig));
-	static const TCHAR* WidgetPath = TEXT("/Game/ChopIt/UI/WBP_PSX_HUD.WBP_PSX_HUD_C");
+	static const TCHAR* WidgetPath = TEXT("/Game/NewChopIt/Art/UI/WBP_PSX_HUD.WBP_PSX_HUD_C");
 	if (const TSubclassOf<UUserWidget> WidgetClass = LoadClass<UUserWidget>(nullptr, WidgetPath))
 	{
 		PSXHUDWidget = CreateWidget<UUserWidget>(PlayerOwner, WidgetClass);
@@ -405,7 +405,7 @@ UTexture2D* AChopItHUD::ResolveItemIcon(const UChopItItemDataAsset* Item)
 	{
 		const FString Stem = Item->ItemId == TEXT("GenerousLog") ? TEXT("HollowLog") : Item->ItemId.ToString();
 		const FString Name = FString(TEXT("T_Stick_")) + Stem;
-		const FString Path = FString::Printf(TEXT("/Game/ChopIt/Art/Sticks/%s.%s"), *Name, *Name);
+		const FString Path = FString::Printf(TEXT("/Game/NewChopIt/Art/Textures/Sticks/%s.%s"), *Name, *Name);
 		Icon = LoadObject<UTexture2D>(nullptr, *Path);
 	}
 	ItemIconCache.Add(Item->ItemId, Icon);
@@ -623,7 +623,7 @@ void AChopItHUD::StartItemReveal(UChopItItemDataAsset* Result)
 	ChestRevealScene = GetWorld()->SpawnActor<AChopItChestRevealScene>(AChopItChestRevealScene::StaticClass(), FVector(0,0,100000), FRotator::ZeroRotator, PreviewParams);
 	if (ChestRevealScene) ChestRevealScene->InitializeScene();
 	ItemRevealIcon = ResolveItemIcon(Result);
-	ItemRevealTickSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/ChopIt/UI/Audio/UI_Tick.UI_Tick"));
+	ItemRevealTickSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/NewChopIt/Audio/UI/UI_Tick.UI_Tick"));
 	ItemRevealStartedAt = FPlatformTime::Seconds();
 	LastRevealStage = INDEX_NONE;
 	bItemRevealGranted = false;

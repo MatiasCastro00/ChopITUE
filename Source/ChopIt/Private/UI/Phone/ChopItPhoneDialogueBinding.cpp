@@ -117,7 +117,7 @@ void UChopItPhoneDialogueBinding::TryStartDialogue()
 	ViewModel->SetAccentColor(Variant->AccentColor);
 	ViewModel->SetPortraitMaterial(Scene->GetCompositeMaterial());
 	UClass* PresentationClass = LoadClass<UChopItPhonePresentationWidget>(nullptr,
-		TEXT("/Game/ChopIt/Phone/WBP_PhonePresentation.WBP_PhonePresentation_C"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/WBP_PhonePresentation.WBP_PhonePresentation_C"));
 	Widget = PresentationClass ? CreateWidget<UChopItPhonePresentationWidget>(Player.Get(), PresentationClass) : nullptr;
 	if (!Widget)
 	{
@@ -167,7 +167,7 @@ bool UChopItPhoneDialogueBinding::BuildOfferChoices()
 	TArray<UChopItPhoneBargainDefinition*> Candidates;
 	for (const TCHAR* Name : Names)
 	{
-		const FString Path = FString::Printf(TEXT("/Game/ChopIt/Phone/Bargains/DA_PhoneBargain_%s.DA_PhoneBargain_%s"), Name, Name);
+		const FString Path = FString::Printf(TEXT("/Game/NewChopIt/Data/Phone/DA_PhoneBargain_%s.DA_PhoneBargain_%s"), Name, Name);
 		if (UChopItPhoneBargainDefinition* Bargain = LoadObject<UChopItPhoneBargainDefinition>(nullptr, *Path))
 			if (!Bargain->BargainId.IsNone() && !Bargain->Modifiers.IsEmpty() &&
 				!Bargain->BenefitText.IsEmpty() && !Bargain->CostText.IsEmpty()) Candidates.Add(Bargain);

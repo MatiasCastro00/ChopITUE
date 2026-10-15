@@ -24,7 +24,7 @@ AChopItAxeSwingTrail::AChopItAxeSwingTrail()
 
 	// A hard reference keeps the complete system and its dependencies in cooked builds.
 	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> AuthoredSlash(
-		TEXT("/Game/ChopIt/Art/FX/NS_AxeSlash.NS_AxeSlash"));
+		TEXT("/Game/NewChopIt/Art/FX/NS_AxeSlash.NS_AxeSlash"));
 	SlashSystem = AuthoredSlash.Object;
 }
 

@@ -42,15 +42,15 @@ bool FChopItBossChestSpawnTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("One chest from one elite death"), Chests, 1);
 	}
 	TestNotNull(TEXT("Arrival Niagara asset"), LoadObject<UNiagaraSystem>(nullptr,
-		TEXT("/Game/ChopIt/Items/Chest/NS_BossChest_Appear.NS_BossChest_Appear")));
+		TEXT("/Game/NewChopIt/Art/Models/Chest/NS_BossChest_Appear.NS_BossChest_Appear")));
 	TestNotNull(TEXT("Opening Niagara asset"), LoadObject<UNiagaraSystem>(nullptr,
-		TEXT("/Game/ChopIt/Items/Chest/NS_BossChest_Open.NS_BossChest_Open")));
+		TEXT("/Game/NewChopIt/Art/Models/Chest/NS_BossChest_Open.NS_BossChest_Open")));
 	TestNotNull(TEXT("Idle Niagara asset"), LoadObject<UNiagaraSystem>(nullptr,
-		TEXT("/Game/ChopIt/Items/Chest/NS_BossChest_Idle.NS_BossChest_Idle")));
+		TEXT("/Game/NewChopIt/Art/Models/Chest/NS_BossChest_Idle.NS_BossChest_Idle")));
 	for (const TCHAR* Icon : {TEXT("Heartwood"), TEXT("VampireStick"), TEXT("Wormwood")})
 	{
 		const FString AssetName = FString(TEXT("T_Stick_")) + Icon;
-		const FString Path = FString::Printf(TEXT("/Game/ChopIt/Art/Sticks/%s.%s"), *AssetName, *AssetName);
+		const FString Path = FString::Printf(TEXT("/Game/NewChopIt/Art/Textures/Sticks/%s.%s"), *AssetName, *AssetName);
 		TestNotNull(FString::Printf(TEXT("Imported icon %s"), Icon), LoadObject<UTexture2D>(nullptr, *Path));
 	}
 	World->DestroyWorld(false);

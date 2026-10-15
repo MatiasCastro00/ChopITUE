@@ -11,7 +11,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChopItPhoneStage3Test, "ChopIt.Phone.Stage3.Pr
 bool FChopItPhoneStage3Test::RunTest(const FString& Parameters)
 {
 	const UChopItPhoneIndicatorConfig* Config = LoadObject<UChopItPhoneIndicatorConfig>(nullptr,
-		TEXT("/Game/ChopIt/Phone/DA_PhoneIndicator.DA_PhoneIndicator"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneIndicator.DA_PhoneIndicator"));
 	if (!TestNotNull(TEXT("Indicator Data Asset"), Config)) return false;
 	TestTrue(TEXT("Editable indicator config is valid"), Config->IsValidConfig());
 	TestNotNull(TEXT("Editable widget Blueprint"), Config->WidgetClass.Get());

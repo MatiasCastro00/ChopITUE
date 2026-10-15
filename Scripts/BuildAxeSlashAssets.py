@@ -4,10 +4,10 @@ import unreal
 
 PROJECT_DIR = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 SOURCE_DIR = os.path.join(PROJECT_DIR, "SourceAssets", "VFX")
-MESH_PATH = "/Game/ChopIt/Presentation/VFX/Meshes"
-MATERIAL_PATH = "/Game/ChopIt/Presentation/VFX/Materials"
-TEXTURE_PATH = "/Game/ChopIt/Presentation/VFX/Textures"
-NIAGARA_PATH = "/Game/ChopIt/Presentation/VFX/Niagara"
+MESH_PATH = "/Game/NewChopIt/Art/Models/Slash"
+MATERIAL_PATH = "/Game/NewChopIt/Art/Materials/Slash"
+TEXTURE_PATH = "/Game/NewChopIt/Art/Textures/Slash"
+NIAGARA_PATH = "/Game/NewChopIt/Art/FX"
 MASK_ASSET_PATH = TEXTURE_PATH + "/T_AxeSlash_BrushMask"
 MASK_SOURCE = "/Engine/EngineMaterials/Good64x64TilingNoiseHighFreq_Low.Good64x64TilingNoiseHighFreq_Low"
 

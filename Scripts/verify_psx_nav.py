@@ -1,7 +1,7 @@
 """Read-only verification of the saved PSX navigation."""
 import unreal
 
-world = unreal.EditorLoadingAndSavingUtils.load_map('/Game/ChopIt/World/Maps/L_PSX_test')
+world = unreal.EditorLoadingAndSavingUtils.load_map('/Game/NewChopIt/Maps/L_PSX_test')
 actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
 bounds = [a for a in actors if isinstance(a, unreal.NavMeshBoundsVolume)]
 assert bounds

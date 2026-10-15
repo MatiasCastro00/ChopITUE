@@ -7,7 +7,7 @@ The script only creates missing assets, preserving later designer edits.
 import unreal
 
 
-ROOT = "/Game/ChopIt/Items/Chest"
+ROOT = "/Game/NewChopIt/Art/Models/Chest"
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 FX = unreal.FXConverterUtilitiesLibrary
 

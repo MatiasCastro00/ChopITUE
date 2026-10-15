@@ -21,7 +21,7 @@ AChopItMandrakeScream::AChopItMandrakeScream()
 	Body->SetupAttachment(RootComponent);
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Body->SetRelativeRotation(FRotator(0,-90,0));
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> Model(TEXT("/Game/ChopIt/Items/Mandrake/SM_Mandrake.SM_Mandrake"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> Model(TEXT("/Game/NewChopIt/Art/Models/Mandrake/SM_Mandrake.SM_Mandrake"));
 	if (Model.Succeeded())
 	{
 		Body->SetStaticMesh(Model.Object);
@@ -41,9 +41,9 @@ AChopItMandrakeScream::AChopItMandrakeScream()
 	SoundWaves->SetRelativeLocation(FVector(18,0,43));
 	LeftSplash->SetRelativeLocation(FVector(23,21,3));
 	RightSplash->SetRelativeLocation(FVector(23,-30,3));
-	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Waves(TEXT("/Game/ChopIt/Items/Mandrake/NS_Mandrake_SonicWaves.NS_Mandrake_SonicWaves"));
-	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Splash(TEXT("/Game/ChopIt/Items/Mandrake/NS_Mandrake_TearSplash.NS_Mandrake_TearSplash"));
-	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Emerge(TEXT("/Game/ChopIt/Items/Mandrake/NS_Mandrake_Emerge.NS_Mandrake_Emerge"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Waves(TEXT("/Game/NewChopIt/Art/Models/Mandrake/NS_Mandrake_SonicWaves.NS_Mandrake_SonicWaves"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Splash(TEXT("/Game/NewChopIt/Art/Models/Mandrake/NS_Mandrake_TearSplash.NS_Mandrake_TearSplash"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Emerge(TEXT("/Game/NewChopIt/Art/Models/Mandrake/NS_Mandrake_Emerge.NS_Mandrake_Emerge"));
 	SoundWaves->SetAsset(Waves.Object);
 	LeftSplash->SetAsset(Splash.Object);RightSplash->SetAsset(Splash.Object);
 	Emergence->SetAsset(Emerge.Object);
@@ -61,7 +61,7 @@ AChopItMandrakeScream::AChopItMandrakeScream()
 	Scream->AttenuationOverrides.bSpatialize = true;
 	Scream->AttenuationOverrides.bAttenuate = true;
 	Scream->AttenuationOverrides.FalloffDistance = 850.f;
-	static ConstructorHelpers::FObjectFinder<USoundWave> Sound(TEXT("/Game/ChopIt/Items/Mandrake/S_Mandrake_Scream.S_Mandrake_Scream"));
+	static ConstructorHelpers::FObjectFinder<USoundWave> Sound(TEXT("/Game/NewChopIt/Art/Models/Mandrake/S_Mandrake_Scream.S_Mandrake_Scream"));
 	Scream->SetSound(Sound.Object);
 }
 

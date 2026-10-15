@@ -4,7 +4,7 @@ The map game mode rebuilds this same actor with a new seed on every Play.
 """
 import unreal
 
-map_path = '/Game/ChopIt/World/Maps/L_PSX_test'
+map_path = '/Game/NewChopIt/Maps/L_PSX_test'
 levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 if not levels.load_level(map_path):
     raise RuntimeError('Could not load ' + map_path)
@@ -14,8 +14,8 @@ existing = actors.get_all_level_actors()
 if any(isinstance(actor, unreal.ChopItTerrainActor) for actor in existing):
     raise RuntimeError('L_PSX_test already has a terrain actor; inspect it before rerunning this script')
 
-recipe = unreal.load_asset('/Game/ChopIt/World/DA_Terrain')
-material = unreal.load_asset('/Game/ChopIt/Art/Materials/Ground/M_Grass_Ground_03_PSX_Tiled')
+recipe = unreal.load_asset('/Game/NewChopIt/Data/DA_Terrain')
+material = unreal.load_asset('/Game/NewChopIt/Art/Materials/Ground/M_Grass_Ground_03_PSX_Tiled')
 if not recipe or not material:
     raise RuntimeError('The default terrain recipe or PSX grass material is missing')
 

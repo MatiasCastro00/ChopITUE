@@ -72,9 +72,9 @@ UChopItCameraComponent::UChopItCameraComponent(const FObjectInitializer& ObjectI
 	PrimaryComponentTick.bTickEvenWhenPaused = true;
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
 	SetAbsolute(true, true, false);
-	static ConstructorHelpers::FObjectFinder<UCameraAsset> CameraAssetFinder(TEXT("/Game/ChopIt/Presentation/Camera/CA_PlayerCameras.CA_PlayerCameras"));
+	static ConstructorHelpers::FObjectFinder<UCameraAsset> CameraAssetFinder(TEXT("/Game/NewChopIt/Camera/CA_PlayerCameras.CA_PlayerCameras"));
 	if (CameraAssetFinder.Succeeded()) CameraReference.SetCameraAsset(CameraAssetFinder.Object);
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> OcclusionMaterialFinder(TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> OcclusionMaterialFinder(TEXT("/Game/NewChopIt/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
 	if (OcclusionMaterialFinder.Succeeded()) OcclusionMaterial = OcclusionMaterialFinder.Object;
 }
 

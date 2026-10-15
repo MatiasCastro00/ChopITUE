@@ -456,7 +456,7 @@ private:
 					.OnClicked_Lambda([State]()
 					{
 						FString Error;
-						UStaticMesh* Asset = FChopItTerrainEditorActions::BakeMesh(State->Target.Get(), TEXT("/Game/ChopIt/World/Generated/SM_Terrain"), Error);
+						UStaticMesh* Asset = FChopItTerrainEditorActions::BakeMesh(State->Target.Get(), TEXT("/Game/NewChopIt/Terrain/Generated/SM_Terrain"), Error);
 						State->Status = Asset ? FString::Printf(TEXT("Baked %s. Save the asset to keep it."), *Asset->GetPathName()) : Error;
 						if (Asset) GEditor->SyncBrowserToObjects(TArray<UObject*>{ Asset });
 						return FReply::Handled();

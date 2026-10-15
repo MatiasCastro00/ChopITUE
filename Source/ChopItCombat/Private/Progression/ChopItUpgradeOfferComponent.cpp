@@ -38,7 +38,7 @@ void UChopItUpgradeOfferComponent::LoadDefaultCatalog()
 	for (const TCHAR* Name : Names)
 	{
 		const FString Path = FString::Printf(
-			TEXT("/Game/ChopIt/Progression/Upgrades/DA_Upgrade_%s.DA_Upgrade_%s"), Name, Name);
+			TEXT("/Game/NewChopIt/Data/Progression/Upgrades/DA_Upgrade_%s.DA_Upgrade_%s"), Name, Name);
 		if (UChopItUpgradeDefinition* Upgrade = LoadObject<UChopItUpgradeDefinition>(nullptr, *Path))
 		{
 			Catalog.Add(Upgrade);

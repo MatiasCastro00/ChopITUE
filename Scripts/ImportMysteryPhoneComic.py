@@ -2,7 +2,7 @@
 import os
 import unreal
 
-root = '/Game/ChopIt/Phone'
+root = '/Game/NewChopIt/Art/Models/Phone'
 source_dir = os.path.join(unreal.Paths.project_dir(), 'SourceArt', 'Phone')
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 

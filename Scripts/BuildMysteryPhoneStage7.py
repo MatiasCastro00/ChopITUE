@@ -3,7 +3,7 @@ import math
 import os
 import unreal
 
-ROOT = '/Game/ChopIt/Phone'
+ROOT = '/Game/NewChopIt/Art/Models/Phone'
 SOURCE = os.path.join(unreal.Paths.project_dir(), 'SourceArt', 'Phone')
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 os.makedirs(SOURCE, exist_ok=True)

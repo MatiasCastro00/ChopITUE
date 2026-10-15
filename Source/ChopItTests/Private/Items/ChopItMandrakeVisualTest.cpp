@@ -38,7 +38,7 @@ bool FChopItMandrakeVisualTest::RunTest(const FString& Parameters)
  auto* Confusion=NewObject<UNiagaraComponent>(Actor);
  Actor->AddInstanceComponent(Confusion);Confusion->SetupAttachment(Actor->GetRootComponent());
  Confusion->SetRelativeLocation(FVector(0,0,125));
- Confusion->SetAsset(LoadObject<UNiagaraSystem>(nullptr,TEXT("/Game/ChopIt/Items/Mandrake/NS_Mandrake_Confusion.NS_Mandrake_Confusion")));
+ Confusion->SetAsset(LoadObject<UNiagaraSystem>(nullptr,TEXT("/Game/NewChopIt/Art/Models/Mandrake/NS_Mandrake_Confusion.NS_Mandrake_Confusion")));
  Confusion->RegisterComponent();
  auto* Body=Actor->FindComponentByClass<UStaticMeshComponent>();
  for(const auto& Section:Body->GetStaticMesh()->GetRenderData()->LODResources[0].Sections)
@@ -62,7 +62,7 @@ bool FChopItMandrakeVisualTest::RunTest(const FString& Parameters)
  Capture->FOVAngle=45;
  FAssetCompilingManager::Get().FinishAllCompilation();
  for(const TCHAR* Name:{TEXT("M_Mandrake_Body"),TEXT("M_Mandrake_TearsFlow"),TEXT("M_Mandrake_SonicRefraction"),TEXT("M_Mandrake_ConfusionStar"),TEXT("M_Mandrake_Droplet")})
- if(auto* Mat=LoadObject<UMaterial>(nullptr,*(FString(TEXT("/Game/ChopIt/Items/Mandrake/"))+Name)))Mat->ForceRecompileForRendering(EMaterialShaderPrecompileMode::Synchronous);
+ if(auto* Mat=LoadObject<UMaterial>(nullptr,*(FString(TEXT("/Game/NewChopIt/Art/Models/Mandrake/"))+Name)))Mat->ForceRecompileForRendering(EMaterialShaderPrecompileMode::Synchronous);
  if(GShaderCompilingManager) GShaderCompilingManager->FinishAllCompilation();
  for(int32 Slot=0;Slot<2;++Slot){auto* Mat=Body->GetMaterial(Slot)->GetMaterial();auto* Resource=Mat->GetMaterialResource(GMaxRHIShaderPlatform);AddInfo(FString::Printf(TEXT("Material %s shader=%d domain=%d materials=%d feature=%d"),*Mat->GetName(),Resource&&Resource->GetGameThreadShaderMap()!=nullptr,int(Mat->MaterialDomain),Capture->ShowFlags.Materials,int(World->GetFeatureLevel())));}
  IStreamingManager::Get().StreamAllResources(30.f);

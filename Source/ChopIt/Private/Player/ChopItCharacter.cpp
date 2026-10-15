@@ -105,17 +105,17 @@ AChopItCharacter::AChopItCharacter()
 	}
 
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> LumberjackMesh(
-		TEXT("/Game/ChopIt/Art/Character/Updated/c85471db_c635_45fc_bae4_6171d60be24f.c85471db_c635_45fc_bae4_6171d60be24f"));
+		TEXT("/Game/NewChopIt/Art/Models/Character/Updated/c85471db_c635_45fc_bae4_6171d60be24f.c85471db_c635_45fc_bae4_6171d60be24f"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> LumberjackIdle(
-		TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Idle_Respiracion_96.LumberJackCTRL_COG_Idle_Respiracion_96"));
+		TEXT("/Game/NewChopIt/Art/Models/Character/Updated/LumberJackCTRL_COG_Idle_Respiracion_96.LumberJackCTRL_COG_Idle_Respiracion_96"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> LumberjackWalk(
-		TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Run_Heavy_650_14.LumberJackCTRL_COG_Run_Heavy_650_14"));
+		TEXT("/Game/NewChopIt/Art/Models/Character/Updated/LumberJackCTRL_COG_Run_Heavy_650_14.LumberJackCTRL_COG_Run_Heavy_650_14"));
 	static ConstructorHelpers::FObjectFinder<UAnimSequence> LumberjackJump(
-		TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Jump_Quick_24.LumberJackCTRL_COG_Jump_Quick_24"));
+		TEXT("/Game/NewChopIt/Art/Models/Character/Updated/LumberJackCTRL_COG_Jump_Quick_24.LumberJackCTRL_COG_Jump_Quick_24"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LumberjackMaterial(
-		TEXT("/Game/ChopIt/Art/Character/M_Lumberjack.M_Lumberjack"));
+		TEXT("/Game/NewChopIt/Art/Models/Character/M_Lumberjack.M_Lumberjack"));
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LumberjackOutlineMaterial(
-		TEXT("/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
+		TEXT("/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
 	if (LumberjackMesh.Succeeded())
 	{
 		USkeletalMeshComponent* CharacterMesh = GetMesh();
@@ -217,13 +217,13 @@ void AChopItCharacter::BeginPlay()
 	// Blueprint defaults have been loaded.
 	if (UMaterialInterface* LumberjackMaterial = LoadObject<UMaterialInterface>(
 		nullptr,
-		TEXT("/Game/ChopIt/Art/Character/M_Lumberjack.M_Lumberjack")))
+		TEXT("/Game/NewChopIt/Art/Models/Character/M_Lumberjack.M_Lumberjack")))
 	{
 		GetMesh()->SetMaterial(0, LumberjackMaterial);
 	}
 	if (UMaterialInterface* LumberjackOutlineMaterial = LoadObject<UMaterialInterface>(
 		nullptr,
-		TEXT("/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering")))
+		TEXT("/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering")))
 	{
 		LumberjackOutlineInstance = UMaterialInstanceDynamic::Create(LumberjackOutlineMaterial, this);
 		if (LumberjackOutlineInstance)
@@ -293,7 +293,7 @@ void AChopItCharacter::BeginPlay()
 
 	if (UMaterialInterface* PlayerMaterial = LoadObject<UMaterialInterface>(
 		nullptr,
-		TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Player.MI_Player")))
+		TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Player.MI_Player")))
 	{
 		BodyVisual->SetMaterial(0, PlayerMaterial);
 		FacingMarker->SetMaterial(0, PlayerMaterial);
@@ -357,7 +357,7 @@ void AChopItCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		return;
 	}
 
-	MoveAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_Move.IA_Move"));
+	MoveAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_Move.IA_Move"));
 	if (!JumpMappingContext)
 	{
 		JumpAction = NewObject<UInputAction>(this);
@@ -378,10 +378,10 @@ void AChopItCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 			}
 		}
 	}
-	InteractAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_Interact.IA_Interact"));
-	CameraLookAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraLook.IA_CameraLook"));
-	CameraZoomAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraZoom.IA_CameraZoom"));
-	CameraResetAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraReset.IA_CameraReset"));
+	InteractAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_Interact.IA_Interact"));
+	CameraLookAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_CameraLook.IA_CameraLook"));
+	CameraZoomAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_CameraZoom.IA_CameraZoom"));
+	CameraResetAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_CameraReset.IA_CameraReset"));
 
 	if (MoveAction)
 	{

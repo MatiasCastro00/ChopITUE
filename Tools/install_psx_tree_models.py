@@ -9,9 +9,9 @@ import math
 import unreal
 
 
-MAP_PATH = "/Game/ChopIt/World/Maps/L_PSX_test"
-TREE_ROOT = "/Game/ChopIt/Art/Models/Trees/New"
-MATERIAL_ROOT = "/Game/ChopIt/Art/Materials"
+MAP_PATH = "/Game/NewChopIt/Maps/L_PSX_test"
+TREE_ROOT = "/Game/NewChopIt/Art/Models/Trees/New"
+MATERIAL_ROOT = "/Game/NewChopIt/Art/Materials"
 GROUND_MATERIAL_ROOT = MATERIAL_ROOT + "/Ground"
 PSX_OUTLINE_PATH = MATERIAL_ROOT + "/PSX_Materials/MI_PSX_Outline_Jittering"
 NEAR_TREE_COUNT = 8
@@ -396,7 +396,7 @@ for variant_number, (texture_path, material_path) in GRASS_VARIANTS.items():
 unreal.EditorAssetLibrary.save_directory(TREE_ROOT, only_if_is_dirty=False, recursive=True)
 unreal.EditorAssetLibrary.save_directory(GROUND_MATERIAL_ROOT, only_if_is_dirty=False, recursive=True)
 
-chain_definition = unreal.EditorAssetLibrary.load_asset("/Game/ChopIt/World/ChainLab/DA_Chain_Default")
+chain_definition = unreal.EditorAssetLibrary.load_asset("/Game/NewChopIt/ChainLab/DA_Chain_Default")
 if not isinstance(chain_definition, unreal.ChopItChainDefinition):
     raise RuntimeError("DA_Chain_Default could not be loaded")
 chain_definition.set_editor_property("chain_link_count", MAX_CHAIN_LINKS)

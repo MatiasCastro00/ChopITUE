@@ -14,8 +14,8 @@
 UChopItEliteEncounterComponent::UChopItEliteEncounterComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-	EliteDefinition = TSoftObjectPtr<UChopItEnemyDefinition>(FSoftObjectPath(TEXT("/Game/ChopIt/AI/Enemies/DA_Enemy_Guardian.DA_Enemy_Guardian")));
-	FinalDefinition = TSoftObjectPtr<UChopItEnemyDefinition>(FSoftObjectPath(TEXT("/Game/ChopIt/AI/Enemies/DA_Enemy_ForestEntity.DA_Enemy_ForestEntity")));
+	EliteDefinition = TSoftObjectPtr<UChopItEnemyDefinition>(FSoftObjectPath(TEXT("/Game/NewChopIt/Data/AI/Enemies/DA_Enemy_Guardian.DA_Enemy_Guardian")));
+	FinalDefinition = TSoftObjectPtr<UChopItEnemyDefinition>(FSoftObjectPath(TEXT("/Game/NewChopIt/Data/AI/Enemies/DA_Enemy_ForestEntity.DA_Enemy_ForestEntity")));
 }
 void UChopItEliteEncounterComponent::BeginPlay()
 {

@@ -52,7 +52,7 @@ void UChopItAutoAttackComponent::BeginPlay()
 	{
 		WeaponDefinition = LoadObject<UChopItWeaponDefinition>(
 			nullptr,
-			TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_BasicAxe.DA_Weapon_BasicAxe"));
+			TEXT("/Game/NewChopIt/Data/Combat/Weapons/DA_Weapon_BasicAxe.DA_Weapon_BasicAxe"));
 	}
 	RestartAttackTimer();
 }

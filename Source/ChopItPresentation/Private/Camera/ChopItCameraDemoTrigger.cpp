@@ -36,8 +36,8 @@ bool AChopItCameraDemoTrigger::Interact_Implementation(AActor* Interactor)
 	FActorSpawnParameters Params; Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	const FVector CameraLocation = Interactor->GetActorLocation() + FVector(-320.0f, 260.0f, 210.0f);
 	RuntimeAnchor = GetWorld()->SpawnActor<AChopItCameraAnchor>(CameraLocation, (Interactor->GetActorLocation() + FVector(0,0,80) - CameraLocation).Rotation(), Params);
-	const UChopItCameraCue* Cue = LoadObject<UChopItCameraCue>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Cues/CC_DialogueCloseup.CC_DialogueCloseup"));
-	const UChopItCameraEffectPreset* Effect = LoadObject<UChopItCameraEffectPreset>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Effects/CE_DialogueFocus.CE_DialogueFocus"));
+	const UChopItCameraCue* Cue = LoadObject<UChopItCameraCue>(nullptr, TEXT("/Game/NewChopIt/Camera/Cues/CC_DialogueCloseup.CC_DialogueCloseup"));
+	const UChopItCameraEffectPreset* Effect = LoadObject<UChopItCameraEffectPreset>(nullptr, TEXT("/Game/NewChopIt/Camera/Effects/CE_DialogueFocus.CE_DialogueFocus"));
 	CueHandle = Director->PushCameraCue(Cue, RuntimeAnchor, Interactor);
 	EffectHandle = Director->PushCameraEffect(Effect, -1.0f);
 	GetWorld()->GetTimerManager().SetTimer(ShakeTimer, this, &AChopItCameraDemoTrigger::PlayShakeStep, 0.8f, false);
@@ -48,7 +48,7 @@ bool AChopItCameraDemoTrigger::Interact_Implementation(AActor* Interactor)
 
 void AChopItCameraDemoTrigger::PlayShakeStep()
 {
-	if (UChopItCameraDirectorSubsystem* Director = GetDirector()) if (const UCameraShakeAsset* Shake = LoadObject<UCameraShakeAsset>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical.CS_Critical"))) Director->PlayCameraShake(Shake, 1.0f, GetActorLocation());
+	if (UChopItCameraDirectorSubsystem* Director = GetDirector()) if (const UCameraShakeAsset* Shake = LoadObject<UCameraShakeAsset>(nullptr, TEXT("/Game/NewChopIt/Camera/Shakes/CS_Critical.CS_Critical"))) Director->PlayCameraShake(Shake, 1.0f, GetActorLocation());
 }
 void AChopItCameraDemoTrigger::RemoveEffectStep() { if (UChopItCameraDirectorSubsystem* Director = GetDirector()) Director->PopCameraEffect(EffectHandle); EffectHandle.Invalidate(); }
 void AChopItCameraDemoTrigger::RestoreStep() { if (UChopItCameraDirectorSubsystem* Director = GetDirector()) Director->PopCameraCue(CueHandle); CueHandle.Invalidate(); if (RuntimeAnchor) RuntimeAnchor->Destroy(); RuntimeAnchor = nullptr; }

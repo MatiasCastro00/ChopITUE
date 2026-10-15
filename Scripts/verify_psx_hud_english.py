@@ -1,7 +1,7 @@
 """Read-only check that the authored PSX HUD labels are in English."""
 import unreal
 
-blueprint = unreal.load_asset('/Game/ChopIt/UI/WBP_PSX_HUD')
+blueprint = unreal.load_asset('/Game/NewChopIt/Art/UI/WBP_PSX_HUD')
 tree = blueprint.get_editor_property('widget_tree')
 expected = {
     'QuotaText': 'QUOTA   120 / 200',

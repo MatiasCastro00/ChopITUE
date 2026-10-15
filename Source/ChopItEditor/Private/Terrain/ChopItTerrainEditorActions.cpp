@@ -29,7 +29,7 @@ UChopItTerrainDataAsset* FChopItTerrainEditorActions::SaveAsDataAsset(
 	UDataAssetFactory* Factory = NewObject<UDataAssetFactory>();
 	Factory->DataAssetClass = UChopItTerrainDataAsset::StaticClass();
 	UObject* Created = FAssetToolsModule::GetModule().Get().CreateAssetWithDialog(
-		TEXT("DA_Terrain"), TEXT("/Game/ChopIt/World/Generated"), UChopItTerrainDataAsset::StaticClass(), Factory,
+		TEXT("DA_Terrain"), TEXT("/Game/NewChopIt/Terrain/Generated"), UChopItTerrainDataAsset::StaticClass(), Factory,
 		NAME_None, false);
 	UChopItTerrainDataAsset* Asset = Cast<UChopItTerrainDataAsset>(Created);
 	if (!Asset) { OutError = TEXT("Data Asset creation was cancelled or failed."); return nullptr; }

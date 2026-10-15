@@ -106,7 +106,7 @@ bool FChopItPhase2AssetsAndMapTest::RunTest(const FString& Parameters)
 {
 	const UChopItWeaponDefinition* Weapon = LoadObject<UChopItWeaponDefinition>(
 		nullptr,
-		TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_BasicAxe.DA_Weapon_BasicAxe"));
+		TEXT("/Game/NewChopIt/Data/Combat/Weapons/DA_Weapon_BasicAxe.DA_Weapon_BasicAxe"));
 	TestNotNull(TEXT("Basic axe data asset exists"), Weapon);
 	if (!Weapon)
 	{
@@ -120,7 +120,7 @@ bool FChopItPhase2AssetsAndMapTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Baseline critical chance is fifteen percent"), FMath::IsNearlyEqual(Weapon->CriticalChance, 0.15f));
 	TestEqual(TEXT("Weapon is registered under the expected primary type"), Weapon->GetPrimaryAssetId().PrimaryAssetType, FPrimaryAssetType(TEXT("ChopItWeapon")));
 
-	const FString CombatMapPackage = TEXT("/Game/ChopIt/World/Maps/L_Test_Combat");
+	const FString CombatMapPackage = TEXT("/Game/NewChopIt/Maps/L_Test_Combat");
 	TestTrue(TEXT("Combat test map package exists"), FPackageName::DoesPackageExist(CombatMapPackage));
 	UPackage* Package = LoadPackage(nullptr, *CombatMapPackage, LOAD_None);
 	TestNotNull(TEXT("Combat map package loads"), Package);

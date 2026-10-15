@@ -543,7 +543,7 @@ void UChopItDialogueSubsystem::SetDialogueInputEnabled(const bool bEnabled)
 {
 	if (!GetLocalPlayer()) return;
 	UEnhancedInputLocalPlayerSubsystem* Input = GetLocalPlayer()->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
-	const UInputMappingContext* Context = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/ChopIt/Input/IMC_Dialogue.IMC_Dialogue"));
+	const UInputMappingContext* Context = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/NewChopIt/Input/IMC_Dialogue.IMC_Dialogue"));
 	if (!Input || !Context) return;
 	if (bEnabled) Input->AddMappingContext(Context, 100);
 	else Input->RemoveMappingContext(Context);

@@ -1,11 +1,11 @@
 """Place the functional phone Blueprint in PSX_test for editor range tuning."""
 import unreal
 
-map_path = '/Game/ChopIt/World/Maps/L_PSX_test'
+map_path = '/Game/NewChopIt/Maps/L_PSX_test'
 world = unreal.EditorLoadingAndSavingUtils.load_map(map_path)
 actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-phone_class = unreal.EditorAssetLibrary.load_blueprint_class('/Game/ChopIt/Phone/BP_MysteryPhone')
+phone_class = unreal.EditorAssetLibrary.load_blueprint_class('/Game/NewChopIt/Art/Models/Phone/BP_MysteryPhone')
 if not phone_class:
     raise RuntimeError('Missing BP_MysteryPhone')
 

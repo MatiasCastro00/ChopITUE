@@ -2,7 +2,7 @@
 
 import unreal
 
-ROOT = "/Game/ChopIt/Art/Materials/PSX_Materials"
+ROOT = "/Game/NewChopIt/Art/Materials/PSX_Materials"
 material = unreal.EditorAssetLibrary.load_asset(ROOT + "/M_PSX_CRT_Post")
 instance = unreal.EditorAssetLibrary.load_asset(ROOT + "/MI_PSX_CRT")
 assert isinstance(material, unreal.Material)
@@ -34,7 +34,7 @@ overrides = [(str(item.get_editor_property("parameter_info").get_editor_property
              for item in instance.get_editor_property("scalar_parameter_values")]
 unreal.log("PSX_CRT_OVERRIDES {}".format(overrides))
 
-world = unreal.EditorLoadingAndSavingUtils.load_map("/Game/ChopIt/World/Maps/L_PSX_test")
+world = unreal.EditorLoadingAndSavingUtils.load_map("/Game/NewChopIt/Maps/L_PSX_test")
 assert world
 volumes = [actor for actor in unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
            if isinstance(actor, unreal.PostProcessVolume)]

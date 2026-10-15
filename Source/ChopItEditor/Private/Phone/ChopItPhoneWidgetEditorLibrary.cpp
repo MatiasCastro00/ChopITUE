@@ -40,14 +40,14 @@
 bool UChopItPhoneWidgetEditorLibrary::BuildEditablePhoneIndicator()
 {
 	UWidgetBlueprint* Blueprint = LoadObject<UWidgetBlueprint>(nullptr,
-		TEXT("/Game/ChopIt/Phone/WBP_PhoneRingIndicator.WBP_PhoneRingIndicator"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/WBP_PhoneRingIndicator.WBP_PhoneRingIndicator"));
 	if (!Blueprint || !Blueprint->WidgetTree) return false;
 	if (Blueprint->WidgetTree->RootWidget) return true;
 
 	UTexture2D* BubbleTexture = LoadObject<UTexture2D>(nullptr,
-		TEXT("/Game/ChopIt/Phone/T_PhoneComicBubble.T_PhoneComicBubble"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/T_PhoneComicBubble.T_PhoneComicBubble"));
 	UTexture2D* RingTexture = LoadObject<UTexture2D>(nullptr,
-		TEXT("/Game/ChopIt/Phone/T_PhoneComicRing.T_PhoneComicRing"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/T_PhoneComicRing.T_PhoneComicRing"));
 	if (!BubbleTexture || !RingTexture) return false;
 
 	Blueprint->Modify();
@@ -109,20 +109,20 @@ bool UChopItPhoneWidgetEditorLibrary::BuildEditablePhoneIndicator()
 bool UChopItPhoneWidgetEditorLibrary::BuildEditablePhonePrompt()
 {
 	UWidgetBlueprint* Blueprint = LoadObject<UWidgetBlueprint>(nullptr,
-		TEXT("/Game/ChopIt/Phone/WBP_PhoneInteractPrompt.WBP_PhoneInteractPrompt"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/WBP_PhoneInteractPrompt.WBP_PhoneInteractPrompt"));
 	if (!Blueprint || !Blueprint->WidgetTree) return false;
 	if (Blueprint->WidgetTree->RootWidget &&
 		Blueprint->WidgetTree->FindWidget(TEXT("KeyGroup"))) return true;
 	UTexture2D* KeyPlateTexture = LoadObject<UTexture2D>(nullptr,
-		TEXT("/Game/ChopIt/Phone/T_PhonePromptKeyPlate.T_PhonePromptKeyPlate"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/T_PhonePromptKeyPlate.T_PhonePromptKeyPlate"));
 	UTexture2D* KeyGlyphTexture = LoadObject<UTexture2D>(nullptr,
-		TEXT("/Game/ChopIt/Phone/T_PhonePromptKeyE.T_PhonePromptKeyE"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/T_PhonePromptKeyE.T_PhonePromptKeyE"));
 	UTexture2D* LeftTexture = LoadObject<UTexture2D>(nullptr,
-		TEXT("/Game/ChopIt/Phone/T_PhonePromptRayLeft.T_PhonePromptRayLeft"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/T_PhonePromptRayLeft.T_PhonePromptRayLeft"));
 	UTexture2D* CenterTexture = LoadObject<UTexture2D>(nullptr,
-		TEXT("/Game/ChopIt/Phone/T_PhonePromptRayCenter.T_PhonePromptRayCenter"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/T_PhonePromptRayCenter.T_PhonePromptRayCenter"));
 	UTexture2D* RightTexture = LoadObject<UTexture2D>(nullptr,
-		TEXT("/Game/ChopIt/Phone/T_PhonePromptRayRight.T_PhonePromptRayRight"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/T_PhonePromptRayRight.T_PhonePromptRayRight"));
 	if (!KeyPlateTexture || !KeyGlyphTexture || !LeftTexture || !CenterTexture || !RightTexture) return false;
 
 	Blueprint->Modify();
@@ -166,7 +166,7 @@ bool UChopItPhoneWidgetEditorLibrary::BuildEditablePhoneDialogue()
 {
     const auto MakeBlueprint = [](const TCHAR* Name, UClass* Parent)
     {
-        const FString Path = FString(TEXT("/Game/ChopIt/Phone/")) + Name;
+        const FString Path = FString(TEXT("/Game/NewChopIt/Art/Models/Phone/")) + Name;
         UWidgetBlueprint* BP = LoadObject<UWidgetBlueprint>(nullptr, *(Path + TEXT(".") + Name));
         if (!BP)
         {
@@ -379,11 +379,11 @@ bool UChopItPhoneWidgetEditorLibrary::ExportPhoneDialoguePreview()
 {
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
     UClass* PresentationClass = LoadClass<UChopItPhonePresentationWidget>(nullptr,
-        TEXT("/Game/ChopIt/Phone/WBP_PhonePresentation.WBP_PhonePresentation_C"));
+        TEXT("/Game/NewChopIt/Art/Models/Phone/WBP_PhonePresentation.WBP_PhonePresentation_C"));
     UChopItDialogueSequence* Sequence = LoadObject<UChopItDialogueSequence>(nullptr,
-        TEXT("/Game/ChopIt/Phone/DA_PhoneDialogueDevil.DA_PhoneDialogueDevil"));
+        TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneDialogueDevil.DA_PhoneDialogueDevil"));
     UChopItPhoneVariantData* Variant = LoadObject<UChopItPhoneVariantData>(nullptr,
-        TEXT("/Game/ChopIt/Phone/DA_PhoneDevil.DA_PhoneDevil"));
+        TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneDevil.DA_PhoneDevil"));
     if (!World || !PresentationClass || !Sequence || !Variant || !Sequence->WidgetClass) return false;
     UChopItPhonePresentationWidget* Portrait = CreateWidget<UChopItPhonePresentationWidget>(World, PresentationClass);
     UChopItPhoneConversationWidget* Conversation = CreateWidget<UChopItPhoneConversationWidget>(World, Sequence->WidgetClass);

@@ -35,8 +35,8 @@ AChopItBossRewardChest::AChopItBossRewardChest()
 	Approach->OnComponentBeginOverlap.AddDynamic(this, &ThisClass::HandleApproach);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Wood(TEXT("/Game/ChopIt/Items/Chest/M_BossChest_Wood.M_BossChest_Wood"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Gold(TEXT("/Game/ChopIt/Items/Chest/M_BossChest_Gold.M_BossChest_Gold"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Wood(TEXT("/Game/NewChopIt/Art/Models/Chest/M_BossChest_Wood.M_BossChest_Wood"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Gold(TEXT("/Game/NewChopIt/Art/Models/Chest/M_BossChest_Gold.M_BossChest_Gold"));
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ChestBody"));
 	Body->SetupAttachment(VisualRoot);
 	Body->SetStaticMesh(Cube.Object);
@@ -89,9 +89,9 @@ AChopItBossRewardChest::AChopItBossRewardChest()
 	IdleParticles->SetupAttachment(VisualRoot);
 	IdleParticles->SetRelativeLocation(FVector(0.f, 0.f, 58.f));
 	IdleParticles->SetAutoActivate(false);
-	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Arrival(TEXT("/Game/ChopIt/Items/Chest/NS_BossChest_Appear.NS_BossChest_Appear"));
-	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Opening(TEXT("/Game/ChopIt/Items/Chest/NS_BossChest_Open.NS_BossChest_Open"));
-	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Idle(TEXT("/Game/ChopIt/Items/Chest/NS_BossChest_Idle.NS_BossChest_Idle"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Arrival(TEXT("/Game/NewChopIt/Art/Models/Chest/NS_BossChest_Appear.NS_BossChest_Appear"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Opening(TEXT("/Game/NewChopIt/Art/Models/Chest/NS_BossChest_Open.NS_BossChest_Open"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> Idle(TEXT("/Game/NewChopIt/Art/Models/Chest/NS_BossChest_Idle.NS_BossChest_Idle"));
 	ArrivalParticles->SetAsset(Arrival.Object);
 	OpeningParticles->SetAsset(Opening.Object);
 	IdleParticles->SetAsset(Idle.Object);
@@ -190,7 +190,7 @@ void AChopItBossRewardChest::TryOpen(AActor* Actor)
 	OpeningParticles->Activate(true);
 	Label->SetText(FText::FromString(TEXT("ABRIENDO...")));
 	if (AChopItHUD* HUD = Cast<AChopItHUD>(PC->GetHUD())) HUD->StartItemReveal(ChosenItem);
-	if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, TEXT("/Game/ChopIt/UI/Audio/UI_Complete.UI_Complete")))
+	if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, TEXT("/Game/NewChopIt/Audio/UI/UI_Complete.UI_Complete")))
 		UGameplayStatics::PlaySoundAtLocation(this, Sound, GetActorLocation());
 	// Award synchronously because world timers stop during the paused reveal.
 	// The HUD keeps the result hidden until the real-time light sequence ends.

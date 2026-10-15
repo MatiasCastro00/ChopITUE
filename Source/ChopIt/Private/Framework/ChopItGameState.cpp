@@ -30,7 +30,7 @@ void AChopItGameState::BeginPlay()
 	EliteEncounterComponent->OnEliteDefeated.AddUObject(this, &AChopItGameState::HandleEliteDefeated);
 	const UChopItDayDefinition* DayDefinition = LoadObject<UChopItDayDefinition>(
 		nullptr,
-		TEXT("/Game/ChopIt/Economy/Days/DA_Day_01.DA_Day_01"));
+		TEXT("/Game/NewChopIt/Data/Days/DA_Day_01.DA_Day_01"));
 	const int32 InitialDay = ResolveInitialDay(DayDefinition);
 	// The authored first match is the complete furnace contract. Keep the value
 	// in runtime code so regenerating bootstrap content never overwrites the

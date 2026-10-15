@@ -18,7 +18,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChopItPhoneStage5Test, "ChopIt.Phone.Stage5.Va
 bool FChopItPhoneStage5Test::RunTest(const FString& Parameters)
 {
 	UChopItPhoneVariantPool* Pool = LoadObject<UChopItPhoneVariantPool>(nullptr,
-		TEXT("/Game/ChopIt/Phone/DA_PhoneVariants.DA_PhoneVariants"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneVariants.DA_PhoneVariants"));
 	if (!TestNotNull(TEXT("Variant pool Data Asset"), Pool)) return false;
 	TestTrue(TEXT("Variant pool valid"), Pool->IsValidConfig());
 	TestEqual(TEXT("Two initial variants"), Pool->Variants.Num(), 2);

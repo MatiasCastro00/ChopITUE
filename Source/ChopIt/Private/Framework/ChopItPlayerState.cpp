@@ -27,6 +27,6 @@ void AChopItPlayerState::HandlePhase(EChopItCyclePhase NewPhase,EChopItCyclePhas
 {
 	if(NewPhase!=EChopItCyclePhase::Dusk || PactComponent->HasActiveOffer()) return;
 	TArray<UChopItPactDefinition*> Offers;
-	for(const TCHAR* Name:{TEXT("Furia"),TEXT("Ritmo"),TEXT("Botas")}) Offers.Add(LoadObject<UChopItPactDefinition>(nullptr,*FString::Printf(TEXT("/Game/ChopIt/Pacts/DA_Pact_%s.DA_Pact_%s"),Name,Name)));
+	for(const TCHAR* Name:{TEXT("Furia"),TEXT("Ritmo"),TEXT("Botas")}) Offers.Add(LoadObject<UChopItPactDefinition>(nullptr,*FString::Printf(TEXT("/Game/NewChopIt/Data/Pacts/DA_Pact_%s.DA_Pact_%s"),Name,Name)));
 	PactComponent->OpenOffers(Offers);
 }

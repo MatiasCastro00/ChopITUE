@@ -90,8 +90,8 @@ void AChopItDialogueStageCharacter::ConfigurePillMarker(const FText& DisplayName
 
 	UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	UMaterialInterface* BodyMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Stone.MI_Stone"));
-	UMaterialInterface* AccentMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Roof.MI_Roof"));
+	UMaterialInterface* BodyMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Stone.MI_Stone"));
+	UMaterialInterface* AccentMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Roof.MI_Roof"));
 
 	if (PillBody)
 	{

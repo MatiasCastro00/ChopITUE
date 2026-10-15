@@ -28,7 +28,7 @@ bool FChopItPhoneStage6Test::RunTest(const FString& Parameters)
 {
 	for (const TCHAR* Id : {TEXT("Devil"), TEXT("Angel")})
 	{
-		const FString VariantPath = FString::Printf(TEXT("/Game/ChopIt/Phone/DA_Phone%s.DA_Phone%s"), Id, Id);
+		const FString VariantPath = FString::Printf(TEXT("/Game/NewChopIt/Art/Models/Phone/DA_Phone%s.DA_Phone%s"), Id, Id);
 		UChopItPhoneVariantData* Variant = LoadObject<UChopItPhoneVariantData>(nullptr, *VariantPath);
 		if (!TestNotNull(TEXT("Variant asset"), Variant)) return false;
 		UChopItDialogueSequence* Sequence = Variant->DialogueSequence.LoadSynchronous();
@@ -48,7 +48,7 @@ bool FChopItPhoneStage6Test::RunTest(const FString& Parameters)
 			bool bFoundBargain = false;
 			for (const TCHAR* BargainName : {TEXT("HachaDeVidrio"), TEXT("SierraFrenetica"), TEXT("BrazoInfinito")})
 			{
-				const FString Path = FString::Printf(TEXT("/Game/ChopIt/Phone/Bargains/DA_PhoneBargain_%s.DA_PhoneBargain_%s"), BargainName, BargainName);
+				const FString Path = FString::Printf(TEXT("/Game/NewChopIt/Data/Phone/DA_PhoneBargain_%s.DA_PhoneBargain_%s"), BargainName, BargainName);
 				if (const UChopItPhoneBargainDefinition* Bargain = LoadObject<UChopItPhoneBargainDefinition>(nullptr, *Path))
 					bFoundBargain |= Bargain->BargainId == Choice.ChoiceId && !Bargain->Modifiers.IsEmpty();
 			}
@@ -69,7 +69,7 @@ bool FChopItPhoneStage6Test::RunTest(const FString& Parameters)
 	UChopItCombatStatsComponent* PhoneStats = NewObject<UChopItCombatStatsComponent>(World);
 	UChopItHealthComponent* PhoneHealth = NewObject<UChopItHealthComponent>(World);
 	UChopItPhoneBargainDefinition* PhoneReward = LoadObject<UChopItPhoneBargainDefinition>(nullptr,
-		TEXT("/Game/ChopIt/Phone/Bargains/DA_PhoneBargain_HachaDeVidrio.DA_PhoneBargain_HachaDeVidrio"));
+		TEXT("/Game/NewChopIt/Data/Phone/DA_PhoneBargain_HachaDeVidrio.DA_PhoneBargain_HachaDeVidrio"));
 	if (!TestNotNull(TEXT("Phone bargain definition"), PhoneReward)) return false;
 	const int32 BeforeModifiers = PhoneStats->GetModifierCount();
 	TestTrue(TEXT("Selecting phone bargain applies both sides"), PhoneProgression->ApplyPhoneBargain(PhoneReward, PhoneStats, PhoneHealth));
@@ -82,13 +82,13 @@ bool FChopItPhoneStage6Test::RunTest(const FString& Parameters)
 		TEXT("TroncosMalditos"), TEXT("PiesPrestados"), TEXT("VerdugoCercano"), TEXT("FortunaDeSangre"),
 		TEXT("UltimoAliento"), TEXT("GuardiaInmovil")})
 	{
-		const FString Path = FString::Printf(TEXT("/Game/ChopIt/Phone/Bargains/DA_PhoneBargain_%s.DA_PhoneBargain_%s"), BargainName, BargainName);
+		const FString Path = FString::Printf(TEXT("/Game/NewChopIt/Data/Phone/DA_PhoneBargain_%s.DA_PhoneBargain_%s"), BargainName, BargainName);
 		const UChopItPhoneBargainDefinition* Bargain = LoadObject<UChopItPhoneBargainDefinition>(nullptr, *Path);
 		if (!TestNotNull(TEXT("Editable bargain in offer catalog"), Bargain)) return false;
 		TestTrue(TEXT("Bargain declares benefit and price"), !Bargain->BenefitText.IsEmpty() && !Bargain->CostText.IsEmpty());
 	}
 	UClass* ViewClass = LoadClass<UChopItPhoneConversationWidget>(nullptr,
-		TEXT("/Game/ChopIt/Phone/WBP_PhoneConversation.WBP_PhoneConversation_C"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/WBP_PhoneConversation.WBP_PhoneConversation_C"));
 	if (!TestNotNull(TEXT("Saved conversation WBP"), ViewClass)) return false;
 	UChopItPhoneConversationWidget* View = CreateWidget<UChopItPhoneConversationWidget>(World, ViewClass);
 	if (!TestNotNull(TEXT("Authored view can instantiate"), View)) return false;
@@ -136,7 +136,7 @@ bool FChopItPhoneStage6Test::RunTest(const FString& Parameters)
 	if (TestNotNull(TEXT("Authored response container"), Cards))
 		TestEqual(TEXT("New line hides previous responses"), Cards->GetVisibility(), ESlateVisibility::Collapsed);
 	UClass* PresentationClass = LoadClass<UChopItPhonePresentationWidget>(nullptr,
-		TEXT("/Game/ChopIt/Phone/WBP_PhonePresentation.WBP_PhonePresentation_C"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/WBP_PhonePresentation.WBP_PhonePresentation_C"));
 	if (!TestNotNull(TEXT("Saved presentation WBP"), PresentationClass)) return false;
 	UChopItPhonePresentationWidget* Presentation = CreateWidget<UChopItPhonePresentationWidget>(World, PresentationClass);
 	if (!TestNotNull(TEXT("Presentation instantiates"), Presentation)) return false;
@@ -148,7 +148,7 @@ bool FChopItPhoneStage6Test::RunTest(const FString& Parameters)
 	AChopItPhoneDialogueScene* Scene = World->SpawnActor<AChopItPhoneDialogueScene>(FVector(0, 0, 100000), FRotator::ZeroRotator);
 	if (!TestNotNull(TEXT("Phone"), Phone) || !TestNotNull(TEXT("Capture stage"), Scene)) return false;
 	UChopItPhoneVariantData* Devil = LoadObject<UChopItPhoneVariantData>(nullptr,
-		TEXT("/Game/ChopIt/Phone/DA_PhoneDevil.DA_PhoneDevil"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneDevil.DA_PhoneDevil"));
 	TestTrue(TEXT("3D stage can clone the selected phone with its UMG composite"),
 		Scene->InitializeScene(Phone, Devil) && Scene->GetTexture() && Scene->GetCompositeMaterial());
 	return true;

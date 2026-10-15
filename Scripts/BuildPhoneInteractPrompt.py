@@ -2,7 +2,7 @@
 import os
 import unreal
 
-root = '/Game/ChopIt/Phone'
+root = '/Game/NewChopIt/Art/Models/Phone'
 source_dir = os.path.join(unreal.Paths.project_dir(), 'SourceArt', 'Phone', 'Prompt')
 assets = {
     'T_PhonePromptKeyPlate': 'KeyPlate.png',

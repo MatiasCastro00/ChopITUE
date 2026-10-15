@@ -5,7 +5,7 @@ import struct
 import wave
 import unreal
 
-ROOT = '/Game/ChopIt/Phone'
+ROOT = '/Game/NewChopIt/Art/Models/Phone'
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 sound_path = ROOT + '/S_PhoneRing'
 source_path = os.path.join(unreal.Paths.project_dir(), 'SourceArt', 'Phone', 'PhoneRing.wav')

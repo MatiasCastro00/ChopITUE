@@ -72,7 +72,7 @@ void AChopItPlayerController::BeginPlay()
 		{
 			const UInputMappingContext* GameplayContext = LoadObject<UInputMappingContext>(
 				nullptr,
-				TEXT("/Game/ChopIt/Input/IMC_Gameplay.IMC_Gameplay"));
+				TEXT("/Game/NewChopIt/Input/IMC_Gameplay.IMC_Gameplay"));
 
 			if (GameplayContext)
 			{
@@ -141,7 +141,7 @@ void AChopItPlayerController::TryStartMatchIntro()
 	UChopItDialogueSubsystem* Dialogue = GetLocalPlayer()->GetSubsystem<UChopItDialogueSubsystem>();
 	UChopItDialogueSequence* Sequence = LoadObject<UChopItDialogueSequence>(
 		nullptr,
-		TEXT("/Game/ChopIt/Dialogue/Sequences/DA_Dialogue_MatchIntro.DA_Dialogue_MatchIntro"));
+		TEXT("/Game/NewChopIt/Data/Dialogue/Sequences/DA_Dialogue_MatchIntro.DA_Dialogue_MatchIntro"));
 	if (!State || !State->GetQuotaComponent() || State->GetQuotaComponent()->GetTarget() <= 0 || !Dialogue || !Sequence) return;
 
 	bMatchIntroAttempted = true;
@@ -153,7 +153,7 @@ void AChopItPlayerController::TryStartMatchIntro()
 	{
 		UClass* OvenClass = LoadClass<AChopItQuotaMachine>(
 			nullptr,
-			TEXT("/Game/ChopIt/World/Economy/BP_QuotaMachine.BP_QuotaMachine_C"));
+			TEXT("/Game/NewChopIt/BP/Economy/BP_QuotaMachine.BP_QuotaMachine_C"));
 		Oven = GetWorld()->SpawnActor<AChopItQuotaMachine>(
 			OvenClass ? OvenClass : AChopItQuotaMachine::StaticClass(),
 			FVector(180.0f, -480.0f, 0.0f),
@@ -178,7 +178,7 @@ void AChopItPlayerController::TryStartMatchIntro()
 	}
 	IntroOvenPortrait = GetWorld()->SpawnActor<AChopItDialogueStageCharacter>(OvenLocation + FVector(0.0f, 0.0f, 155.0f), FRotator::ZeroRotator);
 	if (IntroDeath) IntroDeath->ConfigurePillMarker(FText::FromString(TEXT("DEATH")));
-	if (IntroOvenPortrait) IntroOvenPortrait->Configure(LoadObject<UTexture2D>(nullptr, TEXT("/Game/ChopIt/Dialogue/Portraits/Oven_Hungry.Oven_Hungry")), 250.0f);
+	if (IntroOvenPortrait) IntroOvenPortrait->Configure(LoadObject<UTexture2D>(nullptr, TEXT("/Game/NewChopIt/Art/Textures/Portraits/Oven_Hungry.Oven_Hungry")), 250.0f);
 
 	// The pill marker is much narrower than the old illustrated stand-in. Give it a
 	// genuinely wider, higher establishing close-up and compose it above the UI.
@@ -345,10 +345,10 @@ void AChopItPlayerController::SetupInputComponent()
 
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
 	{
-		DialogueAdvanceAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_DialogueAdvance.IA_DialogueAdvance"));
-		DialogueNextChoiceAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_DialogueNextChoice.IA_DialogueNextChoice"));
-		DialoguePreviousChoiceAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_DialoguePreviousChoice.IA_DialoguePreviousChoice"));
-		DialogueCancelAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_DialogueCancel.IA_DialogueCancel"));
+		DialogueAdvanceAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_DialogueAdvance.IA_DialogueAdvance"));
+		DialogueNextChoiceAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_DialogueNextChoice.IA_DialogueNextChoice"));
+		DialoguePreviousChoiceAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_DialoguePreviousChoice.IA_DialoguePreviousChoice"));
+		DialogueCancelAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_DialogueCancel.IA_DialogueCancel"));
 		if (DialogueAdvanceAction) EnhancedInput->BindAction(DialogueAdvanceAction, ETriggerEvent::Started, this, &AChopItPlayerController::DialogueAdvance);
 		if (DialogueNextChoiceAction) EnhancedInput->BindAction(DialogueNextChoiceAction, ETriggerEvent::Started, this, &AChopItPlayerController::DialogueNextChoice);
 		if (DialoguePreviousChoiceAction) EnhancedInput->BindAction(DialoguePreviousChoiceAction, ETriggerEvent::Started, this, &AChopItPlayerController::DialoguePreviousChoice);

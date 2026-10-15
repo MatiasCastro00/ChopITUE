@@ -19,9 +19,9 @@ bool FChopItPhase8BudgetTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChopItPhase8AssetsTest, "ChopIt.Phase8.Assets", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FChopItPhase8AssetsTest::RunTest(const FString& Parameters)
 {
-	const UChopItEnemyDefinition* Basic = LoadObject<UChopItEnemyDefinition>(nullptr, TEXT("/Game/ChopIt/AI/Enemies/DA_Enemy_Tree.DA_Enemy_Tree"));
-	const UChopItEnemyDefinition* Fast = LoadObject<UChopItEnemyDefinition>(nullptr, TEXT("/Game/ChopIt/AI/Enemies/DA_Enemy_FastTree.DA_Enemy_FastTree"));
-	const UChopItEnemyDirectorDefinition* Director = LoadObject<UChopItEnemyDirectorDefinition>(nullptr, TEXT("/Game/ChopIt/AI/Directors/DA_Director_Day01.DA_Director_Day01"));
+	const UChopItEnemyDefinition* Basic = LoadObject<UChopItEnemyDefinition>(nullptr, TEXT("/Game/NewChopIt/Data/AI/Enemies/DA_Enemy_Tree.DA_Enemy_Tree"));
+	const UChopItEnemyDefinition* Fast = LoadObject<UChopItEnemyDefinition>(nullptr, TEXT("/Game/NewChopIt/Data/AI/Enemies/DA_Enemy_FastTree.DA_Enemy_FastTree"));
+	const UChopItEnemyDirectorDefinition* Director = LoadObject<UChopItEnemyDirectorDefinition>(nullptr, TEXT("/Game/NewChopIt/Data/AI/Directors/DA_Director_Day01.DA_Director_Day01"));
 	TestNotNull(TEXT("Basic enemy asset exists"), Basic);
 	TestNotNull(TEXT("Fast enemy asset exists"), Fast);
 	TestNotNull(TEXT("Director asset exists"), Director);

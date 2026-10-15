@@ -2,7 +2,7 @@
 
 import unreal
 
-MAP_PATH = "/Game/ChopIt/World/Maps/L_PSX_test"
+MAP_PATH = "/Game/NewChopIt/Maps/L_PSX_test"
 CHECK_LABELS = {"CabinHub", "QuotaMachine"}
 
 

@@ -1,7 +1,7 @@
 """Create a placeable harmless Blueprint for viewing Mandrake VFX in PIE."""
 import unreal
 
-folder = '/Game/ChopIt/Items/Mandrake'
+folder = '/Game/NewChopIt/Art/Models/Mandrake'
 name = folder + '/BP_MandrakeFXPreview'
 asset = unreal.EditorAssetLibrary.load_asset(name)
 if not asset:

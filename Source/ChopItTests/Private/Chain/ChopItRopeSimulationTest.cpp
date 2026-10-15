@@ -17,7 +17,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FChopItStartupChainObstacleCourseTest::RunTest(const FString& Parameters)
 {
-	const FString MapPackageName = TEXT("/Game/ChopIt/World/Maps/L_Startup");
+	const FString MapPackageName = TEXT("/Game/NewChopIt/Maps/L_Startup");
 	UPackage* Package = LoadPackage(nullptr, *MapPackageName, LOAD_None);
 	UWorld* World = Package ? FindObject<UWorld>(Package, TEXT("L_Startup")) : nullptr;
 	TestNotNull(TEXT("Startup map with the chain course loads"), World);

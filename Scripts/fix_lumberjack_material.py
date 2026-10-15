@@ -1,6 +1,6 @@
 import unreal
 
-root = '/Game/ChopIt/Art/Character'
+root = '/Game/NewChopIt/Art/Models/Character'
 task = unreal.AssetImportTask()
 task.filename = unreal.Paths.project_content_dir() + 'ChopIt/Art/Character/Textures/Lumberjack_BaseColor.png'
 task.destination_path = root + '/Textures'

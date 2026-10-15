@@ -10,7 +10,7 @@
 UChopItPhoneCallComponent::UChopItPhoneCallComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-	CallConfig = TSoftObjectPtr<UChopItPhoneCallConfig>(FSoftObjectPath(TEXT("/Game/ChopIt/Phone/DA_PhoneCall.DA_PhoneCall")));
+	CallConfig = TSoftObjectPtr<UChopItPhoneCallConfig>(FSoftObjectPath(TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneCall.DA_PhoneCall")));
 }
 
 void UChopItPhoneCallComponent::BeginPlay()

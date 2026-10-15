@@ -11,7 +11,7 @@ tasks = []
 for filename, asset_name in SOURCES:
     task = unreal.AssetImportTask()
     task.filename = ROOT + filename
-    task.destination_path = "/Game/ChopIt/Art/UI"
+    task.destination_path = "/Game/NewChopIt/Art/Textures/UI"
     task.destination_name = asset_name
     task.automated = True
     task.replace_existing = True
@@ -21,7 +21,7 @@ for filename, asset_name in SOURCES:
 
 unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(tasks)
 for _, asset_name in SOURCES:
-    asset_path = "/Game/ChopIt/Art/UI/" + asset_name
+    asset_path = "/Game/NewChopIt/Art/Textures/UI/" + asset_name
     texture = unreal.EditorAssetLibrary.load_asset(asset_path)
     if texture is None:
         raise RuntimeError("No se pudo importar " + asset_path)

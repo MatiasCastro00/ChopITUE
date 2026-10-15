@@ -65,9 +65,9 @@ AChopItMysteryPhone::AChopItMysteryPhone()
 	ReceiverVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Placeholder(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> PhoneBase(
-		TEXT("/Game/ChopIt/Phone/SM_RotaryPhoneBase.SM_RotaryPhoneBase"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/SM_RotaryPhoneBase.SM_RotaryPhoneBase"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> PhoneReceiver(
-		TEXT("/Game/ChopIt/Phone/SM_RotaryPhoneReceiver.SM_RotaryPhoneReceiver"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/SM_RotaryPhoneReceiver.SM_RotaryPhoneReceiver"));
 	if (PhoneBase.Succeeded() && PhoneReceiver.Succeeded())
 	{
 		BaseVisual->SetStaticMesh(PhoneBase.Object);

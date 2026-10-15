@@ -1,9 +1,9 @@
 import unreal
 
-path = '/Game/ChopIt/Items/Chest/M_ChestReveal_Light'
+path = '/Game/NewChopIt/Art/Models/Chest/M_ChestReveal_Light'
 if not unreal.EditorAssetLibrary.does_asset_exist(path):
     material = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
-        'M_ChestReveal_Light', '/Game/ChopIt/Items/Chest', unreal.Material, unreal.MaterialFactoryNew())
+        'M_ChestReveal_Light', '/Game/NewChopIt/Art/Models/Chest', unreal.Material, unreal.MaterialFactoryNew())
     material.set_editor_property('shading_model', unreal.MaterialShadingModel.MSM_UNLIT)
     material.set_editor_property('blend_mode', unreal.BlendMode.BLEND_ADDITIVE)
     material.set_editor_property('two_sided', True)

@@ -2,8 +2,8 @@
 
 import unreal
 
-MATERIAL_PATH = "/Game/ChopIt/Art/Materials/PSX_Materials/M_PSX_CellShading_Color"
-INSTANCE_PATH = "/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_CellShading"
+MATERIAL_PATH = "/Game/NewChopIt/Art/Materials/PSX_Materials/M_PSX_CellShading_Color"
+INSTANCE_PATH = "/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_CellShading"
 
 material = unreal.EditorAssetLibrary.load_asset(MATERIAL_PATH)
 if material is None:
@@ -50,7 +50,7 @@ if not isinstance(instance, unreal.MaterialInstanceConstant):
 unreal.MaterialEditingLibrary.set_material_instance_parent(instance, material)
 unreal.EditorAssetLibrary.save_loaded_asset(instance, only_if_is_dirty=False)
 fog = unreal.EditorAssetLibrary.load_asset(
-    "/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Fog_Inst"
+    "/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Fog_Inst"
 )
 if not isinstance(fog, unreal.MaterialInstanceConstant):
     raise RuntimeError("Missing PSX fog instance")

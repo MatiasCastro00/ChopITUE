@@ -11,7 +11,7 @@
 
 bool InstallUIJuiceAnimations()
 {
- auto* BP=LoadObject<UWidgetBlueprint>(nullptr,TEXT("/Game/ChopIt/UI/WBP_PSX_HUD.WBP_PSX_HUD")); if(!BP) return false;
+ auto* BP=LoadObject<UWidgetBlueprint>(nullptr,TEXT("/Game/NewChopIt/Art/UI/WBP_PSX_HUD.WBP_PSX_HUD")); if(!BP) return false;
  struct FSpec { const TCHAR* Name; const TCHAR* Widget; float Duration; };
  const FSpec Specs[]={{TEXT("JuicePickup"),TEXT("CargoIcon"),.45f},{TEXT("JuiceMission"),TEXT("MissionFrame"),.6f},{TEXT("JuiceStamp"),TEXT("QuotaTextContainer"),.45f}};
  for(const auto& Spec:Specs)
@@ -31,5 +31,5 @@ bool InstallUIJuiceAnimations()
   BP->Animations.Add(A);
  }
  FKismetEditorUtilities::CompileBlueprint(BP); BP->MarkPackageDirty(); FSavePackageArgs Args; Args.TopLevelFlags=RF_Public|RF_Standalone;
- return UPackage::SavePackage(BP->GetOutermost(),BP,*FPackageName::LongPackageNameToFilename(TEXT("/Game/ChopIt/UI/WBP_PSX_HUD"),FPackageName::GetAssetPackageExtension()),Args);
+ return UPackage::SavePackage(BP->GetOutermost(),BP,*FPackageName::LongPackageNameToFilename(TEXT("/Game/NewChopIt/Art/UI/WBP_PSX_HUD"),FPackageName::GetAssetPackageExtension()),Args);
 }

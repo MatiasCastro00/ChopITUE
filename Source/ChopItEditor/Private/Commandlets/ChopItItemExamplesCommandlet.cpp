@@ -17,7 +17,7 @@ int32 UChopItItemExamplesCommandlet::Main(const FString& Params)
 	for (const auto& Example : Examples)
 	{
 		const FString Name = FString(TEXT("DA_Item_")) + Example.Id;
-		const FString Path = TEXT("/Game/ChopIt/Items/") + Name;
+		const FString Path = TEXT("/Game/NewChopIt/Data/Items/") + Name;
 		if (FPackageName::DoesPackageExist(Path)) continue;
 		UPackage* Package = CreatePackage(*Path);
 		auto* Item = NewObject<UChopItItemDataAsset>(Package, *Name, RF_Public | RF_Standalone);

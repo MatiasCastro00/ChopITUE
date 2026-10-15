@@ -1,7 +1,7 @@
 import unreal
 
 
-ROOT = "/Game/ChopIt/Art/Character"
+ROOT = "/Game/NewChopIt/Art/Models/Character"
 UPDATED = ROOT + "/Updated"
 MESH_PATH = UPDATED + "/c85471db_c635_45fc_bae4_6171d60be24f"
 ANIMATION_PATHS = [

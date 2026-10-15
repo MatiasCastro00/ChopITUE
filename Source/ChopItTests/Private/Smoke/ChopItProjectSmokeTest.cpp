@@ -26,13 +26,13 @@ bool FChopItProjectConfigurationSmokeTest::RunTest(const FString& Parameters)
 		TestEqual(
 			TEXT("Startup map reference is configured"),
 			Settings->StartupMap.ToString(),
-			FString(TEXT("/Game/ChopIt/World/Maps/L_Startup.L_Startup")));
+			FString(TEXT("/Game/NewChopIt/Maps/L_Startup.L_Startup")));
 	}
 
 	const TArray<FString> RequiredMapPackages =
 	{
-		TEXT("/Game/ChopIt/World/Maps/L_Startup"),
-		TEXT("/Game/ChopIt/World/Maps/L_Dev_Sandbox")
+		TEXT("/Game/NewChopIt/Maps/L_Startup"),
+		TEXT("/Game/NewChopIt/Maps/L_Dev_Sandbox")
 	};
 
 	for (const FString& MapPackage : RequiredMapPackages)
@@ -48,10 +48,10 @@ bool FChopItProjectConfigurationSmokeTest::RunTest(const FString& Parameters)
 		AssetManager.GetPrimaryAssetIdList(UAssetManager::MapType, DiscoveredMaps));
 	TestTrue(
 		TEXT("Asset Manager discovers L_Startup"),
-		DiscoveredMaps.Contains(FPrimaryAssetId(UAssetManager::MapType, TEXT("/Game/ChopIt/World/Maps/L_Startup"))));
+		DiscoveredMaps.Contains(FPrimaryAssetId(UAssetManager::MapType, TEXT("/Game/NewChopIt/Maps/L_Startup"))));
 	TestTrue(
 		TEXT("Asset Manager discovers L_Dev_Sandbox"),
-		DiscoveredMaps.Contains(FPrimaryAssetId(UAssetManager::MapType, TEXT("/Game/ChopIt/World/Maps/L_Dev_Sandbox"))));
+		DiscoveredMaps.Contains(FPrimaryAssetId(UAssetManager::MapType, TEXT("/Game/NewChopIt/Maps/L_Dev_Sandbox"))));
 
 	TestTrue(TEXT("Day phase tag is registered"), ChopItGameplayTags::State_Cycle_Day.GetTag().IsValid());
 	TestTrue(TEXT("Night phase tag is registered"), ChopItGameplayTags::State_Cycle_Night.GetTag().IsValid());

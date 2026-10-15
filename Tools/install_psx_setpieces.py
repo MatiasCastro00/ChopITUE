@@ -3,9 +3,9 @@
 import unreal
 
 
-MAP_PATH = "/Game/ChopIt/World/Maps/L_PSX_test"
-ROOT = "/Game/ChopIt/Art/Models/SetPieces"
-OUTLINE_PATH = "/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering"
+MAP_PATH = "/Game/NewChopIt/Maps/L_PSX_test"
+ROOT = "/Game/NewChopIt/Art/Models/SetPieces"
+OUTLINE_PATH = "/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering"
 SOURCES = (
     {
         "label": "CabinHub",

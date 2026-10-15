@@ -10,7 +10,7 @@ import struct
 import wave
 import unreal
 
-ROOT = '/Game/ChopIt/Items/Mandrake'
+ROOT = '/Game/NewChopIt/Art/Models/Mandrake'
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
 def material(name, rgb, emissive=False):
@@ -70,7 +70,7 @@ if sound:
     sound.set_editor_property('looping', True)
     unreal.EditorAssetLibrary.save_loaded_asset(sound)
 
-item_path = '/Game/ChopIt/Items/DA_Item_MandrakeStick'
+item_path = '/Game/NewChopIt/Data/Items/DA_Item_MandrakeStick'
 item = unreal.EditorAssetLibrary.load_asset(item_path)
 if not item:
     raise RuntimeError('Missing ' + item_path)

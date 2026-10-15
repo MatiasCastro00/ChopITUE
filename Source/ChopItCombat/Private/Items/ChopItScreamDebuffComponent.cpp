@@ -13,7 +13,7 @@ UChopItScreamDebuffComponent::UChopItScreamDebuffComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
-	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> FX(TEXT("/Game/ChopIt/Items/Mandrake/NS_Mandrake_Confusion.NS_Mandrake_Confusion"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> FX(TEXT("/Game/NewChopIt/Art/Models/Mandrake/NS_Mandrake_Confusion.NS_Mandrake_Confusion"));
 	ConfusionSystem = FX.Object;
 }
 

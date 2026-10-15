@@ -2,7 +2,7 @@ import unreal
 
 
 SOURCE_FBX = unreal.Paths.project_content_dir() + "ChopIt/Art/Character/LumberJack.fbx"
-DESTINATION = "/Game/ChopIt/Art/Character/Updated"
+DESTINATION = "/Game/NewChopIt/Art/Models/Character/Updated"
 
 options = unreal.FbxImportUI()
 options.set_editor_property("import_mesh", True)

@@ -111,7 +111,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FChopItDialogueDemoAssetsTest::RunTest(const FString&)
 {
 	UChopItDialogueSequence* Sequence = LoadObject<UChopItDialogueSequence>(
-		nullptr, TEXT("/Game/ChopIt/Dialogue/Sequences/DA_Dialogue_Demo.DA_Dialogue_Demo"));
+		nullptr, TEXT("/Game/NewChopIt/Data/Dialogue/Sequences/DA_Dialogue_Demo.DA_Dialogue_Demo"));
 	TestNotNull(TEXT("Demo sequence loads"), Sequence);
 	if (!Sequence) return false;
 
@@ -145,7 +145,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FChopItDialogueMatchIntroAssetsTest::RunTest(const FString&)
 {
 	UChopItDialogueSequence* Sequence = LoadObject<UChopItDialogueSequence>(
-		nullptr, TEXT("/Game/ChopIt/Dialogue/Sequences/DA_Dialogue_MatchIntro.DA_Dialogue_MatchIntro"));
+		nullptr, TEXT("/Game/NewChopIt/Data/Dialogue/Sequences/DA_Dialogue_MatchIntro.DA_Dialogue_MatchIntro"));
 	TestNotNull(TEXT("Match introduction sequence loads"), Sequence);
 	if (!Sequence) return false;
 

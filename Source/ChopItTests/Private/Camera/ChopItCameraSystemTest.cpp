@@ -77,8 +77,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FChopItCameraAssetsTest::RunTest(const FString&)
 {
-	const UCameraAsset* CameraAsset = LoadObject<UCameraAsset>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/CA_PlayerCameras.CA_PlayerCameras"));
-	const UStateTree* StateTree = LoadObject<UStateTree>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/ST_CameraDirector.ST_CameraDirector"));
+	const UCameraAsset* CameraAsset = LoadObject<UCameraAsset>(nullptr, TEXT("/Game/NewChopIt/Camera/CA_PlayerCameras.CA_PlayerCameras"));
+	const UStateTree* StateTree = LoadObject<UStateTree>(nullptr, TEXT("/Game/NewChopIt/Camera/ST_CameraDirector.ST_CameraDirector"));
 	TestNotNull(TEXT("Player camera asset exists"), CameraAsset);
 	TestNotNull(TEXT("Camera StateTree exists"), StateTree);
 	if (!CameraAsset || !StateTree) return false;
@@ -93,25 +93,25 @@ bool FChopItCameraAssetsTest::RunTest(const FString&)
 
 	for (const TCHAR* Path :
 	{
-		TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_GameplayOrbit.CR_GameplayOrbit"),
-		TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_DialogueAnchor.CR_DialogueAnchor"),
-		TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_Cinematic.CR_Cinematic"),
-		TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_Death.CR_Death")
+		TEXT("/Game/NewChopIt/Camera/Rigs/CR_GameplayOrbit.CR_GameplayOrbit"),
+		TEXT("/Game/NewChopIt/Camera/Rigs/CR_DialogueAnchor.CR_DialogueAnchor"),
+		TEXT("/Game/NewChopIt/Camera/Rigs/CR_Cinematic.CR_Cinematic"),
+		TEXT("/Game/NewChopIt/Camera/Rigs/CR_Death.CR_Death")
 	})
 	{
 		TestNotNull(FString::Printf(TEXT("Camera rig loads: %s"), Path), LoadObject<UCameraRigAsset>(nullptr, Path));
 	}
 	for (const TCHAR* Path :
 	{
-		TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Normal.CS_Normal"),
-		TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical.CS_Critical"),
-		TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_HeavyImpact.CS_HeavyImpact")
+		TEXT("/Game/NewChopIt/Camera/Shakes/CS_Normal.CS_Normal"),
+		TEXT("/Game/NewChopIt/Camera/Shakes/CS_Critical.CS_Critical"),
+		TEXT("/Game/NewChopIt/Camera/Shakes/CS_HeavyImpact.CS_HeavyImpact")
 	})
 	{
 		TestNotNull(FString::Printf(TEXT("Camera shake loads: %s"), Path), LoadObject<UCameraShakeAsset>(nullptr, Path));
 	}
 
-	UMaterial* OcclusionMaterial = LoadObject<UMaterial>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
+	UMaterial* OcclusionMaterial = LoadObject<UMaterial>(nullptr, TEXT("/Game/NewChopIt/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
 	TestNotNull(TEXT("Generic camera occlusion material exists"), OcclusionMaterial);
 	if (OcclusionMaterial)
 	{
@@ -135,8 +135,8 @@ bool FChopItCameraOcclusionOverlayTest::RunTest(const FString&)
 {
 	UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	UMaterialInterface* OriginalMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/EngineMaterials/DefaultMaterial.DefaultMaterial"));
-	UMaterialInterface* DitherMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
-	UMaterialInterface* OutlineMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
+	UMaterialInterface* DitherMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/NewChopIt/Camera/Materials/M_CameraFoliageOcclusion.M_CameraFoliageOcclusion"));
+	UMaterialInterface* OutlineMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
 	TestNotNull(TEXT("Test cube mesh"), CubeMesh);
 	TestNotNull(TEXT("Original material"), OriginalMaterial);
 	TestNotNull(TEXT("Dither material"), DitherMaterial);

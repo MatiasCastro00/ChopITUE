@@ -1,7 +1,7 @@
 """Author the phone offer screen and its editable three-upgrade sequences."""
 import unreal
 
-root = '/Game/ChopIt/Phone/'
+root = '/Game/NewChopIt/Art/Models/Phone/'
 bargain_root = root + 'Bargains'
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 
@@ -62,7 +62,7 @@ material_path = root + 'M_PhonePortrait_UI'
 material = unreal.load_asset(material_path)
 if not material:
     material = unreal.EditorAssetLibrary.duplicate_asset(
-        '/Game/ChopIt/Items/Chest/M_ChestReveal_UI', material_path)
+        '/Game/NewChopIt/Art/Models/Chest/M_ChestReveal_UI', material_path)
 if not material:
     raise RuntimeError('Could not create the phone UMG portrait material')
 material.set_editor_property('material_domain', unreal.MaterialDomain.MD_UI)

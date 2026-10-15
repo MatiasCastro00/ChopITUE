@@ -75,13 +75,13 @@ void AChopItDeliveryZone::BeginPlay()
 	ZoneLabel->SetHiddenInGame(true, true);
 
 	if (UMaterialInterface* WoodMaterial = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Wood.MI_Wood")))
+		nullptr, TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Wood.MI_Wood")))
 	{
 		ZoneVisual->SetMaterial(0, WoodMaterial);
 		LogPool->SetMaterial(0, WoodMaterial);
 	}
 	if (UMaterialInterface* TrailMaterial = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Player.MI_Player")))
+		nullptr, TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Player.MI_Player")))
 	{
 		TrailPool->SetMaterial(0, TrailMaterial);
 	}

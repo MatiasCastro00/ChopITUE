@@ -3,11 +3,11 @@
 import unreal
 
 
-MAP_PATH = "/Game/ChopIt/World/Maps/L_PSX_test"
-OUTLINE_PATH = "/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering"
+MAP_PATH = "/Game/NewChopIt/Maps/L_PSX_test"
+OUTLINE_PATH = "/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering"
 SET_PIECES = (
-    ("CabinHub", "CabinVisual", "/Game/ChopIt/Art/Models/SetPieces/House/SM_House_PSX", "/Game/ChopIt/Art/Models/SetPieces/House/T_House_BaseColor", "/Game/ChopIt/Art/Models/SetPieces/House/M_House_PSX_Jittering"),
-    ("QuotaMachine", "MachineVisual", "/Game/ChopIt/Art/Models/SetPieces/Machine/SM_Machine_PSX", "/Game/ChopIt/Art/Models/SetPieces/Machine/T_Machine_BaseColor", "/Game/ChopIt/Art/Models/SetPieces/Machine/M_Machine_PSX_Jittering"),
+    ("CabinHub", "CabinVisual", "/Game/NewChopIt/Art/Models/SetPieces/House/SM_House_PSX", "/Game/NewChopIt/Art/Models/SetPieces/House/T_House_BaseColor", "/Game/NewChopIt/Art/Models/SetPieces/House/M_House_PSX_Jittering"),
+    ("QuotaMachine", "MachineVisual", "/Game/NewChopIt/Art/Models/SetPieces/Machine/SM_Machine_PSX", "/Game/NewChopIt/Art/Models/SetPieces/Machine/T_Machine_BaseColor", "/Game/NewChopIt/Art/Models/SetPieces/Machine/M_Machine_PSX_Jittering"),
 )
 
 

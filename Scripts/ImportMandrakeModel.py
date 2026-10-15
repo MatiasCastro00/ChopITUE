@@ -2,7 +2,7 @@ import os
 import sys
 import unreal
 
-ROOT = '/Game/ChopIt/Items/Mandrake'
+ROOT = '/Game/NewChopIt/Art/Models/Mandrake'
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 unreal.SystemLibrary.execute_console_command(None, 'Interchange.FeatureFlags.Import.FBX 0')
 source = os.path.abspath(os.path.join(unreal.Paths.project_dir(), 'SourceArt', 'Mandrake'))

@@ -1,7 +1,7 @@
 """Make the phone comic perspective stronger and author its editable UMG layout."""
 import unreal
 
-root = '/Game/ChopIt/Phone'
+root = '/Game/NewChopIt/Art/Models/Phone'
 indicator = unreal.load_asset(root + '/DA_PhoneIndicator')
 call = unreal.load_asset(root + '/DA_PhoneCall')
 widget = unreal.load_asset(root + '/WBP_PhoneRingIndicator')

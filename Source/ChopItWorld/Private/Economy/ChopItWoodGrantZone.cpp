@@ -44,7 +44,7 @@ void AChopItWoodGrantZone::BeginPlay()
 	ZoneLabel->SetVisibility(false, true);
 	ZoneLabel->SetHiddenInGame(true, true);
 	if (UMaterialInterface* PlayerMaterial = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Player.MI_Player")))
+		nullptr, TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Player.MI_Player")))
 	{
 		ZoneVisual->SetMaterial(0, PlayerMaterial);
 	}

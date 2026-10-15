@@ -1,7 +1,7 @@
 """Create the weighted devil/angel variants and selection pool. Safe to rerun."""
 import unreal
 
-ROOT = '/Game/ChopIt/Phone'
+ROOT = '/Game/NewChopIt/Art/Models/Phone'
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
 

@@ -1,7 +1,7 @@
 """Keep the comic proportional to distance and above the visible phone."""
 import unreal
 
-indicator = unreal.load_asset('/Game/ChopIt/Phone/DA_PhoneIndicator')
+indicator = unreal.load_asset('/Game/NewChopIt/Art/Models/Phone/DA_PhoneIndicator')
 if not isinstance(indicator, unreal.ChopItPhoneIndicatorConfig):
     raise RuntimeError('Missing DA_PhoneIndicator')
 

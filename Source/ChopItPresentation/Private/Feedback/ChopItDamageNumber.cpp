@@ -22,7 +22,7 @@ AChopItDamageNumber::AChopItDamageNumber()
 	// depth testing disabled. The priority keeps simultaneous hit numbers ordered
 	// above every other translucent gameplay effect as well.
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> DamageTextMaterial(
-		TEXT("/Game/ChopIt/Presentation/Materials/M_DamageText_PSXBypass.M_DamageText_PSXBypass"));
+		TEXT("/Game/NewChopIt/Art/Materials/Presentation/M_DamageText_PSXBypass.M_DamageText_PSXBypass"));
 	if (DamageTextMaterial.Succeeded())
 	{
 		TextRender->SetMaterial(0, DamageTextMaterial.Object);

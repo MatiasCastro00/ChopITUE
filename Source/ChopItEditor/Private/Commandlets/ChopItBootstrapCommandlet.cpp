@@ -114,7 +114,7 @@
 	{
 	bool LocalizePSXHUDToEnglish()
 	{
-		constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/UI/WBP_PSX_HUD");
+		constexpr TCHAR PackageName[] = TEXT("/Game/NewChopIt/Art/UI/WBP_PSX_HUD");
 		UPackage* Package = LoadPackage(nullptr, PackageName, LOAD_None);
 		UWidgetBlueprint* Blueprint = Package ? FindObject<UWidgetBlueprint>(Package, TEXT("WBP_PSX_HUD")) : nullptr;
 		if (!Blueprint || !Blueprint->WidgetTree) return false;
@@ -144,7 +144,7 @@
 
 	bool CreatePSXHUDAsset()
 	{
-		constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/UI/WBP_PSX_HUD");
+		constexpr TCHAR PackageName[] = TEXT("/Game/NewChopIt/Art/UI/WBP_PSX_HUD");
 		UPackage* Package = FPackageName::DoesPackageExist(PackageName)
 			? LoadPackage(nullptr, PackageName, LOAD_None)
 			: CreatePackage(PackageName);
@@ -169,9 +169,9 @@
 		UCanvasPanel* Root = NewObject<UCanvasPanel>(Blueprint->WidgetTree, TEXT("HUDRoot"), RF_Transactional);
 		Blueprint->WidgetVariableNameToGuidMap.FindOrAdd(Root->GetFName()) = FGuid::NewGuid();
 		Blueprint->WidgetTree->RootWidget = Root;
-		UTexture2D* Atlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/ChopIt/Art/UI/UI_PSX_Atlas_Transparente.UI_PSX_Atlas_Transparente"));
-		UTexture2D* QuotaTextTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/ChopIt/Art/UI/T_QuotaTextContainer.T_QuotaTextContainer"));
-		UTexture2D* HealthBackdropTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/ChopIt/Art/UI/T_HealthBackdrop.T_HealthBackdrop"));
+		UTexture2D* Atlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/NewChopIt/Art/Textures/UI/UI_PSX_Atlas_Transparente.UI_PSX_Atlas_Transparente"));
+		UTexture2D* QuotaTextTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/NewChopIt/Art/Textures/UI/T_QuotaTextContainer.T_QuotaTextContainer"));
+		UTexture2D* HealthBackdropTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/NewChopIt/Art/Textures/UI/T_HealthBackdrop.T_HealthBackdrop"));
 		if (!Atlas || !QuotaTextTexture || !HealthBackdropTexture) return false;
 
 		auto Place = [Root](UWidget* Widget, FVector2D Pos, FVector2D Size, FVector2D Anchor, FVector2D Align, int32 Z)
@@ -238,53 +238,53 @@
 		return UPackage::SavePackage(Package, Blueprint, *FPackageName::LongPackageNameToFilename(PackageName, FPackageName::GetAssetPackageExtension()), Args);
 	}
 
-	constexpr TCHAR StartupMap[] = TEXT("/Game/ChopIt/World/Maps/L_Startup");
-	constexpr TCHAR SandboxMap[] = TEXT("/Game/ChopIt/World/Maps/L_Dev_Sandbox");
-	constexpr TCHAR CombatMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Combat");
-	constexpr TCHAR HarvestMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Harvest");
-	constexpr TCHAR EconomyMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Economy");
-	constexpr TCHAR CycleMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Cycle");
-	constexpr TCHAR ProgressionMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Progression");
-	constexpr TCHAR ShopMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Shop");
-	constexpr TCHAR EnemyMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Enemies");
-	constexpr TCHAR ChainLabMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_ChainLab");
-	constexpr TCHAR DialogueMap[] = TEXT("/Game/ChopIt/World/Maps/L_Test_Dialogue");
-	constexpr TCHAR PSXTestMap[] = TEXT("/Game/ChopIt/World/Maps/L_PSX_test");
-	constexpr TCHAR MoveActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Move");
-	constexpr TCHAR InteractActionPackage[] = TEXT("/Game/ChopIt/Input/IA_Interact");
-	constexpr TCHAR CameraLookActionPackage[] = TEXT("/Game/ChopIt/Input/IA_CameraLook");
-	constexpr TCHAR CameraZoomActionPackage[] = TEXT("/Game/ChopIt/Input/IA_CameraZoom");
-	constexpr TCHAR CameraResetActionPackage[] = TEXT("/Game/ChopIt/Input/IA_CameraReset");
-	constexpr TCHAR GameplayContextPackage[] = TEXT("/Game/ChopIt/Input/IMC_Gameplay");
-	constexpr TCHAR DialogueAdvanceActionPackage[] = TEXT("/Game/ChopIt/Input/IA_DialogueAdvance");
-	constexpr TCHAR DialogueNextChoiceActionPackage[] = TEXT("/Game/ChopIt/Input/IA_DialogueNextChoice");
-	constexpr TCHAR DialoguePreviousChoiceActionPackage[] = TEXT("/Game/ChopIt/Input/IA_DialoguePreviousChoice");
-	constexpr TCHAR DialogueCancelActionPackage[] = TEXT("/Game/ChopIt/Input/IA_DialogueCancel");
-	constexpr TCHAR DialogueContextPackage[] = TEXT("/Game/ChopIt/Input/IMC_Dialogue");
-	constexpr TCHAR CameraAssetPackage[] = TEXT("/Game/ChopIt/Presentation/Camera/CA_PlayerCameras");
-	constexpr TCHAR CameraStateTreePackage[] = TEXT("/Game/ChopIt/Presentation/Camera/ST_CameraDirector");
-	constexpr TCHAR CharacterBlueprintPackage[] = TEXT("/Game/ChopIt/Characters/Blueprints/BP_ChopItCharacter");
-	constexpr TCHAR BasicAxePackage[] = TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_BasicAxe");
-	constexpr TCHAR HandSawPackage[] = TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_HandSaw");
-	constexpr TCHAR SawHaloPackage[] = TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_SawHalo");
-	constexpr TCHAR ShopBlueprintPackage[] = TEXT("/Game/ChopIt/World/Economy/BP_ShopTerminal");
-	constexpr TCHAR TreeBlueprintPackage[] = TEXT("/Game/ChopIt/World/Forest/Trees/BP_Tree_Basic");
-	constexpr TCHAR LogPickupBlueprintPackage[] = TEXT("/Game/ChopIt/World/Pickups/BP_LogPickup");
-	constexpr TCHAR CabinBlueprintPackage[] = TEXT("/Game/ChopIt/World/Economy/BP_CabinHub");
-	constexpr TCHAR QuotaMachineBlueprintPackage[] = TEXT("/Game/ChopIt/World/Economy/BP_QuotaMachine");
-	constexpr TCHAR DeliveryZoneBlueprintPackage[] = TEXT("/Game/ChopIt/World/Economy/BP_DeliveryZone");
-	constexpr TCHAR SellZoneBlueprintPackage[] = TEXT("/Game/ChopIt/World/Economy/BP_SellZone");
-	constexpr TCHAR ChainLabMachineBlueprintPackage[] = TEXT("/Game/ChopIt/World/ChainLab/BP_ChainLabMachine");
-	constexpr TCHAR DefaultChainDefinitionPackage[] = TEXT("/Game/ChopIt/World/ChainLab/DA_Chain_Default");
-	constexpr TCHAR DayOnePackage[] = TEXT("/Game/ChopIt/Economy/Days/DA_Day_01");
-	constexpr TCHAR DialogueThemePackage[] = TEXT("/Game/ChopIt/Dialogue/DA_DialogueTheme_WoodMetal");
-	constexpr TCHAR BrunaSpeakerPackage[] = TEXT("/Game/ChopIt/Dialogue/Speakers/DA_Speaker_Bruna");
-	constexpr TCHAR MiloSpeakerPackage[] = TEXT("/Game/ChopIt/Dialogue/Speakers/DA_Speaker_Milo");
-	constexpr TCHAR DialogueDemoPackage[] = TEXT("/Game/ChopIt/Dialogue/Sequences/DA_Dialogue_Demo");
-	constexpr TCHAR DeathSpeakerPackage[] = TEXT("/Game/ChopIt/Dialogue/Speakers/DA_Speaker_Death");
-	constexpr TCHAR OvenSpeakerPackage[] = TEXT("/Game/ChopIt/Dialogue/Speakers/DA_Speaker_Oven");
-	constexpr TCHAR ProtagonistSpeakerPackage[] = TEXT("/Game/ChopIt/Dialogue/Speakers/DA_Speaker_Protagonist");
-	constexpr TCHAR MatchIntroDialoguePackage[] = TEXT("/Game/ChopIt/Dialogue/Sequences/DA_Dialogue_MatchIntro");
+	constexpr TCHAR StartupMap[] = TEXT("/Game/NewChopIt/Maps/L_Startup");
+	constexpr TCHAR SandboxMap[] = TEXT("/Game/NewChopIt/Maps/L_Dev_Sandbox");
+	constexpr TCHAR CombatMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_Combat");
+	constexpr TCHAR HarvestMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_Harvest");
+	constexpr TCHAR EconomyMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_Economy");
+	constexpr TCHAR CycleMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_Cycle");
+	constexpr TCHAR ProgressionMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_Progression");
+	constexpr TCHAR ShopMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_Shop");
+	constexpr TCHAR EnemyMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_Enemies");
+	constexpr TCHAR ChainLabMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_ChainLab");
+	constexpr TCHAR DialogueMap[] = TEXT("/Game/NewChopIt/Maps/L_Test_Dialogue");
+	constexpr TCHAR PSXTestMap[] = TEXT("/Game/NewChopIt/Maps/L_PSX_test");
+	constexpr TCHAR MoveActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_Move");
+	constexpr TCHAR InteractActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_Interact");
+	constexpr TCHAR CameraLookActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_CameraLook");
+	constexpr TCHAR CameraZoomActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_CameraZoom");
+	constexpr TCHAR CameraResetActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_CameraReset");
+	constexpr TCHAR GameplayContextPackage[] = TEXT("/Game/NewChopIt/Input/IMC_Gameplay");
+	constexpr TCHAR DialogueAdvanceActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_DialogueAdvance");
+	constexpr TCHAR DialogueNextChoiceActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_DialogueNextChoice");
+	constexpr TCHAR DialoguePreviousChoiceActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_DialoguePreviousChoice");
+	constexpr TCHAR DialogueCancelActionPackage[] = TEXT("/Game/NewChopIt/Input/IA_DialogueCancel");
+	constexpr TCHAR DialogueContextPackage[] = TEXT("/Game/NewChopIt/Input/IMC_Dialogue");
+	constexpr TCHAR CameraAssetPackage[] = TEXT("/Game/NewChopIt/Camera/CA_PlayerCameras");
+	constexpr TCHAR CameraStateTreePackage[] = TEXT("/Game/NewChopIt/Camera/ST_CameraDirector");
+	constexpr TCHAR CharacterBlueprintPackage[] = TEXT("/Game/NewChopIt/Characters/Blueprints/BP_ChopItCharacter");
+	constexpr TCHAR BasicAxePackage[] = TEXT("/Game/NewChopIt/Data/Combat/Weapons/DA_Weapon_BasicAxe");
+	constexpr TCHAR HandSawPackage[] = TEXT("/Game/NewChopIt/Data/Combat/Weapons/DA_Weapon_HandSaw");
+	constexpr TCHAR SawHaloPackage[] = TEXT("/Game/NewChopIt/Data/Combat/Weapons/DA_Weapon_SawHalo");
+	constexpr TCHAR ShopBlueprintPackage[] = TEXT("/Game/NewChopIt/BP/Economy/BP_ShopTerminal");
+	constexpr TCHAR TreeBlueprintPackage[] = TEXT("/Game/NewChopIt/BP/Trees/BP_Tree_Basic");
+	constexpr TCHAR LogPickupBlueprintPackage[] = TEXT("/Game/NewChopIt/BP/Pickups/BP_LogPickup");
+	constexpr TCHAR CabinBlueprintPackage[] = TEXT("/Game/NewChopIt/BP/Economy/BP_CabinHub");
+	constexpr TCHAR QuotaMachineBlueprintPackage[] = TEXT("/Game/NewChopIt/BP/Economy/BP_QuotaMachine");
+	constexpr TCHAR DeliveryZoneBlueprintPackage[] = TEXT("/Game/NewChopIt/BP/Economy/BP_DeliveryZone");
+	constexpr TCHAR SellZoneBlueprintPackage[] = TEXT("/Game/NewChopIt/BP/Economy/BP_SellZone");
+	constexpr TCHAR ChainLabMachineBlueprintPackage[] = TEXT("/Game/NewChopIt/ChainLab/BP_ChainLabMachine");
+	constexpr TCHAR DefaultChainDefinitionPackage[] = TEXT("/Game/NewChopIt/ChainLab/DA_Chain_Default");
+	constexpr TCHAR DayOnePackage[] = TEXT("/Game/NewChopIt/Data/Days/DA_Day_01");
+	constexpr TCHAR DialogueThemePackage[] = TEXT("/Game/NewChopIt/Data/Dialogue/DA_DialogueTheme_WoodMetal");
+	constexpr TCHAR BrunaSpeakerPackage[] = TEXT("/Game/NewChopIt/Data/Dialogue/Speakers/DA_Speaker_Bruna");
+	constexpr TCHAR MiloSpeakerPackage[] = TEXT("/Game/NewChopIt/Data/Dialogue/Speakers/DA_Speaker_Milo");
+	constexpr TCHAR DialogueDemoPackage[] = TEXT("/Game/NewChopIt/Data/Dialogue/Sequences/DA_Dialogue_Demo");
+	constexpr TCHAR DeathSpeakerPackage[] = TEXT("/Game/NewChopIt/Data/Dialogue/Speakers/DA_Speaker_Death");
+	constexpr TCHAR OvenSpeakerPackage[] = TEXT("/Game/NewChopIt/Data/Dialogue/Speakers/DA_Speaker_Oven");
+	constexpr TCHAR ProtagonistSpeakerPackage[] = TEXT("/Game/NewChopIt/Data/Dialogue/Speakers/DA_Speaker_Protagonist");
+	constexpr TCHAR MatchIntroDialoguePackage[] = TEXT("/Game/NewChopIt/Data/Dialogue/Sequences/DA_Dialogue_MatchIntro");
 
 	template <typename AssetType>
 	AssetType* LoadOrCreateAsset(const FString& PackageName, const FName AssetName)
@@ -341,7 +341,7 @@
 	{
 		return LoadObject<UMaterialInterface>(
 			nullptr,
-			*FString::Printf(TEXT("/Game/ChopIt/World/Blockout/Materials/%s.%s"), Name, Name));
+			*FString::Printf(TEXT("/Game/NewChopIt/Art/Blockout/Materials/%s.%s"), Name, Name));
 	}
 
 	AStaticMeshActor* SpawnBlockoutMesh(
@@ -439,7 +439,7 @@ int32 UChopItBootstrapCommandlet::Main(const FString& Params)
 		return CreateChestRevealUIMaterial() ? 0 : 1;
 	// Targeted repair must not run asset generation or touch the user's HUD.
 	if (FParse::Param(*Params, TEXT("RepairPSXNavigation")))
-		return RebuildNavigationData(TEXT("/Game/ChopIt/World/Maps/L_PSX_test")) ? 0 : 1;
+		return RebuildNavigationData(TEXT("/Game/NewChopIt/Maps/L_PSX_test")) ? 0 : 1;
 	if (FParse::Param(*Params, TEXT("UIJuiceAnimations"))) return InstallUIJuiceAnimations() ? 0 : 1;
 	const TArray<FString> RequiredMaps =
 	{
@@ -688,7 +688,7 @@ bool UChopItBootstrapCommandlet::CreateSharedWeaponAssets() const
 
 bool UChopItBootstrapCommandlet::CreateShopBlueprint() const
 {
-	UBlueprint* Blueprint = LoadObject<UBlueprint>(nullptr, TEXT("/Game/ChopIt/World/Economy/BP_ShopTerminal.BP_ShopTerminal"));
+	UBlueprint* Blueprint = LoadObject<UBlueprint>(nullptr, TEXT("/Game/NewChopIt/BP/Economy/BP_ShopTerminal.BP_ShopTerminal"));
 	if (!Blueprint)
 	{
 		UPackage* Package = CreatePackage(ChopItBootstrap::ShopBlueprintPackage);
@@ -718,13 +718,13 @@ bool UChopItBootstrapCommandlet::CreateHarvestBlueprints() const
 	const FBlueprintSpec Specs[] =
 	{
 		{
-			TEXT("/Game/ChopIt/World/Forest/Trees/BP_Tree_Basic.BP_Tree_Basic"),
+			TEXT("/Game/NewChopIt/BP/Trees/BP_Tree_Basic.BP_Tree_Basic"),
 			ChopItBootstrap::TreeBlueprintPackage,
 			TEXT("BP_Tree_Basic"),
 			AChopItTree::StaticClass()
 		},
 		{
-			TEXT("/Game/ChopIt/World/Pickups/BP_LogPickup.BP_LogPickup"),
+			TEXT("/Game/NewChopIt/BP/Pickups/BP_LogPickup.BP_LogPickup"),
 			ChopItBootstrap::LogPickupBlueprintPackage,
 			TEXT("BP_LogPickup"),
 			AChopItLogPickup::StaticClass()
@@ -815,15 +815,15 @@ bool UChopItBootstrapCommandlet::CreatePhase9Assets() const
 		Enemy->WoodRewardUnits = 3;
 		return ChopItBootstrap::SaveAsset(Enemy);
 	};
-	const bool bGuard = Configure(TEXT("/Game/ChopIt/AI/Enemies/DA_Enemy_Guardian"), TEXT("DA_Enemy_Guardian"), TEXT("Guardian"), TEXT("Forest Guardian"), 260.0f, 210.0f, 18.0f, 30);
-	const bool bFinal = Configure(TEXT("/Game/ChopIt/AI/Enemies/DA_Enemy_ForestEntity"), TEXT("DA_Enemy_ForestEntity"), TEXT("ForestEntity"), TEXT("Forest Entity"), 520.0f, 260.0f, 24.0f, 75);
-	return bGuard && bFinal && RebuildPhase1Map(TEXT("/Game/ChopIt/World/Maps/L_Test_Elite"), true, false, false, true);
+	const bool bGuard = Configure(TEXT("/Game/NewChopIt/Data/AI/Enemies/DA_Enemy_Guardian"), TEXT("DA_Enemy_Guardian"), TEXT("Guardian"), TEXT("Forest Guardian"), 260.0f, 210.0f, 18.0f, 30);
+	const bool bFinal = Configure(TEXT("/Game/NewChopIt/Data/AI/Enemies/DA_Enemy_ForestEntity"), TEXT("DA_Enemy_ForestEntity"), TEXT("ForestEntity"), TEXT("Forest Entity"), 520.0f, 260.0f, 24.0f, 75);
+	return bGuard && bFinal && RebuildPhase1Map(TEXT("/Game/NewChopIt/Maps/L_Test_Elite"), true, false, false, true);
 }
 
 bool UChopItBootstrapCommandlet::CreatePhase10Assets() const
 {
 	auto Make=[](const TCHAR* Id,const TCHAR* Name,const TCHAR* Desc,const TArray<FChopItStatModifier>& Modifiers)
-	{ FString Asset=FString::Printf(TEXT("DA_Pact_%s"),Id); UChopItPactDefinition* P=ChopItBootstrap::LoadOrCreateAsset<UChopItPactDefinition>(FString::Printf(TEXT("/Game/ChopIt/Pacts/%s"),*Asset),FName(*Asset)); if(!P)return false; P->PactId=FName(Id);P->DisplayName=FText::FromString(Name);P->Description=FText::FromString(Desc);P->CurseIncrease=1;P->Modifiers=Modifiers;return ChopItBootstrap::SaveAsset(P); };
+	{ FString Asset=FString::Printf(TEXT("DA_Pact_%s"),Id); UChopItPactDefinition* P=ChopItBootstrap::LoadOrCreateAsset<UChopItPactDefinition>(FString::Printf(TEXT("/Game/NewChopIt/Data/Pacts/%s"),*Asset),FName(*Asset)); if(!P)return false; P->PactId=FName(Id);P->DisplayName=FText::FromString(Name);P->Description=FText::FromString(Desc);P->CurseIncrease=1;P->Modifiers=Modifiers;return ChopItBootstrap::SaveAsset(P); };
 	auto Mod=[](EChopItCombatStat S,float V){ FChopItStatModifier M; M.Stat=S;M.Operation=EChopItModifierOperation::Multiply;M.Magnitude=V;return M; };
 	return Make(TEXT("Furia"),TEXT("Reaper's Fury"),TEXT("+35% damage  |  -15% attack speed"),{Mod(EChopItCombatStat::Damage,1.35f),Mod(EChopItCombatStat::AttackSpeed,0.85f)})
 		&& Make(TEXT("Ritmo"),TEXT("Funeral Rhythm"),TEXT("+25% attack speed  |  -10% movement speed"),{Mod(EChopItCombatStat::AttackSpeed,1.25f),Mod(EChopItCombatStat::MovementSpeed,0.90f)})
@@ -833,7 +833,7 @@ bool UChopItBootstrapCommandlet::CreatePhase10Assets() const
 bool UChopItBootstrapCommandlet::CreatePhase12Assets() const
 {
 	return CreatePhase9Assets()
-		&& RebuildPhase1Map(TEXT("/Game/ChopIt/World/Maps/L_Test_Infinite"), true, false, false, true);
+		&& RebuildPhase1Map(TEXT("/Game/NewChopIt/Maps/L_Test_Infinite"), true, false, false, true);
 }
 
 bool UChopItBootstrapCommandlet::CreateDialogueAssets() const
@@ -874,7 +874,7 @@ bool UChopItBootstrapCommandlet::CreateDialogueAssets() const
 		|| !ChopItBootstrap::SaveAsset(DialogueContext)) return false;
 
 	const FString PortraitSource = FPaths::Combine(FPaths::ProjectDir(), TEXT("Build/Dialogue/Portraits"));
-	const FString PortraitDestination = TEXT("/Game/ChopIt/Dialogue/Portraits");
+	const FString PortraitDestination = TEXT("/Game/NewChopIt/Art/Textures/Portraits");
 	const TCHAR* PortraitNames[] =
 	{
 		TEXT("Bruna_Neutral"), TEXT("Bruna_Angry"), TEXT("Bruna_Surprised"),
@@ -961,19 +961,19 @@ bool UChopItBootstrapCommandlet::CreateDialogueAssets() const
 	Theme->ExitDuration = 0.22f;
 	FChopItDialogueCameraAction& Closeup = Theme->CameraActions.FindOrAdd(TEXT("Closeup"));
 	Closeup.Kind = EChopItDialogueCameraActionKind::Cue;
-	Closeup.Cue = LoadObject<UChopItCameraCue>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Cues/CC_DialogueCloseup.CC_DialogueCloseup"));
+	Closeup.Cue = LoadObject<UChopItCameraCue>(nullptr, TEXT("/Game/NewChopIt/Camera/Cues/CC_DialogueCloseup.CC_DialogueCloseup"));
 	Closeup.AnchorBinding = TEXT("CameraAnchor");
 	Closeup.SubjectBinding = TEXT("Speaker");
 	FChopItDialogueCameraAction& Impact = Theme->CameraActions.FindOrAdd(TEXT("Impact"));
 	Impact.Kind = EChopItDialogueCameraActionKind::Shake;
-	Impact.Shake = LoadObject<UCameraShakeAsset>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical.CS_Critical"));
+	Impact.Shake = LoadObject<UCameraShakeAsset>(nullptr, TEXT("/Game/NewChopIt/Camera/Shakes/CS_Critical.CS_Critical"));
 	Impact.SubjectBinding = TEXT("Speaker");
 	Impact.Scale = 0.65f;
 	auto ConfigureCloseup = [Theme](const FName ActionId, const FName AnchorBinding, const FName SubjectBinding, const float FieldOfView)
 	{
 		FChopItDialogueCameraAction& Action = Theme->CameraActions.FindOrAdd(ActionId);
 		Action.Kind = EChopItDialogueCameraActionKind::Cue;
-		Action.Cue = LoadObject<UChopItCameraCue>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Cues/CC_DialogueCloseup.CC_DialogueCloseup"));
+		Action.Cue = LoadObject<UChopItCameraCue>(nullptr, TEXT("/Game/NewChopIt/Camera/Cues/CC_DialogueCloseup.CC_DialogueCloseup"));
 		Action.AnchorBinding = AnchorBinding;
 		Action.SubjectBinding = SubjectBinding;
 		Action.FieldOfViewOverride = FieldOfView;
@@ -993,7 +993,7 @@ bool UChopItBootstrapCommandlet::CreateDialogueAssets() const
 	ConfigureCloseup(TEXT("IntroWide"), TEXT("WideCamera"), TEXT("Oven"), 72.0f);
 	FChopItDialogueCameraAction& OvenImpact = Theme->CameraActions.FindOrAdd(TEXT("OvenImpact"));
 	OvenImpact.Kind = EChopItDialogueCameraActionKind::Shake;
-	OvenImpact.Shake = LoadObject<UCameraShakeAsset>(nullptr, TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical.CS_Critical"));
+	OvenImpact.Shake = LoadObject<UCameraShakeAsset>(nullptr, TEXT("/Game/NewChopIt/Camera/Shakes/CS_Critical.CS_Critical"));
 	OvenImpact.SubjectBinding = TEXT("Oven");
 	OvenImpact.Scale = 0.9f;
 	OvenImpact.bSustainUntilLineEnds = true;
@@ -1519,12 +1519,12 @@ bool UChopItBootstrapCommandlet::CreateEnemyAssets() const
 		return ChopItBootstrap::SaveAsset(Enemy) ? Enemy : nullptr;
 	};
 	UChopItEnemyDefinition* Basic = CreateEnemy(
-		TEXT("/Game/ChopIt/AI/Enemies/DA_Enemy_Tree"), TEXT("DA_Enemy_Tree"), TEXT("Tree"), TEXT("Animated Tree"), 48.0f, 250.0f, 7.0f, 1.0f, 6);
+		TEXT("/Game/NewChopIt/Data/AI/Enemies/DA_Enemy_Tree"), TEXT("DA_Enemy_Tree"), TEXT("Tree"), TEXT("Animated Tree"), 48.0f, 250.0f, 7.0f, 1.0f, 6);
 	UChopItEnemyDefinition* Fast = CreateEnemy(
-		TEXT("/Game/ChopIt/AI/Enemies/DA_Enemy_FastTree"), TEXT("DA_Enemy_FastTree"), TEXT("FastTree"), TEXT("Swift Tree"), 32.0f, 410.0f, 5.0f, 0.75f, 10);
+		TEXT("/Game/NewChopIt/Data/AI/Enemies/DA_Enemy_FastTree"), TEXT("DA_Enemy_FastTree"), TEXT("FastTree"), TEXT("Swift Tree"), 32.0f, 410.0f, 5.0f, 0.75f, 10);
 	if (!Basic || !Fast) { return false; }
 	UChopItEnemyDirectorDefinition* Director = ChopItBootstrap::LoadOrCreateAsset<UChopItEnemyDirectorDefinition>(
-		TEXT("/Game/ChopIt/AI/Directors/DA_Director_Day01"), TEXT("DA_Director_Day01"));
+		TEXT("/Game/NewChopIt/Data/AI/Directors/DA_Director_Day01"), TEXT("DA_Director_Day01"));
 	if (!Director) { return false; }
 	Director->WaveInterval = 2.5f;
 	Director->BaseBudget = 3;
@@ -1554,7 +1554,7 @@ bool UChopItBootstrapCommandlet::CreateEnemyAssets() const
 bool UChopItBootstrapCommandlet::CreateProgressionAssets() const
 {
 	UCurveFloat* Curve = ChopItBootstrap::LoadOrCreateAsset<UCurveFloat>(
-		TEXT("/Game/ChopIt/Progression/Curves/Curve_XP_Levels"),
+		TEXT("/Game/NewChopIt/Data/Progression/Curves/Curve_XP_Levels"),
 		TEXT("Curve_XP_Levels"));
 	if (!Curve)
 	{
@@ -1612,7 +1612,7 @@ bool UChopItBootstrapCommandlet::CreateProgressionAssets() const
 	for (const FUpgradeSpec& Spec : Specs)
 	{
 		const FString AssetName = FString::Printf(TEXT("DA_Upgrade_%s"), Spec.Name);
-		const FString Package = FString::Printf(TEXT("/Game/ChopIt/Progression/Upgrades/%s"), *AssetName);
+		const FString Package = FString::Printf(TEXT("/Game/NewChopIt/Data/Progression/Upgrades/%s"), *AssetName);
 		UChopItUpgradeDefinition* Upgrade = ChopItBootstrap::LoadOrCreateAsset<UChopItUpgradeDefinition>(Package, FName(*AssetName));
 		if (!Upgrade)
 		{
@@ -1668,10 +1668,10 @@ bool UChopItBootstrapCommandlet::CreateEconomyBlueprints() const
 	};
 	const FBlueprintSpec Specs[] =
 	{
-		{ TEXT("/Game/ChopIt/World/Economy/BP_CabinHub.BP_CabinHub"), ChopItBootstrap::CabinBlueprintPackage, TEXT("BP_CabinHub"), AChopItCabinHub::StaticClass() },
-		{ TEXT("/Game/ChopIt/World/Economy/BP_QuotaMachine.BP_QuotaMachine"), ChopItBootstrap::QuotaMachineBlueprintPackage, TEXT("BP_QuotaMachine"), AChopItQuotaMachine::StaticClass() },
-		{ TEXT("/Game/ChopIt/World/Economy/BP_DeliveryZone.BP_DeliveryZone"), ChopItBootstrap::DeliveryZoneBlueprintPackage, TEXT("BP_DeliveryZone"), AChopItDeliveryZone::StaticClass() },
-		{ TEXT("/Game/ChopIt/World/Economy/BP_SellZone.BP_SellZone"), ChopItBootstrap::SellZoneBlueprintPackage, TEXT("BP_SellZone"), AChopItSellZone::StaticClass() }
+		{ TEXT("/Game/NewChopIt/BP/Economy/BP_CabinHub.BP_CabinHub"), ChopItBootstrap::CabinBlueprintPackage, TEXT("BP_CabinHub"), AChopItCabinHub::StaticClass() },
+		{ TEXT("/Game/NewChopIt/BP/Economy/BP_QuotaMachine.BP_QuotaMachine"), ChopItBootstrap::QuotaMachineBlueprintPackage, TEXT("BP_QuotaMachine"), AChopItQuotaMachine::StaticClass() },
+		{ TEXT("/Game/NewChopIt/BP/Economy/BP_DeliveryZone.BP_DeliveryZone"), ChopItBootstrap::DeliveryZoneBlueprintPackage, TEXT("BP_DeliveryZone"), AChopItDeliveryZone::StaticClass() },
+		{ TEXT("/Game/NewChopIt/BP/Economy/BP_SellZone.BP_SellZone"), ChopItBootstrap::SellZoneBlueprintPackage, TEXT("BP_SellZone"), AChopItSellZone::StaticClass() }
 	};
 
 	for (const FBlueprintSpec& Spec : Specs)
@@ -1747,7 +1747,7 @@ bool UChopItBootstrapCommandlet::CreateChainLabAssets() const
 
 	UBlueprint* ChainLabMachineBlueprint = LoadObject<UBlueprint>(
 		nullptr,
-		TEXT("/Game/ChopIt/World/ChainLab/BP_ChainLabMachine.BP_ChainLabMachine"));
+		TEXT("/Game/NewChopIt/ChainLab/BP_ChainLabMachine.BP_ChainLabMachine"));
 	if (!ChainLabMachineBlueprint)
 	{
 		UPackage* Package = CreatePackage(ChopItBootstrap::ChainLabMachineBlueprintPackage);
@@ -1880,7 +1880,7 @@ bool UChopItBootstrapCommandlet::CreateCharacterBlueprint() const
 {
 	UBlueprint* CharacterBlueprint = LoadObject<UBlueprint>(
 		nullptr,
-		TEXT("/Game/ChopIt/Characters/Blueprints/BP_ChopItCharacter.BP_ChopItCharacter"));
+		TEXT("/Game/NewChopIt/Characters/Blueprints/BP_ChopItCharacter.BP_ChopItCharacter"));
 	if (!CharacterBlueprint)
 	{
 		UPackage* Package = CreatePackage(ChopItBootstrap::CharacterBlueprintPackage);
@@ -1923,12 +1923,12 @@ bool UChopItBootstrapCommandlet::CreateCameraAssets() const
 		return Rig;
 	};
 
-	UCameraRigAsset* GameplayRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_GameplayOrbit"), TEXT("CR_GameplayOrbit"), 85.0f);
-	UCameraRigAsset* ScriptedRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_DialogueAnchor"), TEXT("CR_DialogueAnchor"), 65.0f);
-	UCameraRigAsset* CinematicRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_Cinematic"), TEXT("CR_Cinematic"), 60.0f);
-	UCameraRigAsset* DeathRig = CreateRig(TEXT("/Game/ChopIt/Presentation/Camera/Rigs/CR_Death"), TEXT("CR_Death"), 55.0f);
+	UCameraRigAsset* GameplayRig = CreateRig(TEXT("/Game/NewChopIt/Camera/Rigs/CR_GameplayOrbit"), TEXT("CR_GameplayOrbit"), 85.0f);
+	UCameraRigAsset* ScriptedRig = CreateRig(TEXT("/Game/NewChopIt/Camera/Rigs/CR_DialogueAnchor"), TEXT("CR_DialogueAnchor"), 65.0f);
+	UCameraRigAsset* CinematicRig = CreateRig(TEXT("/Game/NewChopIt/Camera/Rigs/CR_Cinematic"), TEXT("CR_Cinematic"), 60.0f);
+	UCameraRigAsset* DeathRig = CreateRig(TEXT("/Game/NewChopIt/Camera/Rigs/CR_Death"), TEXT("CR_Death"), 55.0f);
 	if (!GameplayRig || !ScriptedRig || !CinematicRig || !DeathRig) return false;
-	UMaterial* OcclusionMaterial = ChopItBootstrap::LoadOrCreateAsset<UMaterial>(TEXT("/Game/ChopIt/Presentation/Camera/Materials/M_CameraFoliageOcclusion"), TEXT("M_CameraFoliageOcclusion"));
+	UMaterial* OcclusionMaterial = ChopItBootstrap::LoadOrCreateAsset<UMaterial>(TEXT("/Game/NewChopIt/Camera/Materials/M_CameraFoliageOcclusion"), TEXT("M_CameraFoliageOcclusion"));
 	if (OcclusionMaterial)
 	{
 		// Rebuild this asset deterministically. A masked temporal dither keeps depth sorting
@@ -2076,9 +2076,9 @@ bool UChopItBootstrapCommandlet::CreateCameraAssets() const
 		Asset->BuildCameraShake();
 		return Asset;
 	};
-	UCameraShakeAsset* NormalShake = CreateShake(TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Normal"), TEXT("CS_Normal"), 4.0f, 24.0f, 0.16f);
-	UCameraShakeAsset* CriticalShake = CreateShake(TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical"), TEXT("CS_Critical"), 9.0f, 20.0f, 0.28f);
-	UCameraShakeAsset* HeavyShake = CreateShake(TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_HeavyImpact"), TEXT("CS_HeavyImpact"), 15.0f, 15.0f, 0.42f);
+	UCameraShakeAsset* NormalShake = CreateShake(TEXT("/Game/NewChopIt/Camera/Shakes/CS_Normal"), TEXT("CS_Normal"), 4.0f, 24.0f, 0.16f);
+	UCameraShakeAsset* CriticalShake = CreateShake(TEXT("/Game/NewChopIt/Camera/Shakes/CS_Critical"), TEXT("CS_Critical"), 9.0f, 20.0f, 0.28f);
+	UCameraShakeAsset* HeavyShake = CreateShake(TEXT("/Game/NewChopIt/Camera/Shakes/CS_HeavyImpact"), TEXT("CS_HeavyImpact"), 15.0f, 15.0f, 0.42f);
 
 	auto CreateEffect = [](const TCHAR* RigPackage, const TCHAR* RigName, const TCHAR* PresetPackage, const TCHAR* PresetName, const float Vignette, const float Saturation, const float Duration, const int32 Order)
 	{
@@ -2103,11 +2103,11 @@ bool UChopItBootstrapCommandlet::CreateCameraAssets() const
 		return ChopItBootstrap::SaveAsset(Rig) && ChopItBootstrap::SaveAsset(Preset);
 	};
 	const bool bEffects =
-		CreateEffect(TEXT("/Game/ChopIt/Presentation/Camera/Effects/CRV_DialogueFocus"), TEXT("CRV_DialogueFocus"), TEXT("/Game/ChopIt/Presentation/Camera/Effects/CE_DialogueFocus"), TEXT("CE_DialogueFocus"), 0.55f, 0.85f, 0.0f, 200)
-		&& CreateEffect(TEXT("/Game/ChopIt/Presentation/Camera/Effects/CRV_DamageFlash"), TEXT("CRV_DamageFlash"), TEXT("/Game/ChopIt/Presentation/Camera/Effects/CE_DamageFlash"), TEXT("CE_DamageFlash"), 0.8f, 0.45f, 0.18f, 300)
-		&& CreateEffect(TEXT("/Game/ChopIt/Presentation/Camera/Effects/CRV_Danger"), TEXT("CRV_Danger"), TEXT("/Game/ChopIt/Presentation/Camera/Effects/CE_Danger"), TEXT("CE_Danger"), 0.72f, 0.65f, 0.0f, 100);
+		CreateEffect(TEXT("/Game/NewChopIt/Camera/Effects/CRV_DialogueFocus"), TEXT("CRV_DialogueFocus"), TEXT("/Game/NewChopIt/Camera/Effects/CE_DialogueFocus"), TEXT("CE_DialogueFocus"), 0.55f, 0.85f, 0.0f, 200)
+		&& CreateEffect(TEXT("/Game/NewChopIt/Camera/Effects/CRV_DamageFlash"), TEXT("CRV_DamageFlash"), TEXT("/Game/NewChopIt/Camera/Effects/CE_DamageFlash"), TEXT("CE_DamageFlash"), 0.8f, 0.45f, 0.18f, 300)
+		&& CreateEffect(TEXT("/Game/NewChopIt/Camera/Effects/CRV_Danger"), TEXT("CRV_Danger"), TEXT("/Game/NewChopIt/Camera/Effects/CE_Danger"), TEXT("CE_Danger"), 0.72f, 0.65f, 0.0f, 100);
 
-	UChopItCameraCue* DialogueCue = ChopItBootstrap::LoadOrCreateAsset<UChopItCameraCue>(TEXT("/Game/ChopIt/Presentation/Camera/Cues/CC_DialogueCloseup"), TEXT("CC_DialogueCloseup"));
+	UChopItCameraCue* DialogueCue = ChopItBootstrap::LoadOrCreateAsset<UChopItCameraCue>(TEXT("/Game/NewChopIt/Camera/Cues/CC_DialogueCloseup"), TEXT("CC_DialogueCloseup"));
 	DialogueCue->Mode = EChopItCameraMode::Scripted; DialogueCue->CameraRig = ScriptedRig; DialogueCue->Priority = 300; DialogueCue->FieldOfView = 55.0f;
 	DialogueCue->InputLocks = static_cast<int32>(EChopItCameraInputLock::Camera | EChopItCameraInputLock::Movement | EChopItCameraInputLock::Actions);
 
@@ -2154,7 +2154,7 @@ bool UChopItBootstrapCommandlet::CreateBlockoutMaterials() const
 	for (const FMaterialSpec& Spec : Specs)
 	{
 		const FString PackageName = FString::Printf(
-			TEXT("/Game/ChopIt/World/Blockout/Materials/%s"), Spec.Name);
+			TEXT("/Game/NewChopIt/Art/Blockout/Materials/%s"), Spec.Name);
 		UMaterialInstanceConstant* Material = ChopItBootstrap::LoadOrCreateAsset<UMaterialInstanceConstant>(
 			PackageName, FName(Spec.Name));
 		Material->SetParentEditorOnly(Parent);
@@ -2169,10 +2169,10 @@ bool UChopItBootstrapCommandlet::CreateBlockoutMaterials() const
 
 bool UChopItBootstrapCommandlet::CreateDamageTextMaterial() const
 {
-	constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/Presentation/Materials/M_DamageText_AlwaysOnTop");
+	constexpr TCHAR PackageName[] = TEXT("/Game/NewChopIt/Art/Materials/Presentation/M_DamageText_AlwaysOnTop");
 	UMaterial* DamageTextMaterial = LoadObject<UMaterial>(
 		nullptr,
-		TEXT("/Game/ChopIt/Presentation/Materials/M_DamageText_AlwaysOnTop.M_DamageText_AlwaysOnTop"));
+		TEXT("/Game/NewChopIt/Art/Materials/Presentation/M_DamageText_AlwaysOnTop.M_DamageText_AlwaysOnTop"));
 	if (!DamageTextMaterial)
 	{
 		UMaterial* SourceMaterial = LoadObject<UMaterial>(
@@ -2200,7 +2200,7 @@ bool UChopItBootstrapCommandlet::CreateDamageTextMaterial() const
 
 bool UChopItBootstrapCommandlet::CreateChestRevealUIMaterial() const
 {
-	constexpr TCHAR PackageName[] = TEXT("/Game/ChopIt/Items/Chest/M_ChestReveal_UI");
+	constexpr TCHAR PackageName[] = TEXT("/Game/NewChopIt/Art/Models/Chest/M_ChestReveal_UI");
 	UMaterial* Material = ChopItBootstrap::LoadOrCreateAsset<UMaterial>(PackageName, TEXT("M_ChestReveal_UI"));
 	if (!Material) return false;
 
@@ -2256,7 +2256,7 @@ bool UChopItBootstrapCommandlet::CreateChestRevealUIMaterial() const
 		if (!Resource->GetCompileErrors().IsEmpty()) return false;
 	}
 	const bool bSaved = ChopItBootstrap::SaveAsset(Material);
-	if (UMaterial* Light = LoadObject<UMaterial>(nullptr,TEXT("/Game/ChopIt/Items/Chest/M_ChestReveal_Light.M_ChestReveal_Light")))
+	if (UMaterial* Light = LoadObject<UMaterial>(nullptr,TEXT("/Game/NewChopIt/Art/Models/Chest/M_ChestReveal_Light.M_ChestReveal_Light")))
 	{
 		Light->SetMaterialUsage(MATUSAGE_InstancedStaticMeshes);
 		Light->PostEditChange();
@@ -2383,7 +2383,7 @@ bool UChopItBootstrapCommandlet::RebuildPhase1Map(
 		const FVector AnchorLocation(560.0f, 520.0f, 240.0f);
 		const FVector SubjectLocation(930.0f, 180.0f, 140.0f);
 		AChopItCameraAnchor* DialogueAnchor = World->SpawnActor<AChopItCameraAnchor>(AnchorLocation, (SubjectLocation - AnchorLocation).Rotation(), SpawnParameters);
-		UChopItDialogueSequence* DemoSequence = LoadObject<UChopItDialogueSequence>(nullptr, TEXT("/Game/ChopIt/Dialogue/Sequences/DA_Dialogue_Demo.DA_Dialogue_Demo"));
+		UChopItDialogueSequence* DemoSequence = LoadObject<UChopItDialogueSequence>(nullptr, TEXT("/Game/NewChopIt/Data/Dialogue/Sequences/DA_Dialogue_Demo.DA_Dialogue_Demo"));
 		if (!DialogueTrigger || !DialogueAnchor || !DemoSequence) return false;
 		DialogueTrigger->SetActorLabel(TEXT("Dialogue Demo: interact to test text, portraits, choices and camera"));
 		DialogueTrigger->Sequence = DemoSequence;
@@ -2582,7 +2582,7 @@ bool UChopItBootstrapCommandlet::RebuildChainLabMap() const
 
 	UBlueprint* ChainLabBlueprint = LoadObject<UBlueprint>(
 		nullptr,
-		TEXT("/Game/ChopIt/World/ChainLab/BP_ChainLabMachine.BP_ChainLabMachine"));
+		TEXT("/Game/NewChopIt/ChainLab/BP_ChainLabMachine.BP_ChainLabMachine"));
 	UClass* MachineClass = AChopItQuotaMachine::StaticClass();
 	if (ChainLabBlueprint && ChainLabBlueprint->GeneratedClass)
 	{

@@ -3,16 +3,16 @@
 import unreal
 
 
-MAP_PATH = "/Game/ChopIt/World/Maps/L_PSX_test"
+MAP_PATH = "/Game/NewChopIt/Maps/L_PSX_test"
 MATERIAL_PATHS = (
-    "/Game/ChopIt/Art/Models/Trees/New/Tree1/M_Tree_Far_01",
-    "/Game/ChopIt/Art/Models/Trees/New/Tree2/M_Tree_Cabin_02",
-    "/Game/ChopIt/Art/Models/Trees/New/Tree3/M_Tree_Cabin_03",
-    "/Game/ChopIt/Art/Models/SetPieces/House/M_House_PSX_Jittering",
-    "/Game/ChopIt/Art/Models/SetPieces/Machine/M_Machine_PSX_Jittering",
-    "/Game/ChopIt/Art/Materials/Ground/M_Grass_Ground_01_PSX_Tiled",
-    "/Game/ChopIt/Art/Materials/Ground/M_Grass_Ground_02_PSX_Tiled",
-    "/Game/ChopIt/Art/Materials/Ground/M_Grass_Ground_03_PSX_Tiled",
+    "/Game/NewChopIt/Art/Models/Trees/New/Tree1/M_Tree_Far_01",
+    "/Game/NewChopIt/Art/Models/Trees/New/Tree2/M_Tree_Cabin_02",
+    "/Game/NewChopIt/Art/Models/Trees/New/Tree3/M_Tree_Cabin_03",
+    "/Game/NewChopIt/Art/Models/SetPieces/House/M_House_PSX_Jittering",
+    "/Game/NewChopIt/Art/Models/SetPieces/Machine/M_Machine_PSX_Jittering",
+    "/Game/NewChopIt/Art/Materials/Ground/M_Grass_Ground_01_PSX_Tiled",
+    "/Game/NewChopIt/Art/Materials/Ground/M_Grass_Ground_02_PSX_Tiled",
+    "/Game/NewChopIt/Art/Materials/Ground/M_Grass_Ground_03_PSX_Tiled",
 )
 
 

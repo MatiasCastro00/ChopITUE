@@ -1,8 +1,8 @@
 """Build a playable integration scene from the progression layout."""
 import unreal
 
-source = '/Game/ChopIt/World/Maps/L_Test_Progression'
-target = '/Game/ChopIt/World/Maps/L_Test_AllFeaturesTerrain'
+source = '/Game/NewChopIt/Maps/L_Test_Progression'
+target = '/Game/NewChopIt/Maps/L_Test_AllFeaturesTerrain'
 assets = unreal.EditorAssetLibrary
 if assets.does_asset_exist(target):
     raise RuntimeError('Combined test map already exists; refusing to overwrite: ' + target)
@@ -31,7 +31,7 @@ def spawn(cls, label, xyz, rot=None):
     return actor
 
 dialogue = spawn(unreal.ChopItDialogueTrigger, 'Dialogue Demo - interact', (1040, 330, 60))
-sequence = unreal.load_asset('/Game/ChopIt/Dialogue/Sequences/DA_Dialogue_Demo')
+sequence = unreal.load_asset('/Game/NewChopIt/Data/Dialogue/Sequences/DA_Dialogue_Demo')
 if not sequence:
     raise RuntimeError('Dialogue sequence is missing')
 dialogue.set_editor_property('sequence', sequence)
@@ -45,7 +45,7 @@ for i, pos in enumerate(((1300, -200, 75), (1550, -450, 75), (1850, 200, 75), (1
 
 # The authored quota machine remains near the cabin; this second station
 # exposes the chain settings and tether interactions from the chain lab.
-chain_class = assets.load_blueprint_class('/Game/ChopIt/World/ChainLab/BP_ChainLabMachine')
+chain_class = assets.load_blueprint_class('/Game/NewChopIt/ChainLab/BP_ChainLabMachine')
 if not chain_class:
     raise RuntimeError('Chain machine Blueprint is missing')
 spawn(chain_class, 'Chain Lab Machine - tether', (-1250, -800, 0))

@@ -100,7 +100,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChopItChestRevealPSXTest, "ChopIt.Items.ChestR
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter | EAutomationTestFlags::NonNullRHI)
 bool FChopItChestRevealPSXTest::RunTest(const FString& Parameters)
 {
-	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/Game/ChopIt/World/Maps/L_PSX_test")));
+	ADD_LATENT_AUTOMATION_COMMAND(FEditorLoadMap(TEXT("/Game/NewChopIt/Maps/L_PSX_test")));
 	ADD_LATENT_AUTOMATION_COMMAND(FStartPIECommand(false));
 	ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(3.f));
 	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this]()

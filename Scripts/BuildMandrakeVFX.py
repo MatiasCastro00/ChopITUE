@@ -2,7 +2,7 @@
 import unreal
 import sys
 
-ROOT = '/Game/ChopIt/Items/Mandrake'
+ROOT = '/Game/NewChopIt/Art/Models/Mandrake'
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 FX = unreal.FXConverterUtilitiesLibrary
 MEL = unreal.MaterialEditingLibrary
@@ -189,6 +189,6 @@ system('NS_Mandrake_TearSplash',lambda c: emitter(c,'WaterDroplets',32,5,.6,3,(.
 system('NS_Mandrake_Confusion',lambda c: emitter(c,'ConfusedStars',8,24,.85,11,(1,.55,.12,.95),star))
 system('NS_Mandrake_Emerge',lambda c: emitter(c,'ForestMotes',36,28,.8,5,(.3,.8,.12,.8),drop,(15,10,65),gravity=True,burst=True))
 
-item=unreal.load_asset('/Game/ChopIt/Items/DA_Item_MandrakeStick')
+item=unreal.load_asset('/Game/NewChopIt/Data/Items/DA_Item_MandrakeStick')
 item.set_editor_property('description','Al matar a un enemigo, 10% de probabilidad de invocar una mandrágora durante 6 s. Su grito causa 8 de daño por segundo y ralentiza un 35% a los enemigos cercanos. La confusión dura hasta 1 s después del último impacto. Los stacks aumentan la probabilidad con rendimiento decreciente.')
 if not unreal.EditorAssetLibrary.save_loaded_asset(item,only_if_is_dirty=False):raise RuntimeError('Could not save Mandrake item description')

@@ -35,7 +35,7 @@ int32 UChopItStickItemDataAssetsCommandlet::Main(const FString& Params)
 	for (const FStickAsset& Stick : Sticks)
 	{
 		const FString AssetName = FString(TEXT("DA_Item_")) + Stick.Id;
-		const FString PackagePath = TEXT("/Game/ChopIt/Items/") + AssetName;
+		const FString PackagePath = TEXT("/Game/NewChopIt/Data/Items/") + AssetName;
 		if (FPackageName::DoesPackageExist(PackagePath)) continue;
 
 		UPackage* Package = CreatePackage(*PackagePath);
@@ -46,7 +46,7 @@ int32 UChopItStickItemDataAssetsCommandlet::Main(const FString& Params)
 		Item->Description = FText::FromString(TEXT("Placeholder: configure this passive effect and description before enabling loot."));
 		Item->SpawnWeight = 0.f; // Keep unfinished examples out of reward drops.
 		const FString IconName = FString(TEXT("T_Stick_")) + Stick.IconId;
-		const FString IconPath = FString::Printf(TEXT("/Game/ChopIt/Art/Sticks/%s.%s"), *IconName, *IconName);
+		const FString IconPath = FString::Printf(TEXT("/Game/NewChopIt/Art/Textures/Sticks/%s.%s"), *IconName, *IconName);
 		Item->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(IconPath));
 
 		FAssetRegistryModule::AssetCreated(Item);

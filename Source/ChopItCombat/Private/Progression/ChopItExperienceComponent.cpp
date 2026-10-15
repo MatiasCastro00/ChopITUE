@@ -6,7 +6,7 @@ UChopItExperienceComponent::UChopItExperienceComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	ExperienceCurve = TSoftObjectPtr<UCurveFloat>(
-		FSoftObjectPath(TEXT("/Game/ChopIt/Progression/Curves/Curve_XP_Levels.Curve_XP_Levels")));
+		FSoftObjectPath(TEXT("/Game/NewChopIt/Data/Progression/Curves/Curve_XP_Levels.Curve_XP_Levels")));
 }
 
 int32 UChopItExperienceComponent::GetRequiredExperience() const

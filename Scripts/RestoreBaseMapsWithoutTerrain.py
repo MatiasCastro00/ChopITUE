@@ -1,8 +1,8 @@
 """Remove authored terrain actors and keep the functional phone on the PSX base map."""
 import unreal
 
-map_paths = ['/Game/ChopIt/Developer/Terrain/L_Terrain_Phase2'] + [
-    '/Game/ChopIt/World/Maps/' + name for name in (
+map_paths = ['/Game/NewChopIt/Terrain/L_Terrain_Phase2'] + [
+    '/Game/NewChopIt/Maps/' + name for name in (
         'L_Dev_Sandbox', 'L_PSX_test', 'L_Startup',
         'L_Test_AllFeaturesTerrain', 'L_Test_ChainLab', 'L_Test_Combat',
         'L_Test_Cycle', 'L_Test_Dialogue', 'L_Test_Economy', 'L_Test_Elite',
@@ -11,7 +11,7 @@ map_paths = ['/Game/ChopIt/Developer/Terrain/L_Terrain_Phase2'] + [
 ]
 actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-phone_class = unreal.EditorAssetLibrary.load_blueprint_class('/Game/ChopIt/Phone/BP_MysteryPhone')
+phone_class = unreal.EditorAssetLibrary.load_blueprint_class('/Game/NewChopIt/Art/Models/Phone/BP_MysteryPhone')
 if not phone_class:
     raise RuntimeError('Missing BP_MysteryPhone')
 

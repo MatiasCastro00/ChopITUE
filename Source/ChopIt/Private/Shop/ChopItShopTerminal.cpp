@@ -41,8 +41,8 @@ void AChopItShopTerminal::BeginPlay()
 	TerminalVisual->SetCollisionResponseToChannel(ChopItCollisionChannels::CameraSolid, ECR_Ignore);
 	static const TCHAR* Paths[] =
 	{
-		TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_HandSaw.DA_Weapon_HandSaw"),
-		TEXT("/Game/ChopIt/Combat/Weapons/DA_Weapon_SawHalo.DA_Weapon_SawHalo")
+		TEXT("/Game/NewChopIt/Data/Combat/Weapons/DA_Weapon_HandSaw.DA_Weapon_HandSaw"),
+		TEXT("/Game/NewChopIt/Data/Combat/Weapons/DA_Weapon_SawHalo.DA_Weapon_SawHalo")
 	};
 	for (const TCHAR* Path : Paths)
 	{

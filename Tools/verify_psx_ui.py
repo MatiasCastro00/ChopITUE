@@ -1,12 +1,12 @@
 import unreal
 
-asset = unreal.load_asset("/Game/ChopIt/UI/WBP_PSX_HUD")
+asset = unreal.load_asset("/Game/NewChopIt/Art/UI/WBP_PSX_HUD")
 if not asset:
     raise RuntimeError("WBP_PSX_HUD is missing")
 if asset.get_editor_property("status") != unreal.BlueprintStatus.BS_UP_TO_DATE:
     raise RuntimeError("WBP_PSX_HUD did not compile: %s" % asset.get_editor_property("status"))
 
-world = unreal.EditorLoadingAndSavingUtils.load_map("/Game/ChopIt/World/Maps/L_PSX_test")
+world = unreal.EditorLoadingAndSavingUtils.load_map("/Game/NewChopIt/Maps/L_PSX_test")
 if not world:
     raise RuntimeError("L_PSX_test could not be loaded")
 settings = world.get_world_settings()

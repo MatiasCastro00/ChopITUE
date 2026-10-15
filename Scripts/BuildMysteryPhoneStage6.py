@@ -1,7 +1,7 @@
 """Create editable placeholder phone conversations using the existing dialogue system."""
 import unreal
 
-ROOT = '/Game/ChopIt/Phone'
+ROOT = '/Game/NewChopIt/Art/Models/Phone'
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
 
@@ -39,7 +39,7 @@ def line(line_id, speaker, text, next_line='', choices=None):
     return item
 
 
-theme = unreal.load_asset('/Game/ChopIt/Dialogue/DA_DialogueTheme_WoodMetal')
+theme = unreal.load_asset('/Game/NewChopIt/Data/Dialogue/DA_DialogueTheme_WoodMetal')
 if not theme:
     raise RuntimeError('Existing dialogue theme is missing')
 

@@ -32,7 +32,7 @@ AChopItTerrainActor::AChopItTerrainActor()
 	PrimaryActorTick.bCanEverTick = false;
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("TerrainRoot"));
 	RootComponent->SetMobility(EComponentMobility::Static);
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Ground(TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Ground.MI_Ground"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> Ground(TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Ground.MI_Ground"));
 	TerrainMaterial = Ground.Object;
 }
 

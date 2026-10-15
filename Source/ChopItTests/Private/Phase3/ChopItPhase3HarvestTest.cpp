@@ -129,12 +129,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FChopItPhase3AssetsAndMapTest::RunTest(const FString& Parameters)
 {
-	UClass* TreeBlueprintClass = LoadClass<AChopItTree>(nullptr, TEXT("/Game/ChopIt/World/Forest/Trees/BP_Tree_Basic.BP_Tree_Basic_C"));
-	UClass* PickupBlueprintClass = LoadClass<AChopItLogPickup>(nullptr, TEXT("/Game/ChopIt/World/Pickups/BP_LogPickup.BP_LogPickup_C"));
+	UClass* TreeBlueprintClass = LoadClass<AChopItTree>(nullptr, TEXT("/Game/NewChopIt/BP/Trees/BP_Tree_Basic.BP_Tree_Basic_C"));
+	UClass* PickupBlueprintClass = LoadClass<AChopItLogPickup>(nullptr, TEXT("/Game/NewChopIt/BP/Pickups/BP_LogPickup.BP_LogPickup_C"));
 	TestNotNull(TEXT("BP_Tree_Basic exists"), TreeBlueprintClass);
 	TestNotNull(TEXT("BP_LogPickup exists"), PickupBlueprintClass);
 
-	const FString HarvestMapPackage = TEXT("/Game/ChopIt/World/Maps/L_Test_Harvest");
+	const FString HarvestMapPackage = TEXT("/Game/NewChopIt/Maps/L_Test_Harvest");
 	TestTrue(TEXT("Harvest test map package exists"), FPackageName::DoesPackageExist(HarvestMapPackage));
 	UPackage* Package = LoadPackage(nullptr, *HarvestMapPackage, LOAD_None);
 	TestNotNull(TEXT("Harvest map package loads"), Package);

@@ -3,8 +3,8 @@
 import math
 import unreal
 
-MAP_PATH = "/Game/ChopIt/World/Maps/L_PSX_test"
-TREE_ROOT = "/Game/ChopIt/Art/Models/Trees/New"
+MAP_PATH = "/Game/NewChopIt/Maps/L_PSX_test"
+TREE_ROOT = "/Game/NewChopIt/Art/Models/Trees/New"
 NEAR_COUNT = 8
 MESH_PATHS = {
     1: "{}/Tree1/SM_Tree_Far_01".format(TREE_ROOT),
@@ -26,14 +26,14 @@ TEXTURE_PATHS = (
     "{}/Tree2/T_Tree_Cabin_02_Normal".format(TREE_ROOT),
     "{}/Tree3/T_Tree_Cabin_03_BaseColor".format(TREE_ROOT),
 )
-GROUND_ROOT = "/Game/ChopIt/Art/Materials/Ground"
+GROUND_ROOT = "/Game/NewChopIt/Art/Materials/Ground"
 GRASS_TEXTURE_PATHS = tuple(
     "{}/T_Grass_Ground_{:02d}".format(GROUND_ROOT, index) for index in range(1, 4)
 )
 GRASS_MATERIAL_PATHS = tuple(
     "{}/M_Grass_Ground_{:02d}_PSX_Tiled".format(GROUND_ROOT, index) for index in range(1, 4)
 )
-OUTLINE_PATH = "/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering"
+OUTLINE_PATH = "/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering"
 
 
 def distance_2d(a, b):
@@ -71,13 +71,13 @@ post_process_materials = {
     for blendable in weighted_blendables
     if blendable.get_editor_property("object")
 }
-assert "/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_CellShading" in post_process_materials
-assert "/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Pixelation_TextSafe" in post_process_materials
+assert "/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_CellShading" in post_process_materials
+assert "/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Pixelation_TextSafe" in post_process_materials
 cell_instance = unreal.EditorAssetLibrary.load_asset(
-    "/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_CellShading"
+    "/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_CellShading"
 )
 cell_parent = unreal.EditorAssetLibrary.load_asset(
-    "/Game/ChopIt/Art/Materials/PSX_Materials/M_PSX_CellShading_Color"
+    "/Game/NewChopIt/Art/Materials/PSX_Materials/M_PSX_CellShading_Color"
 )
 assert cell_instance.get_editor_property("parent").get_path_name().split(".")[0] == cell_parent.get_path_name().split(".")[0]
 cell_output = unreal.MaterialEditingLibrary.get_material_property_input_node(
@@ -140,7 +140,7 @@ for label in ("Boundary_North", "Boundary_South", "Boundary_East", "Boundary_Wes
 _, nav_extent = actors_by_label["NavMeshBounds"].get_actor_bounds(False)
 assert nav_extent.x >= 3990.0 and nav_extent.y >= 3990.0
 
-chain = unreal.EditorAssetLibrary.load_asset("/Game/ChopIt/World/ChainLab/DA_Chain_Default")
+chain = unreal.EditorAssetLibrary.load_asset("/Game/NewChopIt/ChainLab/DA_Chain_Default")
 assert chain.get_editor_property("chain_link_count") == 64
 assert abs(chain.get_editor_property("max_chain_length") - 3600.0) < 0.1
 assert chain.get_editor_property("minimum_deployed_links") == 16

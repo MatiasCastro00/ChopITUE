@@ -1,7 +1,7 @@
 """Create editable nearby phone prompt assets. Safe to rerun."""
 import unreal
 
-ROOT = '/Game/ChopIt/Phone'
+ROOT = '/Game/NewChopIt/Art/Models/Phone'
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
 widget_path = ROOT + '/WBP_PhoneInteractPrompt'

@@ -73,7 +73,7 @@ AChopItTree::AChopItTree()
 		CrownMesh->SetStaticMesh(SphereMesh.Object);
 	}
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> TreeOutlineMaterial(
-		TEXT("/Game/ChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
+		TEXT("/Game/NewChopIt/Art/Materials/PSX_Materials/MI_PSX_Outline_Jittering.MI_PSX_Outline_Jittering"));
 	if (TreeOutlineMaterial.Succeeded())
 	{
 		TrunkMesh->SetOverlayMaterial(TreeOutlineMaterial.Object);

@@ -8,7 +8,7 @@ import unreal
 
 
 SOURCE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Content", "ChopIt", "Art", "Sticks"))
-DESTINATION = "/Game/ChopIt/Art/Sticks"
+DESTINATION = "/Game/NewChopIt/Art/Textures/Sticks"
 ITEMS = {
     "Heartwood": "Heartwood",
     "VampireStick": "VampireStick",
@@ -47,7 +47,7 @@ for filename in sorted(os.listdir(SOURCE_DIR)):
     unreal.log("CHOPIT_STICK_ICON " + texture.get_path_name())
 
 for item_name, icon_name in ITEMS.items():
-    item = unreal.EditorAssetLibrary.load_asset("/Game/ChopIt/Items/DA_Item_" + item_name)
+    item = unreal.EditorAssetLibrary.load_asset("/Game/NewChopIt/Data/Items/DA_Item_" + item_name)
     texture = unreal.EditorAssetLibrary.load_asset(DESTINATION + "/T_Stick_" + icon_name)
     if item is None or texture is None:
         raise RuntimeError("Missing item or icon for " + item_name)

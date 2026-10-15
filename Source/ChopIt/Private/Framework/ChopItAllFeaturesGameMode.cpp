@@ -24,7 +24,7 @@
 AChopItAllFeaturesGameMode::AChopItAllFeaturesGameMode()
 {
 	PhoneSpawnConfig = TSoftObjectPtr<UChopItPhoneSpawnConfig>(
-		FSoftObjectPath(TEXT("/Game/ChopIt/Phone/DA_PhoneSpawn.DA_PhoneSpawn")));
+		FSoftObjectPath(TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneSpawn.DA_PhoneSpawn")));
 }
 
 void AChopItAllFeaturesGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)

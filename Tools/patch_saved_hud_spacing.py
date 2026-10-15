@@ -1,5 +1,5 @@
 import unreal
-path = '/Game/ChopIt/UI/WBP_PSX_HUD'
+path = '/Game/NewChopIt/Art/UI/WBP_PSX_HUD'
 asset = unreal.load_asset(path)
 def widget(name):
     result = unreal.load_object(None, path + '.WBP_PSX_HUD:WidgetTree.' + name)

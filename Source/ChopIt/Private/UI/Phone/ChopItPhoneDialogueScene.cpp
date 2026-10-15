@@ -66,7 +66,7 @@ bool AChopItPhoneDialogueScene::InitializeScene(const AChopItMysteryPhone* Phone
 	Target->InitAutoFormat(768, 768);
 	Target->UpdateResourceImmediate(true);
 	UMaterialInterface* Composite = LoadObject<UMaterialInterface>(nullptr,
-		TEXT("/Game/ChopIt/Phone/M_PhonePortrait_UI.M_PhonePortrait_UI"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/M_PhonePortrait_UI.M_PhonePortrait_UI"));
 	if (!Composite) return false;
 	CompositeMaterial = UMaterialInstanceDynamic::Create(Composite, this);
 	CompositeMaterial->SetTextureParameterValue(TEXT("CaptureTexture"), Target);

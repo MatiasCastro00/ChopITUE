@@ -107,7 +107,7 @@ void AChopItQuotaMachine::BeginPlay()
 		WoodChipPool->AddInstance(FTransform(FRotator::ZeroRotator, FVector(0.0f, 0.0f, -100000.0f), FVector::ZeroVector));
 	}
 	if (UMaterialInterface* WoodMaterial = LoadObject<UMaterialInterface>(
-		nullptr, TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Wood.MI_Wood")))
+		nullptr, TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Wood.MI_Wood")))
 	{
 		WoodChipPool->SetMaterial(0, WoodMaterial);
 	}
@@ -698,7 +698,7 @@ const UChopItChainDefinition* AChopItQuotaMachine::GetChainDefinition() const
 		return ChainDefinition.Get();
 	}
 	return LoadObject<UChopItChainDefinition>(nullptr,
-		TEXT("/Game/ChopIt/World/ChainLab/DA_Chain_Default.DA_Chain_Default"));
+		TEXT("/Game/NewChopIt/ChainLab/DA_Chain_Default.DA_Chain_Default"));
 }
 
 void AChopItQuotaMachine::DestroyPlayerChain()

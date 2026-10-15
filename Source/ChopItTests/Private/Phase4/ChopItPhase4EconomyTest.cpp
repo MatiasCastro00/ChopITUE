@@ -138,7 +138,7 @@ bool FChopItPhase4AssetsAndMapTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Wood-chip pool supports sustained grinding"), MachineDefaults->GetWoodChipPoolSize() >= 32);
 
 	const UChopItDayDefinition* Day = LoadObject<UChopItDayDefinition>(
-		nullptr, TEXT("/Game/ChopIt/Economy/Days/DA_Day_01.DA_Day_01"));
+		nullptr, TEXT("/Game/NewChopIt/Data/Days/DA_Day_01.DA_Day_01"));
 	TestNotNull(TEXT("Day one definition exists"), Day);
 	if (Day)
 	{
@@ -151,12 +151,12 @@ bool FChopItPhase4AssetsAndMapTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Day definition primary type"), Day->GetPrimaryAssetId().PrimaryAssetType, FPrimaryAssetType(TEXT("ChopItDay")));
 	}
 
-	TestNotNull(TEXT("BP_CabinHub exists"), LoadClass<AChopItCabinHub>(nullptr, TEXT("/Game/ChopIt/World/Economy/BP_CabinHub.BP_CabinHub_C")));
-	TestNotNull(TEXT("BP_QuotaMachine exists"), LoadClass<AChopItQuotaMachine>(nullptr, TEXT("/Game/ChopIt/World/Economy/BP_QuotaMachine.BP_QuotaMachine_C")));
-	TestNotNull(TEXT("BP_DeliveryZone exists"), LoadClass<AChopItDeliveryZone>(nullptr, TEXT("/Game/ChopIt/World/Economy/BP_DeliveryZone.BP_DeliveryZone_C")));
-	TestNotNull(TEXT("BP_SellZone exists"), LoadClass<AChopItSellZone>(nullptr, TEXT("/Game/ChopIt/World/Economy/BP_SellZone.BP_SellZone_C")));
+	TestNotNull(TEXT("BP_CabinHub exists"), LoadClass<AChopItCabinHub>(nullptr, TEXT("/Game/NewChopIt/BP/Economy/BP_CabinHub.BP_CabinHub_C")));
+	TestNotNull(TEXT("BP_QuotaMachine exists"), LoadClass<AChopItQuotaMachine>(nullptr, TEXT("/Game/NewChopIt/BP/Economy/BP_QuotaMachine.BP_QuotaMachine_C")));
+	TestNotNull(TEXT("BP_DeliveryZone exists"), LoadClass<AChopItDeliveryZone>(nullptr, TEXT("/Game/NewChopIt/BP/Economy/BP_DeliveryZone.BP_DeliveryZone_C")));
+	TestNotNull(TEXT("BP_SellZone exists"), LoadClass<AChopItSellZone>(nullptr, TEXT("/Game/NewChopIt/BP/Economy/BP_SellZone.BP_SellZone_C")));
 
-	const FString MapPackageName = TEXT("/Game/ChopIt/World/Maps/L_Test_Economy");
+	const FString MapPackageName = TEXT("/Game/NewChopIt/Maps/L_Test_Economy");
 	TestTrue(TEXT("Economy map exists"), FPackageName::DoesPackageExist(MapPackageName));
 	UPackage* Package = LoadPackage(nullptr, *MapPackageName, LOAD_None);
 	UWorld* World = Package ? FindObject<UWorld>(Package, TEXT("L_Test_Economy")) : nullptr;

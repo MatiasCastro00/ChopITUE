@@ -12,7 +12,7 @@
 AChopItChestRevealScene::AChopItChestRevealScene()
 {
 	PrimaryActorTick.bCanEverTick = false;
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LightMaterial(TEXT("/Game/ChopIt/Items/Chest/M_ChestReveal_Light.M_ChestReveal_Light"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LightMaterial(TEXT("/Game/NewChopIt/Art/Models/Chest/M_ChestReveal_Light.M_ChestReveal_Light"));
 	LightMaterialAsset = LightMaterial.Object;
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Stage")));
 	Model = CreateDefaultSubobject<USceneComponent>(TEXT("ChestModel"));
@@ -53,8 +53,8 @@ void AChopItChestRevealScene::InitializeScene()
 {
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	UMaterialInterface* Wood = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/ChopIt/Items/Chest/M_BossChest_Wood.M_BossChest_Wood"));
-	UMaterialInterface* Gold = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/ChopIt/Items/Chest/M_BossChest_Gold.M_BossChest_Gold"));
+	UMaterialInterface* Wood = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/NewChopIt/Art/Models/Chest/M_BossChest_Wood.M_BossChest_Wood"));
+	UMaterialInterface* Gold = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/NewChopIt/Art/Models/Chest/M_BossChest_Gold.M_BossChest_Gold"));
 	auto Part = [&](USceneComponent* Parent, FVector Position, FVector Size, UMaterialInterface* Material, FRotator Rotation = FRotator::ZeroRotator)
 	{
 		auto* Mesh = NewObject<UStaticMeshComponent>(this);
@@ -116,7 +116,7 @@ void AChopItChestRevealScene::InitializeScene()
 		Light->SetLightColor(I==0 ? FLinearColor(1.f,.78f,.53f) : FLinearColor(.35f,.55f,1.f));
 		Light->RegisterComponent();
 	}
-	Finale->SetAsset(LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/ChopIt/Items/Chest/NS_BossChest_Open.NS_BossChest_Open")));
+	Finale->SetAsset(LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/NewChopIt/Art/Models/Chest/NS_BossChest_Open.NS_BossChest_Open")));
 	Finale->SetForceSolo(true);
 	Finale->SetVisibleInSceneCaptureOnly(true);
 	Finale->SetComponentTickEnabled(false);
@@ -127,7 +127,7 @@ void AChopItChestRevealScene::InitializeScene()
 	Target->InitAutoFormat(1024,1024);
 	Target->UpdateResourceImmediate(true);
 	if (UMaterialInterface* CompositeMaterial = LoadObject<UMaterialInterface>(nullptr,
-		TEXT("/Game/ChopIt/Items/Chest/M_ChestReveal_UI.M_ChestReveal_UI")))
+		TEXT("/Game/NewChopIt/Art/Models/Chest/M_ChestReveal_UI.M_ChestReveal_UI")))
 	{
 		CaptureCompositeMaterial = UMaterialInstanceDynamic::Create(CompositeMaterial, this);
 		CaptureCompositeMaterial->SetTextureParameterValue(TEXT("CaptureTexture"), Target);

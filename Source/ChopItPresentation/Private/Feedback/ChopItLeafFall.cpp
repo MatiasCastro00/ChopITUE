@@ -14,7 +14,7 @@ AChopItLeafFall::AChopItLeafFall()
 	SetRootComponent(Leaves);
 	Leaves->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> LeafMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LeavesMaterial(TEXT("/Game/ChopIt/World/Blockout/Materials/MI_Leaves.MI_Leaves"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> LeavesMaterial(TEXT("/Game/NewChopIt/Art/Blockout/Materials/MI_Leaves.MI_Leaves"));
 	if (LeafMesh.Succeeded()) { Leaves->SetStaticMesh(LeafMesh.Object); }
 	if (LeavesMaterial.Succeeded()) { Leaves->SetMaterial(0, LeavesMaterial.Object); }
 }

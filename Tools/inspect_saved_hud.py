@@ -1,5 +1,5 @@
 import unreal
-asset = unreal.load_asset('/Game/ChopIt/UI/WBP_PSX_HUD')
+asset = unreal.load_asset('/Game/NewChopIt/Art/UI/WBP_PSX_HUD')
 task = unreal.AssetExportTask()
 task.object = asset
 task.filename = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir() + 'HUD_inspect.t3d')

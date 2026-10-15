@@ -2,7 +2,7 @@
 import os
 import unreal
 
-root = '/Game/ChopIt/Phone'
+root = '/Game/NewChopIt/Art/Models/Phone'
 call = unreal.load_asset(root + '/DA_PhoneCall')
 indicator = unreal.load_asset(root + '/DA_PhoneIndicator')
 if not isinstance(call, unreal.ChopItPhoneCallConfig):

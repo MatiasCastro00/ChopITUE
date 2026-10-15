@@ -21,7 +21,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChopItMandrakeTest, "ChopIt.Items.MandrakeScre
 bool FChopItMandrakeTest::RunTest(const FString& Parameters)
 {
 	const UChopItItemDataAsset* Authored = LoadObject<UChopItItemDataAsset>(nullptr,
-		TEXT("/Game/ChopIt/Items/DA_Item_MandrakeStick.DA_Item_MandrakeStick"));
+		TEXT("/Game/NewChopIt/Data/Items/DA_Item_MandrakeStick.DA_Item_MandrakeStick"));
 	TestNotNull(TEXT("Mandrake Data Asset"),Authored);
 	if (Authored)
 	{

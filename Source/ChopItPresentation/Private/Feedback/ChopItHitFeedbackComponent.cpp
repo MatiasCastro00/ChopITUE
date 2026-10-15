@@ -103,8 +103,8 @@ void UChopItHitFeedbackComponent::HandleDamageReceived(const float Damage, const
 	if (Settings->bEnableCameraShake && Settings->CameraShakeStrength > 0.0f)
 	{
 		const TCHAR* ShakePath = bCritical
-			? TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Critical.CS_Critical")
-			: TEXT("/Game/ChopIt/Presentation/Camera/Shakes/CS_Normal.CS_Normal");
+			? TEXT("/Game/NewChopIt/Camera/Shakes/CS_Critical.CS_Critical")
+			: TEXT("/Game/NewChopIt/Camera/Shakes/CS_Normal.CS_Normal");
 		if (const UCameraShakeAsset* Shake = LoadObject<UCameraShakeAsset>(nullptr, ShakePath))
 		{
 			if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))

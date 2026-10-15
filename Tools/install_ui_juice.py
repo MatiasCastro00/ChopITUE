@@ -27,17 +27,17 @@ for index,(name,(frequency,duration)) in enumerate(specs.items()):
             samples.append(struct.pack('<h',int(14000*value)))
         with wave.open(str(filename),'wb') as out:
             out.setnchannels(1);out.setsampwidth(2);out.setframerate(44100);out.writeframes(b''.join(samples))
-    if not unreal.EditorAssetLibrary.does_asset_exist('/Game/ChopIt/UI/Audio/UI_'+name):
+    if not unreal.EditorAssetLibrary.does_asset_exist('/Game/NewChopIt/Audio/UI/UI_'+name):
         task=unreal.AssetImportTask();task.filename=str(filename)
-        task.destination_path='/Game/ChopIt/UI/Audio';task.automated=True;task.save=True;tasks.append(task)
+        task.destination_path='/Game/NewChopIt/Audio/UI';task.automated=True;task.save=True;tasks.append(task)
 unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks(tasks)
-profile=unreal.load_asset('/Game/ChopIt/UI/DA_UIJuice')
+profile=unreal.load_asset('/Game/NewChopIt/Data/UI/DA_UIJuice')
 if not profile:
     factory=unreal.DataAssetFactory();factory.set_editor_property('data_asset_class',unreal.ChopItUIJuiceProfile)
-    profile=unreal.AssetToolsHelpers.get_asset_tools().create_asset('DA_UIJuice','/Game/ChopIt/UI',unreal.ChopItUIJuiceProfile,factory)
-    profile.set_editor_property('sounds',{name:unreal.load_asset('/Game/ChopIt/UI/Audio/UI_'+name) for name in specs})
+    profile=unreal.AssetToolsHelpers.get_asset_tools().create_asset('DA_UIJuice','/Game/NewChopIt/Data/UI',unreal.ChopItUIJuiceProfile,factory)
+    profile.set_editor_property('sounds',{name:unreal.load_asset('/Game/NewChopIt/Audio/UI/UI_'+name) for name in specs})
     unreal.EditorAssetLibrary.save_loaded_asset(profile,only_if_is_dirty=False)
-asset=unreal.load_asset('/Game/ChopIt/UI/WBP_PSX_HUD')
+asset=unreal.load_asset('/Game/NewChopIt/Art/UI/WBP_PSX_HUD')
 assert asset
 unreal.BlueprintEditorLibrary.reparent_blueprint(asset,unreal.ChopItJuiceWidget)
 unreal.BlueprintEditorLibrary.compile_blueprint(asset)

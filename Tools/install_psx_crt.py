@@ -7,8 +7,8 @@ Running it again keeps existing material-instance parameter edits.
 
 import unreal
 
-MAP_PATH = "/Game/ChopIt/World/Maps/L_PSX_test"
-ROOT = "/Game/ChopIt/Art/Materials/PSX_Materials"
+MAP_PATH = "/Game/NewChopIt/Maps/L_PSX_test"
+ROOT = "/Game/NewChopIt/Art/Materials/PSX_Materials"
 MATERIAL_PATH = ROOT + "/M_PSX_CRT_Post"
 INSTANCE_PATH = ROOT + "/MI_PSX_CRT"
 MEL = unreal.MaterialEditingLibrary

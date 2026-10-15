@@ -15,7 +15,7 @@ AChopItGameMode::AChopItGameMode()
 {
 	DefaultPawnClass = AChopItCharacter::StaticClass();
 	static ConstructorHelpers::FClassFinder<APawn> CharacterBlueprint(
-		TEXT("/Game/ChopIt/Characters/Blueprints/BP_ChopItCharacter"));
+		TEXT("/Game/NewChopIt/Characters/Blueprints/BP_ChopItCharacter"));
 	if (CharacterBlueprint.Succeeded())
 	{
 		DefaultPawnClass = CharacterBlueprint.Class;

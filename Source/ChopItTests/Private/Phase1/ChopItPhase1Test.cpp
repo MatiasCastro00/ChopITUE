@@ -59,13 +59,13 @@ bool FChopItPhase1GameplayFrameworkTest::RunTest(const FString& Parameters)
 
 	TestNotNull(
 		TEXT("Lumberjack idle animation exists"),
-		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Idle_Respiracion_96.LumberJackCTRL_COG_Idle_Respiracion_96")));
+		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/NewChopIt/Art/Models/Character/Updated/LumberJackCTRL_COG_Idle_Respiracion_96.LumberJackCTRL_COG_Idle_Respiracion_96")));
 	TestNotNull(
 		TEXT("Lumberjack run animation exists"),
-		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Run_Heavy_650_14.LumberJackCTRL_COG_Run_Heavy_650_14")));
+		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/NewChopIt/Art/Models/Character/Updated/LumberJackCTRL_COG_Run_Heavy_650_14.LumberJackCTRL_COG_Run_Heavy_650_14")));
 	TestNotNull(
 		TEXT("Lumberjack jump animation exists"),
-		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/ChopIt/Art/Character/Updated/LumberJackCTRL_COG_Jump_Quick_24.LumberJackCTRL_COG_Jump_Quick_24")));
+		LoadObject<UAnimSequence>(nullptr, TEXT("/Game/NewChopIt/Art/Models/Character/Updated/LumberJackCTRL_COG_Jump_Quick_24.LumberJackCTRL_COG_Jump_Quick_24")));
 
 	TestEqual(TEXT("Unit input remains unit input"), AChopItCharacter::NormalizeMovementInput(FVector2D(0.0, 1.0)), FVector2D(0.0, 1.0));
 	const FVector2D Diagonal = AChopItCharacter::NormalizeMovementInput(FVector2D(1.0, 1.0));
@@ -80,12 +80,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FChopItPhase1InputAssetsTest::RunTest(const FString& Parameters)
 {
-	const UInputAction* Move = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_Move.IA_Move"));
-	const UInputAction* Interact = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_Interact.IA_Interact"));
-	const UInputAction* CameraLook = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraLook.IA_CameraLook"));
-	const UInputAction* CameraZoom = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraZoom.IA_CameraZoom"));
-	const UInputAction* CameraReset = LoadObject<UInputAction>(nullptr, TEXT("/Game/ChopIt/Input/IA_CameraReset.IA_CameraReset"));
-	const UInputMappingContext* Context = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/ChopIt/Input/IMC_Gameplay.IMC_Gameplay"));
+	const UInputAction* Move = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_Move.IA_Move"));
+	const UInputAction* Interact = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_Interact.IA_Interact"));
+	const UInputAction* CameraLook = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_CameraLook.IA_CameraLook"));
+	const UInputAction* CameraZoom = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_CameraZoom.IA_CameraZoom"));
+	const UInputAction* CameraReset = LoadObject<UInputAction>(nullptr, TEXT("/Game/NewChopIt/Input/IA_CameraReset.IA_CameraReset"));
+	const UInputMappingContext* Context = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/NewChopIt/Input/IMC_Gameplay.IMC_Gameplay"));
 	TestNotNull(TEXT("IA_Move exists"), Move);
 	TestNotNull(TEXT("IA_Interact exists"), Interact);
 	TestNotNull(TEXT("IA_CameraLook exists"), CameraLook);
@@ -139,7 +139,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FChopItPhase1MapTest::RunTest(const FString& Parameters)
 {
-	UPackage* Package = LoadPackage(nullptr, TEXT("/Game/ChopIt/World/Maps/L_Dev_Sandbox"), LOAD_None);
+	UPackage* Package = LoadPackage(nullptr, TEXT("/Game/NewChopIt/Maps/L_Dev_Sandbox"), LOAD_None);
 	TestNotNull(TEXT("Sandbox package loads"), Package);
 	if (!Package)
 	{

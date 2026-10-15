@@ -17,6 +17,6 @@ def export_texture(asset_path, filename):
         raise RuntimeError("Could not export: " + asset_path)
 
 
-export_texture("/Game/ChopIt/Art/MockUp/Mockup", "Mockup.png")
-export_texture("/Game/ChopIt/Art/UI/UI_PSX_Atlas_Transparente", "UI_PSX_Atlas_Transparente.png")
+export_texture("/Game/NewChopIt/Art/MockUp/Mockup", "Mockup.png")
+export_texture("/Game/NewChopIt/Art/Textures/UI/UI_PSX_Atlas_Transparente", "UI_PSX_Atlas_Transparente.png")
 unreal.log("CHOPIT_UI_REFERENCES_EXPORTED")

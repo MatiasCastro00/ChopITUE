@@ -1,7 +1,7 @@
 """Put the comic closer to the phone and persist prompt UI layer settings."""
 import unreal
 
-root = '/Game/ChopIt/Phone'
+root = '/Game/NewChopIt/Art/Models/Phone'
 indicator = unreal.load_asset(root + '/DA_PhoneIndicator')
 if not isinstance(indicator, unreal.ChopItPhoneIndicatorConfig):
     raise RuntimeError('Missing DA_PhoneIndicator')

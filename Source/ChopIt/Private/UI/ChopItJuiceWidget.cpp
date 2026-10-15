@@ -27,7 +27,7 @@ void UChopItJuiceWidget::SetText(FName Name,const FString& Value) { if(auto* W=C
 void UChopItJuiceWidget::NativeConstruct()
 {
  Super::NativeConstruct();
- if(!JuiceProfile) JuiceProfile=LoadObject<UChopItUIJuiceProfile>(nullptr,TEXT("/Game/ChopIt/UI/DA_UIJuice.DA_UIJuice"));
+ if(!JuiceProfile) JuiceProfile=LoadObject<UChopItUIJuiceProfile>(nullptr,TEXT("/Game/NewChopIt/Data/UI/DA_UIJuice.DA_UIJuice"));
  if(!JuiceProfile) JuiceProfile=NewObject<UChopItUIJuiceProfile>(this);
  TArray<UWidget*> Widgets; WidgetTree->GetAllWidgets(Widgets);
  for(auto* W:Widgets)

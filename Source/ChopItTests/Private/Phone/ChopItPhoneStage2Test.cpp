@@ -20,7 +20,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChopItPhoneStage2Test, "ChopIt.Phone.Stage2.Ca
 bool FChopItPhoneStage2Test::RunTest(const FString& Parameters)
 {
 	UChopItPhoneCallConfig* Config = LoadObject<UChopItPhoneCallConfig>(nullptr,
-		TEXT("/Game/ChopIt/Phone/DA_PhoneCall.DA_PhoneCall"));
+		TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneCall.DA_PhoneCall"));
 	if (!TestNotNull(TEXT("Call Data Asset"), Config)) return false;
 	TestTrue(TEXT("Default call config is valid"), Config->IsValidConfig());
 	TestTrue(TEXT("Ring audio fades out at a nearby distance"), Config->AudibleDistance <= 900.0f);

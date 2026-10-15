@@ -1,8 +1,8 @@
 """Create the test map; terrain is spawned from the project default DA at runtime."""
 import unreal
 
-map_path = '/Game/ChopIt/World/Maps/L_Test_TerrainDefault'
-asset_path = '/Game/ChopIt/World/DA_Terrain'
+map_path = '/Game/NewChopIt/Maps/L_Test_TerrainDefault'
+asset_path = '/Game/NewChopIt/Data/DA_Terrain'
 asset = unreal.load_asset(asset_path)
 if not isinstance(asset, unreal.ChopItTerrainDataAsset):
     raise RuntimeError('Missing terrain recipe: ' + asset_path)

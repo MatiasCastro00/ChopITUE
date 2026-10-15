@@ -115,7 +115,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FChopItPhase5AssetsAndMapTest::RunTest(const FString& Parameters)
 {
 	const UChopItDayDefinition* Day = LoadObject<UChopItDayDefinition>(
-		nullptr, TEXT("/Game/ChopIt/Economy/Days/DA_Day_01.DA_Day_01"));
+		nullptr, TEXT("/Game/NewChopIt/Data/Days/DA_Day_01.DA_Day_01"));
 	TestNotNull(TEXT("Day definition contains cycle timings"), Day);
 	if (Day)
 	{
@@ -127,7 +127,7 @@ bool FChopItPhase5AssetsAndMapTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Night has a minimum duration"), Day->NightMinimumDuration > 0.0f);
 	}
 
-	const FString MapPackageName = TEXT("/Game/ChopIt/World/Maps/L_Test_Cycle");
+	const FString MapPackageName = TEXT("/Game/NewChopIt/Maps/L_Test_Cycle");
 	TestTrue(TEXT("Cycle map exists"), FPackageName::DoesPackageExist(MapPackageName));
 	UPackage* Package = LoadPackage(nullptr, *MapPackageName, LOAD_None);
 	TestNotNull(TEXT("Cycle map loads"), Package);

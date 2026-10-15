@@ -6,7 +6,7 @@ UChopItPhoneVariantComponent::UChopItPhoneVariantComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	VariantPool = TSoftObjectPtr<UChopItPhoneVariantPool>(
-		FSoftObjectPath(TEXT("/Game/ChopIt/Phone/DA_PhoneVariants.DA_PhoneVariants")));
+		FSoftObjectPath(TEXT("/Game/NewChopIt/Art/Models/Phone/DA_PhoneVariants.DA_PhoneVariants")));
 }
 
 void UChopItPhoneVariantComponent::InitializeSelectionSeed(const int32 Seed)
