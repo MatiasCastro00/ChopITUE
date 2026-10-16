@@ -70,6 +70,13 @@ namespace ChopItHUD
 		return 1.0f + C3 * T * T * T + C1 * T * T;
 	}
 
+	float UpgradeOverlayScale(const float Width, const float Height)
+	{
+		const float HUDScale = FMath::Clamp(FMath::Min(Width / 1920.0f, Height / 1080.0f), 0.80f, 1.5f);
+		// The cards end at 610 design pixels. Keep a margin below them on short viewports.
+		return FMath::Min(HUDScale, FMath::Max(0.1f, FMath::Min((Width - 40.0f) / 956.0f, (Height - 40.0f) / 610.0f)));
+	}
+
 	void DrawSolidRect(UCanvas* Canvas, const float X, const float Y, const float Width, const float Height, const FLinearColor& Color)
 	{
 		FCanvasTileItem Tile(FVector2D(X, Y), FVector2D(Width, Height), Color);
@@ -241,14 +248,15 @@ int32 AChopItHUD::GetChoiceAtScreenPosition(const FVector2D& ScreenPosition) con
 	const UChopItPactComponent* Pacts = State->FindComponentByClass<UChopItPactComponent>();
 	const UChopItShopComponent* Shop = State->FindComponentByClass<UChopItShopComponent>();
 	const bool bUpgrade = Upgrades && Upgrades->HasActiveOffer();
+	const float ChoiceScale = bUpgrade ? ChopItHUD::UpgradeOverlayScale(SizeX, SizeY) : Scale;
 	const bool bPact = !bUpgrade && Pacts && Pacts->HasActiveOffer();
 	const int32 Count = bUpgrade ? Upgrades->GetActiveOffers().Num() :
 		bPact ? Pacts->GetActiveOffers().Num() : Shop ? Shop->GetActiveOffers().Num() : 0;
-	const float Width = (bPact ? 280.f : 300.f) * Scale;
-	const float Height = (bPact ? 280.f : bUpgrade ? 360.f : 330.f) * Scale;
-	const float Y = (bPact ? 240.f : 250.f) * Scale;
-	const float Gap = (bPact ? 50.f : 28.f) * Scale;
-	const float StartX = bPact ? SizeX * .5f - 140.f * Scale - 330.f * Scale :
+	const float Width = (bPact ? 280.f : 300.f) * ChoiceScale;
+	const float Height = (bPact ? 280.f : bUpgrade ? 360.f : 330.f) * ChoiceScale;
+	const float Y = (bPact ? 240.f : 250.f) * ChoiceScale;
+	const float Gap = (bPact ? 50.f : 28.f) * ChoiceScale;
+	const float StartX = bPact ? SizeX * .5f - 140.f * ChoiceScale - 330.f * ChoiceScale :
 		SizeX * .5f - (Width * (bUpgrade ? 3 : Count) + Gap * FMath::Max(0, (bUpgrade ? 3 : Count) - 1)) * .5f;
 	for (int32 Index = 0; Index < FMath::Min(Count, 3); ++Index)
 	{
@@ -302,7 +310,7 @@ void AChopItHUD::DrawHUD()
 	if (PSXHUDWidget && bOfferVisible && !bChoiceHUDMousePassThrough)
 	{
 		PreChoiceHUDVisibility = PSXHUDWidget->GetVisibility();
-		PSXHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		PSXHUDWidget->SetVisibility(ESlateVisibility::Hidden);
 		bChoiceHUDMousePassThrough = true;
 	}
 	else if (PSXHUDWidget && !bOfferVisible && bChoiceHUDMousePassThrough)
@@ -362,7 +370,7 @@ void AChopItHUD::DrawHUD()
 	else { bHasChoiceMousePosition = false; HoveredChoiceIndex = INDEX_NONE; }
 	if (Offers && Offers->HasActiveOffer())
 	{
-		DrawUpgradeOverlay(Scale, Offers->GetActiveOffers());
+		DrawUpgradeOverlay(ChopItHUD::UpgradeOverlayScale(Canvas->SizeX, Canvas->SizeY), Offers->GetActiveOffers());
 		return;
 	}
 	const UChopItShopComponent* Shop = State ? State->FindComponentByClass<UChopItShopComponent>() : nullptr;
